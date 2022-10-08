@@ -9,6 +9,7 @@ import numpy as np
 import ray
 import requests
 
+from alpa.util import to_str_round
 from benchmarks.alpa.util import build_logger
 
 
@@ -19,27 +20,30 @@ class Client:
     
     def query(self, inputs):
         json = {
-            "model": self.model_name,
             "input": inputs,
         }
-        resp = requests.post(url=url, json=json)
+        resp = requests.post(
+            url=self.url, params={"model": self.model_name}, json=json)
         return resp
 
 
-def submit_request(client, start):
-    t = start - time.time()
-    if t > 0:
-        time.sleep(t)
-    #start = time.time()
-    res = client.query("I like this movie")
+def submit_request(client, start, idx):
+    while time.time() < start:
+        pass
+
+    res = client.query(f"I like this movie {idx}")
+    assert res.status_code == 200
     end = time.time()
-    latency = end - start
-    print(f"res: {res.json()}, latency: {latency * 1e3:.2f} ms", flush=True)
+
+    res = res.json()
+    e2e_latency = end - start
+    tstamps = to_str_round({x: (y - start) * 1e3 for x, y in res["ts"]}, 2)
+    print(f"ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
     return start, end
 
 
 class RequestSubmitter:
-    def __init__(self, url, model_name, max_workers=20):
+    def __init__(self, url, model_name, max_workers=10):
         self.client = Client(url, model_name)
         self.executor = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
 
@@ -62,11 +66,13 @@ class RequestSubmitter:
         return self.submit_request_internal(ticks)
 
     def submit_request_internal(self, request_start):
-        futures = [self.executor.submit(submit_request, self.client, s)
-                   for s in request_start]
+        futures = [self.executor.submit(submit_request, self.client, s, i)
+                   for i, s in enumerate(request_start)]
         return futures
  
     def print_stats(self, futures, warmup=10):
+        if not futures:
+            return
         res = [f.result() for f in futures]
         request_start, request_end = zip(*res)
 
@@ -109,8 +115,8 @@ if __name__ == "__main__":
     s2.warmup()
 
     tic = time.time() + 2
-    res1 = s1.submit_poisson(tic, 10, 200)
-    res2 = s2.submit_poisson(tic,  2, 200)
+    res1 = s1.submit_uniform(tic, 12, 60)
+    res2 = s2.submit_poisson(tic,  2, 60)
     assert tic > time.time()
 
     wait(res1 + res2)

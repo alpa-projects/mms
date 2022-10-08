@@ -13,10 +13,10 @@ from typing import Callable, List, Dict, Optional, Tuple, Any, Union
 from fastapi.middleware.cors import CORSMiddleware
 import ray
 from ray.actor import ActorHandle
+from starlette.datastructures import QueryParams
 import uvicorn
 
 from alpa.api import init
-from alpa.global_env import global_config
 from alpa_serve.http_util import (HTTPRequestWrapper, receive_http_body,
                                   Response, set_socket_reuse_port, ASGIHandler,
                                   build_starlette_request, new_port,
@@ -66,8 +66,6 @@ class DeviceMeshGroupManager:
         else:
             init(cluster="ray")
 
-        global_config.pipeline_check_alive = False
-
         # Dict[str, object]
         self.replicas = {}
 
@@ -85,8 +83,10 @@ class DeviceMeshGroupManager:
         del self.replicas[name]
 
     async def handle_request(self, name: str, request_wrapper: bytes):
+        enter_time = time.time()
         request_wrapper = pickle.loads(request_wrapper)
         request = build_starlette_request(request_wrapper)
+        request.scope["ts"].append(("b", enter_time))
         try:
             response = await self.replicas[name].handle_request(request)
             return response
@@ -168,21 +168,26 @@ class Controller:
             model_info.managers.append(manager)
 
     async def handle_asgi(self, scope, receive, send):
+        scope["ts"] = [("a", time.time())]
         assert scope["type"] == "http"
-        scope["tstamp"] = time.time()
 
         # Receive request
         http_body_bytes = await receive_http_body(scope, receive, send)
         request_wrapper = HTTPRequestWrapper(scope, http_body_bytes)
-        request = build_starlette_request(request_wrapper)
-        request_wrapper = pickle.dumps(request_wrapper)
+        request_wrapper_bytes = pickle.dumps(request_wrapper)
+
+        query_params = QueryParams(scope["query_string"])
 
         # Route
         try:
-            obj = await request.json()
+            if "model" in query_params:
+                name = query_params["model"]
+            else:
+                request = build_starlette_request(request_wrapper)
+                obj = await request.json()
 
-            assert "model" in obj, "Model name is not specified in the request."
-            name = obj["model"]
+                assert "model" in obj, "Model name is not specified in the request."
+                name = obj["model"]
 
             assert name in self.model_info, (
                 f"Model '{name}' is not registered.")
@@ -194,7 +199,7 @@ class Controller:
                 model_info.managers)
 
             response = await manager.handle_request.remote(
-                name, request_wrapper)
+                name, request_wrapper_bytes)
             if isinstance(response, Exception):
                 raise response
 
@@ -250,12 +255,12 @@ class Controller:
         # class because we want to run the server as a coroutine. The only
         # alternative is to call uvicorn.run which is blocking.
         app = ASGIHandler(self)
-        app = CORSMiddleware(
-            app,
-            allow_origins=["*"],
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+        #app = CORSMiddleware(
+        #    app,
+        #    allow_origins=["*"],
+        #    allow_methods=["*"],
+        #    allow_headers=["*"],
+        #)
 
         config = uvicorn.Config(
             app,

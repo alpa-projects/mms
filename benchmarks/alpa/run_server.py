@@ -102,7 +102,7 @@ class BertModel:
         def forward_func(params, batch):
             return module.apply(params, head_mask=None, **batch)
 
-        def infer_func(src):
+        def infer_func(src, request):
             inputs = tokenizer(src,
                                max_length=pad_seq_len,
                                padding="max_length",
@@ -139,10 +139,10 @@ class BertModel:
         num_manual_pipeline_stages = pp
 
         batch = {
-            "input_ids": jnp.ones((batch_size, seq_len), jnp.int32),
-            "attention_mask": jnp.ones((batch_size, seq_len), jnp.int32),
-            "token_type_ids": jnp.ones((batch_size, seq_len), jnp.int32),
-            "position_ids": jnp.ones((batch_size, seq_len), jnp.int32),
+            "input_ids": np.ones((batch_size, seq_len), np.int32),
+            "attention_mask": np.ones((batch_size, seq_len), np.int32),
+            "token_type_ids": np.ones((batch_size, seq_len), np.int32),
+            "position_ids": np.ones((batch_size, seq_len), np.int32),
         }
 
         bert_config = BertConfig(
@@ -217,7 +217,8 @@ class BertModel:
         global_config.use_dummy_value_for_benchmarking = False
 
         # Final inference function
-        async def infer_func(src):
+        async def infer_func(src, request):
+            request.scope["ts"].append(("c", time.time()))
             inputs = tokenizer(src,
                                max_length=seq_len,
                                padding="max_length",
@@ -231,6 +232,7 @@ class BertModel:
                     np.atleast_2d(input_ids).shape[-1]), input_ids.shape),
             }
             outputs = executable(params, batch)
+            request.scope["ts"].append(("d", time.time()))
             return await outputs.logits.to_np_async()
 
         return infer_func
@@ -239,11 +241,14 @@ class BertModel:
         obj = await request.json()
 
         tic = time.time()
-        res = await self.infer_func(obj["input"])
+        res = await self.infer_func(obj["input"], request)
         latency = time.time() - tic
         self.logger.info(f"handle request. latency = {latency*1e3:.2f} ms")
 
-        return res
+        return {
+            "logits": res.tolist(),
+            "ts": request.scope["ts"],
+        }
 
 
 if __name__ == "__main__":
