@@ -1,0 +1,72 @@
+# Python cache
+__pycache__
+*.pyc
+dist
+*.egg-info
+.cache
+*env
+
+# NFS temp files
+.nfs*
+
+# Vim
+*.swp
+
+# pycharm
+.idea
+
+# vscode
+*vscode*
+
+# Build files
+alpa/pipeline_parallel/xla_custom_call_marker/build
+build/lib
+build/bdist*
+build_jaxlib/build/bazel*
+build_jaxlib/bazel-*
+build_jaxlib/.jax_configure.bazelrc
+build_jaxlib/dist
+
+# Examples build and tmp files
+examples/build/
+examples/llm_serving/dataset/*.so
+examples/llm_serving/dataset/*.c
+examples/llm_serving/dataset/*.cpp
+examples/llm_serving/weblogs
+examples/llm_serving/keys_file.json
+examples/llm_serving/benchmark/tmp*
+examples/llm_serving/tmp*
+examples/opt_finetune/output/
+examples/gpt2/norwegian-gpt2/
+alpa_debug_info
+
+# Analysis temp files
+*.nvprof
+*.prof
+*.tsv
+*.hlo
+
+# Tests temp files
+tests/tmp
+
+# Dataset
+benchmark/deepspeed/data
+
+# plots
+benchmark/**.pdf
+
+# Numpy cache
+*.npy
+*.pkl
+benchmarks/alpa/tmp*
+*.log
+
+# Documentation website build
+docs/_build
+docs/tutorials
+
+# Example temp files
+examples/imagenet/imagenet
+
+# macOS temp files
+.DS_Store
