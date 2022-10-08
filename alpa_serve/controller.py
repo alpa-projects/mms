@@ -16,6 +16,7 @@ from ray.actor import ActorHandle
 import uvicorn
 
 from alpa.api import init
+from alpa.global_env import global_config
 from alpa_serve.http_util import (HTTPRequestWrapper, receive_http_body,
                                   Response, set_socket_reuse_port, ASGIHandler,
                                   build_starlette_request, new_port,
@@ -64,6 +65,8 @@ class DeviceMeshGroupManager:
                  num_devices_per_node=virtual_mesh_shape[1])
         else:
             init(cluster="ray")
+
+        global_config.pipeline_check_alive = False
 
         # Dict[str, object]
         self.replicas = {}

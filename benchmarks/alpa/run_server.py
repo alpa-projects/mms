@@ -9,7 +9,7 @@ import alpa
 from alpa import (PipeshardParallel, get_global_cluster,
                   get_global_virtual_physical_mesh, set_global_virtual_physical_mesh,
                   AutoShardingOption, ManualStageOption)
-from alpa.serve import run_controller
+from alpa_serve import run_controller
 from alpa.util import compute_bytes, compute_param_number
 import jax
 import jax.numpy as jnp
