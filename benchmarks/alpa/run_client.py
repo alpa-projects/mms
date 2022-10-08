@@ -44,24 +44,24 @@ class RequestSubmitter:
         self.executor = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
 
     def warmup(self):
-        futures = self.launch_uniform(time.time(), 1, 2)
+        futures = self.submit_uniform(time.time(), 1, 2)
 
-    def launch_uniform(self, start, throughput, duration):
+    def submit_uniform(self, start, throughput, duration):
         number = int(duration * throughput)
         interval = 1 / throughput
         ticks = [start + i * interval for i in range(number)]
-        return self.launch_request_internal(ticks)
+        return self.submit_request_internal(ticks)
 
-    def launch_poisson(self, start, throughput, duration):
+    def submit_poisson(self, start, throughput, duration):
         number = int(duration * throughput)
         ticks = []
         cur = start
         for i in range(number):
             cur += random.expovariate(throughput)
             ticks.append(cur)
-        return self.launch_request_internal(ticks)
+        return self.submit_request_internal(ticks)
 
-    def launch_request_internal(self, request_start):
+    def submit_request_internal(self, request_start):
         futures = [self.executor.submit(submit_request, self.client, s)
                    for s in request_start]
         return futures
@@ -109,8 +109,8 @@ if __name__ == "__main__":
     s2.warmup()
 
     tic = time.time() + 2
-    res1 = s1.launch_poisson(tic, 2, 200)
-    res2 = s2.launch_poisson(tic, 2, 200)
+    res1 = s1.submit_poisson(tic, 10, 200)
+    res2 = s2.submit_poisson(tic,  2, 200)
     assert tic > time.time()
 
     wait(res1 + res2)
