@@ -12,8 +12,8 @@ from pulp import LpVariable, LpProblem, LpMaximize, lpSum, lpDot, LpStatus
 @dataclass
 class ModelData:
     name: str
-    average_load: float
     model_mem: float
+    average_load: float
     single_throughput: float
 
 
@@ -32,29 +32,29 @@ class SelectiveReplication(PlacementPolicy):
                      controller,
                      mem_budget: float,
                      num_gpus: int,
-                     model_infos: List[ModelData]):
-        placement = self.solve(mem_budget, num_gpus, model_infos)
+                     model_datas: List[ModelData]):
+        placement = self.solve(mem_budget, num_gpus, model_datas)
 
         for g_id in range(num_gpus):
             controller.launch_mesh_group_manager.remote(g_id, [1, 1])
 
-        for g_id in range(num_gpus):
-            for m_id in range(len(model_infos)):
+        for m_id in range(len(model_datas)):
+            for g_id in range(num_gpus):
                 if placement[m_id][g_id]:
-                    name = model_infos[m_id].name
+                    name = model_datas[m_id].name
                     controller.create_replica.remote(
                         name, g_id, (ParallelConfig(1, 1, 1),))
 
     def solve(self,
               mem_budget: float,
               num_gpus: int,
-              model_infos: List[ModelData]):
+              model_datas: List[ModelData]):
         tic = time.time()
 
-        num_models = len(model_infos)
-        a = [x.average_load for x in model_infos]
-        m = [x.model_mem for x in model_infos]
-        s = [x.single_throughput for x in model_infos]
+        num_models = len(model_datas)
+        a = [x.average_load for x in model_datas]
+        m = [x.model_mem for x in model_datas]
+        s = [x.single_throughput for x in model_datas]
 
         # 1. Create variables
         p = LpVariable.matrix(

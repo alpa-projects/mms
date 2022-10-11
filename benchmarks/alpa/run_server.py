@@ -291,7 +291,12 @@ if __name__ == "__main__":
         controller.create_replica.remote(
             "alpa/bert-2", group_id, (ParallelConfig(1, 1, 2),))
     elif args.policy == "sr":
-        raise NotImplementedError()
+        policy = SelectiveReplication()
+        policy.place_models(controller, mem_budget=14*GB, num_gpus=2,
+            model_datas=[
+                ModelData("alpa/bert-1", 3*GB, 1, 1),
+                ModelData("alpa/bert-2", 3*GB, 1, 1),
+            ])
     else:
         raise ValueError(f"Invalid policy: {args.policy}")
 
