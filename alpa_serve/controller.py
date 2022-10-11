@@ -67,6 +67,8 @@ class DeviceMeshGroupManager:
         else:
             init(cluster="ray")
 
+        self.logger = build_logger()
+
         # Dict[str, object]
         self.replicas = {}
 
@@ -169,7 +171,7 @@ class Controller:
             logger.info(
                 f"Create replica of model={name} on mesh={mesh_group_id}")
             self.logger.info(f"Create replica of {name} "
-                             f"on group manager {group_id}")
+                             f"on group manager {mesh_group_id}")
             await manager.create_replica.remote(name, create_info)
             model_info.managers.append(manager)
 

@@ -11,7 +11,8 @@ from alpa import (PipeshardParallel, get_global_cluster,
                   AutoShardingOption, ManualStageOption,
                   parallelize)
 from alpa_serve import run_controller
-from alpa_serve.placement_policy import SelectiveReplication, ModelData
+from alpa_serve.placement_policy import (
+    SelectiveReplication, ModelData, ParallelConfig)
 from alpa.util import compute_bytes, compute_param_number, GB
 import jax
 import jax.numpy as jnp
@@ -157,7 +158,7 @@ class BertModel:
             pipeline_mp_size=num_manual_pipeline_stages,
         )
         module = FlaxBertForSequenceClassificationModule(
-            bert_config, dtype=jnp.float16)
+            bert_config, dtype=dtype)
 
         # Choose parallel method
         virtual_mesh = get_global_virtual_physical_mesh()
@@ -197,9 +198,12 @@ class BertModel:
         if use_dummy_weights:
             params = jax.eval_shape(module.init, jax.random.PRNGKey(0), **batch)
             params = tree_map(
-                lambda x: jax.core.ShapedArray(x.shape, x.dtype), params)
+                lambda x: jax.core.ShapedArray(x.shape, dtype=params_dtype),
+                params)
         else:
             params = module.init(jax.random.PRNGKey(0), **batch)
+            params = tree_map(lambda x: jax.asarray(x, dtype=params_dtype),
+                params)
 
         executable = forward_func.get_executable(params, batch)
         executable.dump_debug_info("tmp")
@@ -253,7 +257,7 @@ class BertModel:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--policy", type=str, choices=["sr"])
+    parser.add_argument("--policy", type=str, required=True)
     parser.add_argument("--port", type=int, default=20001)
     args = parser.parse_args()
 
@@ -265,33 +269,31 @@ if __name__ == "__main__":
     controller.register_model.remote("alpa/bert-2",
         BertModel, (bert_specs["1.3B"],))
 
-    mem_budget = 15 * GB
-    num_gpus = 2
-    model_datas = [
-        ModelData("alpa/bert-1", 1.0, 3 * GB, 1.0),
-        ModelData("alpa/bert-1", 1.0, 3 * GB, 1.0),
-    ]
+    if args.policy == "manual_1":
+        group_id = 0
+        controller.launch_mesh_group_manager.remote(group_id, [1, 1])
+        controller.create_replica.remote(
+            "alpa/bert-1", group_id, (ParallelConfig(1, 1, 1),))
+        controller.create_replica.remote(
+            "alpa/bert-2", group_id, (ParallelConfig(1, 1, 1),))
 
-    if args.policy == "sr":
-        policy = SelectiveReplication()
-        policy.place_models(
-            controller,
-            mem_budget,
-            num_gpus,
-            model_datas,
-        )
+        group_id = 1
+        controller.launch_mesh_group_manager.remote(group_id, [1, 1])
+        controller.create_replica.remote(
+            "alpa/bert-1", group_id, (ParallelConfig(1, 1, 1),))
+        controller.create_replica.remote(
+            "alpa/bert-2", group_id, (ParallelConfig(1, 1, 1),))
+    elif args.policy == "manual_2":
+        group_id = 0
+        controller.launch_mesh_group_manager.remote(group_id, [1, 2])
+        controller.create_replica.remote(
+            "alpa/bert-1", group_id, (ParallelConfig(1, 1, 2),))
+        controller.create_replica.remote(
+            "alpa/bert-2", group_id, (ParallelConfig(1, 1, 2),))
+    elif args.policy == "sr":
+        raise NotImplementedError()
     else:
         raise ValueError(f"Invalid policy: {args.policy}")
 
     while True:
         pass
-
-#    elif strategy == 1:
-#        group_id = 0
-#        controller.launch_mesh_group_manager.remote(group_id, [1, 2])
-#        controller.create_replica.remote(
-#            "alpa/bert-1", group_id, (ParallelConfig(1, 1, 2),))
-#        controller.create_replica.remote(
-#            "alpa/bert-2", group_id, (ParallelConfig(1, 1, 2),))
-#
-
