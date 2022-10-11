@@ -38,12 +38,12 @@ class SelectiveReplication(PlacementPolicy):
         for g_id in range(num_gpus):
             controller.launch_mesh_group_manager.remote(g_id, [1, 1])
 
-        #for g_id in range(num_gpus):
-        #    for m_id in range(len(model_infos)):
-        #        if placement[m_id][g_id]:
-        #            name = model_infos[m_id].name
-        #            controller.create_replica.remote(
-        #                name, g_id, (ParallelConfig(1, 1, 1),))
+        for g_id in range(num_gpus):
+            for m_id in range(len(model_infos)):
+                if placement[m_id][g_id]:
+                    name = model_infos[m_id].name
+                    controller.create_replica.remote(
+                        name, g_id, (ParallelConfig(1, 1, 1),))
 
     def solve(self,
               mem_budget: float,
