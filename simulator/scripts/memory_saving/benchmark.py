@@ -11,16 +11,20 @@ from alpasim.workload import generate_workload, PossoinWorkLoad
 from alpasim.utils import compute_statistics_from_simulation, dump_chrome_tracing_from_simulation
 
 
-def plot_memory_saving(model_size, x1, y1, x2, y2, filename):
+def plot_memory_saving(model_size, model_nums, x1, y1, x2, y2, xlim, ylim, ylabel, title, filename):
+    plt.figure()
     plt.plot(x1, y1, "c", label="selective replication")
     plt.plot(x2, y2, "orange", label="partition + replication")
-    plt.plot([model_size, model_size], [0, 0.5], "k--")
-    #plt.plot([16, 16], [0, 0.5], "k--")
-    #plt.xticks([0, model_size, 16], ["0", f"Model Size({model_size}GB) ", "GPU Memory Capacity(16GB)"])
-    plt.xticks([0, model_size], ["0", f"Model Size({model_size}GB) "])
+    plt.plot([model_size, model_size], [0, 5], "k--")
+    plt.plot([model_size * model_nums, model_size * model_nums], [0, 5], "k--")
+    plt.text(model_size - 0.7, 0.05, "Model Size", fontsize=8)
+    plt.text(model_size * model_nums - 0.7, 0.05, "Model Size x #Model", fontsize=8)
+    plt.xlim(*xlim)
+    plt.ylim(*ylim)
     plt.xlabel("Memory Usage Per GPU (GB)")
-    plt.ylabel("99% Tail Latency (s)")
+    plt.ylabel(ylabel)
     plt.legend()
+    plt.title(title)
     plt.savefig(filename)
  
 
@@ -35,52 +39,57 @@ def run_exp(workload_name, placement_filename, model_id_to_service_name, experim
     simulator = Simulator(scheduler, cluster)
     simulator.start()
     latencies, overall_latencies = compute_statistics_from_simulation(scheduler.completed_requests)
-    return np.mean(overall_latencies)
+    sorted_latencies = np.sort(overall_latencies)
+    return np.mean(overall_latencies), sorted_latencies[int(0.99 * len(sorted_latencies))]
     #dump_chrome_tracing_from_simulation(scheduler.completed_requests, f"./traces/{workload_name}_{experiment_name}.json")
 
 
 def two_gpu():
     model_size = 2.6
     workload_name = "test_workload_2_even_10Hz_3600s"
+    #workload_name = "test_workload_2_even_12Hz_3600s"
+    #workload_name = "test_workload_2_even_14Hz_3600s"
     baseline_placement = "./placements/placement_baseline_2GPUs.json"
     pipeline_placement = "./placements/placement_pipeline_2GPUs.json"
     strong_baseline_placement = "./placements/placement_strong_2GPUs.json"
     model_id_to_service_name = {0: "Bert_2.6B_0", 1: "Bert_2.6B_1"}
-    l1 = run_exp(workload_name, baseline_placement, model_id_to_service_name, "2 GPU baseline")
-    l2 = run_exp(workload_name, pipeline_placement, model_id_to_service_name, "2 GPU pipeline")
-    l3 = run_exp(workload_name, strong_baseline_placement, model_id_to_service_name, "2 GPU strong baseline")
+    l1_m, l1_t = run_exp(workload_name, baseline_placement, model_id_to_service_name, "2 GPU baseline")
+    l2_m, l2_t = run_exp(workload_name, pipeline_placement, model_id_to_service_name, "2 GPU pipeline")
+    l3_m, l3_t = run_exp(workload_name, strong_baseline_placement, model_id_to_service_name, "2 GPU strong baseline")
     x = [model_size, model_size * 2]
-    y1 = [l1, l3]
-    y2 = [l2, l3]
-    plt.plot(x, y1, "c", label="selective replication")
-    plt.plot(x, y2, "orange", label="partition + replication")
-    plt.plot([model_size, model_size], [0, 0.5], "k--")
-    plt.plot([model_size * 2, model_size * 2], [0, 0.5], "k--")
-    plt.text(model_size - 0.7, 0.05, "Model Size", fontsize=12)
-    plt.text(model_size * 2 - 0.7, 0.05, "Model Size x #Model", fontsize=12)
-    plt.xlim(0, 8)
-    plt.ylim(0, 0.5)
-    plt.xlabel("Memory Usage Per GPU (GB)")
-    plt.ylabel("99% Tail Latency (s)")
-    plt.legend()
-    plt.title("2 Model - 2 GPU")
-    plt.savefig(f"./figures/{workload_name}.png")
- 
+    y1_m, y2_m = [l1_m, l3_m], [l2_m, l3_m]
+    lim_m = max(l1_m, l2_m, l3_m) + 0.2
+    y1_t, y2_t = [l1_t, l3_t], [l2_t, l3_t]
+    lim_t = max(l1_t, l2_t, l3_t) + 0.2
+    plot_memory_saving(model_size, 2, x, y1_m, x, y2_m, (0, 8), (0, lim_m), "Mean Latency (s)", workload_name, f"./figures/{workload_name}_mean.png")
+    plot_memory_saving(model_size, 2, x, y1_t, x, y2_t, (0, 8), (0, lim_t), "99% Tail Latency (s)", workload_name, f"./figures/{workload_name}_tail.png")
+
 
 def four_gpu():
-    # workload_name = "test_workload_4_even_20Hz_3600s"
+    model_size = 2.6
+    # workload_name = "test_workload_4_even_20Hz_60s"
+    # workload_name = "test_workload_4_even_22Hz_60s"
+    # workload_name = "test_workload_4_even_24Hz_60s"
+    # workload_name = "test_workload_4_even_26Hz_60s"
     workload_name = "test_workload_4_even_28Hz_60s"
+    # workload_name = "test_workload_4_even_20Hz_3600s"
     pipeline_placement_memx1 = "./placements/placement_pipeline_4GPUs_memx1.json"
     pipeline_placement_memx2 = "./placements/placement_pipeline_4GPUs_memx2.json"
     baseline_placement_memx1 = "./placements/placement_baseline_4GPUs_memx1.json"
     baseline_placement_memx2 = "./placements/placement_baseline_4GPUs_memx2.json"
     baseline_placement_memx4 = "./placements/placement_baseline_4GPUs_memx4.json"
     model_id_to_service_name = {0: "Bert_2.6B_0", 1: "Bert_2.6B_1", 2: "Bert_2.6B_2", 3: "Bert_2.6B_3"}
-    #run_exp(workload_name, pipeline_placement_memx1, model_id_to_service_name, "4 GPU pipeline memx1")
-    run_exp(workload_name, pipeline_placement_memx2, model_id_to_service_name, "4 GPU pipeline memx2")
-    #run_exp(workload_name, baseline_placement_memx1, model_id_to_service_name, "4 GPU baseline memx1")
-    #run_exp(workload_name, baseline_placement_memx2, model_id_to_service_name, "4 GPU baseline memx2")
-    run_exp(workload_name, baseline_placement_memx4, model_id_to_service_name, "4 GPU baseline memx4")
+    pl1 = run_exp(workload_name, pipeline_placement_memx1, model_id_to_service_name, "4 GPU pipeline memx1")
+    pl2 = run_exp(workload_name, pipeline_placement_memx2, model_id_to_service_name, "4 GPU pipeline memx2")
+    bl1 = run_exp(workload_name, baseline_placement_memx1, model_id_to_service_name, "4 GPU baseline memx1")
+    bl2 = run_exp(workload_name, baseline_placement_memx2, model_id_to_service_name, "4 GPU baseline memx2")
+    bl4 = run_exp(workload_name, baseline_placement_memx4, model_id_to_service_name, "4 GPU baseline memx4")
+    x = [model_size, model_size * 2, model_size * 4]
+    y1 = [pl1, pl2, bl4]
+    y2 = [bl1, bl2, bl4]
+    print(y1, y2)
+    plot_memory_saving(model_size, 4, x, y1, x, y2, (0, 12), (0, 3.0), "4 Model - 4 GPU", f"./figures/{workload_name}.png")
+
 
 def eight_gpu():
     workload_name = "test_workload_8_even_40Hz_3600s"
@@ -88,13 +97,18 @@ def eight_gpu():
 
 
 def workload():
-    # generate_workload(2, 10, [0.5]*2, 60, [200]*2, "test_workload_2_even_10Hz_60s")
-    # generate_workload(2, 10, [0.5]*2, 3600, [200]*2, "test_workload_2_even_10Hz_3600s")
+    # generate_workload(2, 10, [0.5]*2, 60, [200]*2, "./workload/test_workload_2_even_10Hz_60s")
+    # generate_workload(2, 10, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_10Hz_3600s")
+    generate_workload(2, 12, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_12Hz_3600s")
+    generate_workload(2, 14, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_14Hz_3600s")
     # generate_workload(4, 20, [0.25]*4, 3600, [200]*4, "test_workload_4_even_20Hz_3600s")
     # generate_workload(8, 40, [0.125]*8, 3600, [200]*8, "test_workload_8_even_40Hz_3600s")
     # generate_workload(16, 80, [0.0625]*16, 3600, [200]*16, "test_workload_16_even_80Hz_3600s")
-    generate_workload(4, 20, [0.25]*4, 60, [200]*4, "test_workload_4_even_20Hz_60s")
-    generate_workload(4, 28, [0.25]*4, 60, [200]*4, "test_workload_4_even_28Hz_60s")
+    # generate_workload(4, 20, [0.25]*4, 60, [200]*4, "test_workload_4_even_20Hz_60s")
+    # generate_workload(4, 28, [0.25]*4, 60, [200]*4, "test_workload_4_even_28Hz_60s")
+    # generate_workload(4, 22, [0.25]*4, 60, [200]*4, "./workload/test_workload_4_even_22Hz_60s")
+    # generate_workload(4, 24, [0.25]*4, 60, [200]*4, "./workload/test_workload_4_even_24Hz_60s")
+    # generate_workload(4, 26, [0.25]*4, 60, [200]*4, "./workload/test_workload_4_even_26Hz_60s")
 
 if __name__ == "__main__":
     gpu_num = int(sys.argv[1])
