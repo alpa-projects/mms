@@ -13,6 +13,7 @@ from typing import Callable, List, Dict, Optional, Tuple, Any, Union
 from fastapi.middleware.cors import CORSMiddleware
 import ray
 from ray.actor import ActorHandle
+from starlette.datastructures import QueryParams
 import uvicorn
 
 from alpa.api import init
@@ -20,6 +21,7 @@ from alpa_serve.http_util import (HTTPRequestWrapper, receive_http_body,
                                   Response, set_socket_reuse_port, ASGIHandler,
                                   build_starlette_request, new_port,
                                   RelayException, make_error_response)
+from alpa_serve.util import build_logger
 
 logger = logging.getLogger(__file__)
 
@@ -65,6 +67,8 @@ class DeviceMeshGroupManager:
         else:
             init(cluster="ray")
 
+        self.logger = build_logger()
+
         # Dict[str, object]
         self.replicas = {}
 
@@ -82,8 +86,10 @@ class DeviceMeshGroupManager:
         del self.replicas[name]
 
     async def handle_request(self, name: str, request_wrapper: bytes):
+        enter_time = time.time()
         request_wrapper = pickle.loads(request_wrapper)
         request = build_starlette_request(request_wrapper)
+        request.scope["ts"].append(("b", enter_time))
         try:
             response = await self.replicas[name].handle_request(request)
             return response
@@ -106,6 +112,8 @@ class Controller:
         self.ssl_keyfile = ssl_keyfile
         self.ssl_certfile = ssl_certfile
 
+        self.logger = build_logger()
+
         self.manager_lock = defaultdict(asyncio.Lock)
 
         # Dict[str -> ModelInfo]
@@ -124,6 +132,7 @@ class Controller:
             num_gpus: int = 0):
         assert group_id not in self.mesh_group_managers, (
             f"Mesh group {group_id} is already launched")
+        self.logger.info(f"Launch mesh group manager {group_id}")
         self.mesh_group_managers[group_id] = (DeviceMeshGroupManager.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
@@ -161,25 +170,32 @@ class Controller:
 
             logger.info(
                 f"Create replica of model={name} on mesh={mesh_group_id}")
+            self.logger.info(f"Create replica of {name} "
+                             f"on group manager {mesh_group_id}")
             await manager.create_replica.remote(name, create_info)
             model_info.managers.append(manager)
 
     async def handle_asgi(self, scope, receive, send):
+        scope["ts"] = [("a", time.time())]
         assert scope["type"] == "http"
-        scope["tstamp"] = time.time()
 
         # Receive request
         http_body_bytes = await receive_http_body(scope, receive, send)
         request_wrapper = HTTPRequestWrapper(scope, http_body_bytes)
-        request = build_starlette_request(request_wrapper)
-        request_wrapper = pickle.dumps(request_wrapper)
+        request_wrapper_bytes = pickle.dumps(request_wrapper)
+
+        query_params = QueryParams(scope["query_string"])
 
         # Route
         try:
-            obj = await request.json()
+            if "model" in query_params:
+                name = query_params["model"]
+            else:
+                request = build_starlette_request(request_wrapper)
+                obj = await request.json()
 
-            assert "model" in obj, "Model name is not specified in the request."
-            name = obj["model"]
+                assert "model" in obj, "Model name is not specified in the request."
+                name = obj["model"]
 
             assert name in self.model_info, (
                 f"Model '{name}' is not registered.")
@@ -191,7 +207,7 @@ class Controller:
                 model_info.managers)
 
             response = await manager.handle_request.remote(
-                name, request_wrapper)
+                name, request_wrapper_bytes)
             if isinstance(response, Exception):
                 raise response
 
@@ -247,12 +263,12 @@ class Controller:
         # class because we want to run the server as a coroutine. The only
         # alternative is to call uvicorn.run which is blocking.
         app = ASGIHandler(self)
-        app = CORSMiddleware(
-            app,
-            allow_origins=["*"],
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+        #app = CORSMiddleware(
+        #    app,
+        #    allow_origins=["*"],
+        #    allow_methods=["*"],
+        #    allow_headers=["*"],
+        #)
 
         config = uvicorn.Config(
             app,

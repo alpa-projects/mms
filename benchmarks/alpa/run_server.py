@@ -5,12 +5,15 @@ import logging
 import math
 import time
 
-import alpa
 from alpa import (PipeshardParallel, get_global_cluster,
-                  get_global_virtual_physical_mesh, set_global_virtual_physical_mesh,
-                  AutoShardingOption, ManualStageOption)
-from alpa.serve import run_controller
-from alpa.util import compute_bytes, compute_param_number
+                  get_global_virtual_physical_mesh,
+                  set_global_virtual_physical_mesh,
+                  AutoShardingOption, ManualStageOption,
+                  parallelize)
+from alpa_serve import run_controller
+from alpa_serve.placement_policy import (
+    SelectiveReplication, ModelData, ParallelConfig)
+from alpa.util import compute_bytes, compute_param_number, GB
 import jax
 import jax.numpy as jnp
 from jax.tree_util import tree_flatten, tree_unflatten, tree_leaves, tree_map
@@ -22,8 +25,6 @@ from benchmarks.alpa.util import build_logger
 BertModelConfig = namedtuple(
     "BertModelConfig",
     ["seq_len", "hidden_size", "num_layers", "num_heads", "vocab_size"])
-
-ParallelConfig = namedtuple("ParallelConfig", ["dp", "op", "pp"])
 
 
 bert_specs = {
@@ -102,7 +103,7 @@ class BertModel:
         def forward_func(params, batch):
             return module.apply(params, head_mask=None, **batch)
 
-        def infer_func(src):
+        def infer_func(src, request):
             inputs = tokenizer(src,
                                max_length=pad_seq_len,
                                padding="max_length",
@@ -139,10 +140,10 @@ class BertModel:
         num_manual_pipeline_stages = pp
 
         batch = {
-            "input_ids": jnp.ones((batch_size, seq_len), jnp.int32),
-            "attention_mask": jnp.ones((batch_size, seq_len), jnp.int32),
-            "token_type_ids": jnp.ones((batch_size, seq_len), jnp.int32),
-            "position_ids": jnp.ones((batch_size, seq_len), jnp.int32),
+            "input_ids": np.ones((batch_size, seq_len), np.int32),
+            "attention_mask": np.ones((batch_size, seq_len), np.int32),
+            "token_type_ids": np.ones((batch_size, seq_len), np.int32),
+            "position_ids": np.ones((batch_size, seq_len), np.int32),
         }
 
         bert_config = BertConfig(
@@ -157,7 +158,7 @@ class BertModel:
             pipeline_mp_size=num_manual_pipeline_stages,
         )
         module = FlaxBertForSequenceClassificationModule(
-            bert_config, dtype=jnp.float16)
+            bert_config, dtype=dtype)
 
         # Choose parallel method
         virtual_mesh = get_global_virtual_physical_mesh()
@@ -189,7 +190,7 @@ class BertModel:
                 submesh_autosharding_option_dicts=[{}] * pp))
 
         # Compile executable
-        @alpa.parallelize(method=parallel_method)
+        @parallelize(method=parallel_method)
         def forward_func(params, batch):
             return module.apply(params, head_mask=None, **batch)
 
@@ -197,9 +198,12 @@ class BertModel:
         if use_dummy_weights:
             params = jax.eval_shape(module.init, jax.random.PRNGKey(0), **batch)
             params = tree_map(
-                lambda x: jax.core.ShapedArray(x.shape, x.dtype), params)
+                lambda x: jax.core.ShapedArray(x.shape, dtype=params_dtype),
+                params)
         else:
             params = module.init(jax.random.PRNGKey(0), **batch)
+            params = tree_map(lambda x: jax.asarray(x, dtype=params_dtype),
+                params)
 
         executable = forward_func.get_executable(params, batch)
         executable.dump_debug_info("tmp")
@@ -217,7 +221,8 @@ class BertModel:
         global_config.use_dummy_value_for_benchmarking = False
 
         # Final inference function
-        async def infer_func(src):
+        async def infer_func(src, request):
+            request.scope["ts"].append(("c", time.time()))
             inputs = tokenizer(src,
                                max_length=seq_len,
                                padding="max_length",
@@ -231,6 +236,7 @@ class BertModel:
                     np.atleast_2d(input_ids).shape[-1]), input_ids.shape),
             }
             outputs = executable(params, batch)
+            request.scope["ts"].append(("d", time.time()))
             return await outputs.logits.to_np_async()
 
         return infer_func
@@ -239,16 +245,19 @@ class BertModel:
         obj = await request.json()
 
         tic = time.time()
-        res = await self.infer_func(obj["input"])
+        res = await self.infer_func(obj["input"], request)
         latency = time.time() - tic
         self.logger.info(f"handle request. latency = {latency*1e3:.2f} ms")
 
-        return res
+        return {
+            "logits": res.tolist(),
+            "ts": request.scope["ts"],
+        }
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--strategy", type=int, default=0)
+    parser.add_argument("--policy", type=str, required=True)
     parser.add_argument("--port", type=int, default=20001)
     args = parser.parse_args()
 
@@ -260,8 +269,7 @@ if __name__ == "__main__":
     controller.register_model.remote("alpa/bert-2",
         BertModel, (bert_specs["1.3B"],))
 
-    strategy = args.strategy
-    if strategy == 0:
+    if args.policy == "manual_1":
         group_id = 0
         controller.launch_mesh_group_manager.remote(group_id, [1, 1])
         controller.create_replica.remote(
@@ -275,13 +283,22 @@ if __name__ == "__main__":
             "alpa/bert-1", group_id, (ParallelConfig(1, 1, 1),))
         controller.create_replica.remote(
             "alpa/bert-2", group_id, (ParallelConfig(1, 1, 1),))
-    elif strategy == 1:
+    elif args.policy == "manual_2":
         group_id = 0
         controller.launch_mesh_group_manager.remote(group_id, [1, 2])
         controller.create_replica.remote(
             "alpa/bert-1", group_id, (ParallelConfig(1, 1, 2),))
         controller.create_replica.remote(
             "alpa/bert-2", group_id, (ParallelConfig(1, 1, 2),))
+    elif args.policy == "sr":
+        policy = SelectiveReplication()
+        policy.place_models(controller, mem_budget=14*GB, num_gpus=2,
+            model_datas=[
+                ModelData("alpa/bert-1", 3*GB, 1, 1),
+                ModelData("alpa/bert-2", 3*GB, 1, 1),
+            ])
+    else:
+        raise ValueError(f"Invalid policy: {args.policy}")
 
     while True:
         pass
