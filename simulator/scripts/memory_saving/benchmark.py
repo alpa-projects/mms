@@ -67,28 +67,29 @@ def two_gpu():
 
 def four_gpu():
     model_size = 2.6
-    # workload_name = "test_workload_4_even_20Hz_60s"
-    # workload_name = "test_workload_4_even_22Hz_60s"
-    # workload_name = "test_workload_4_even_24Hz_60s"
-    # workload_name = "test_workload_4_even_26Hz_60s"
-    workload_name = "test_workload_4_even_28Hz_60s"
     # workload_name = "test_workload_4_even_20Hz_3600s"
+    # workload_name = "test_workload_4_even_22Hz_3600s"
+    # workload_name = "test_workload_4_even_24Hz_3600s"
+    workload_name = "test_workload_4_even_26Hz_3600s"
+    # workload_name = "test_workload_4_even_28Hz_3600s"
     pipeline_placement_memx1 = "./placements/placement_pipeline_4GPUs_memx1.json"
     pipeline_placement_memx2 = "./placements/placement_pipeline_4GPUs_memx2.json"
     baseline_placement_memx1 = "./placements/placement_baseline_4GPUs_memx1.json"
     baseline_placement_memx2 = "./placements/placement_baseline_4GPUs_memx2.json"
     baseline_placement_memx4 = "./placements/placement_baseline_4GPUs_memx4.json"
     model_id_to_service_name = {0: "Bert_2.6B_0", 1: "Bert_2.6B_1", 2: "Bert_2.6B_2", 3: "Bert_2.6B_3"}
-    pl1 = run_exp(workload_name, pipeline_placement_memx1, model_id_to_service_name, "4 GPU pipeline memx1")
-    pl2 = run_exp(workload_name, pipeline_placement_memx2, model_id_to_service_name, "4 GPU pipeline memx2")
-    bl1 = run_exp(workload_name, baseline_placement_memx1, model_id_to_service_name, "4 GPU baseline memx1")
-    bl2 = run_exp(workload_name, baseline_placement_memx2, model_id_to_service_name, "4 GPU baseline memx2")
-    bl4 = run_exp(workload_name, baseline_placement_memx4, model_id_to_service_name, "4 GPU baseline memx4")
+    pl1_m, pl1_t = run_exp(workload_name, pipeline_placement_memx1, model_id_to_service_name, "4 GPU pipeline memx1")
+    pl2_m, pl2_t = run_exp(workload_name, pipeline_placement_memx2, model_id_to_service_name, "4 GPU pipeline memx2")
+    bl1_m, bl1_t = run_exp(workload_name, baseline_placement_memx1, model_id_to_service_name, "4 GPU baseline memx1")
+    bl2_m, bl2_t = run_exp(workload_name, baseline_placement_memx2, model_id_to_service_name, "4 GPU baseline memx2")
+    bl4_m, bl4_t = run_exp(workload_name, baseline_placement_memx4, model_id_to_service_name, "4 GPU baseline memx4")
     x = [model_size, model_size * 2, model_size * 4]
-    y1 = [pl1, pl2, bl4]
-    y2 = [bl1, bl2, bl4]
-    print(y1, y2)
-    plot_memory_saving(model_size, 4, x, y1, x, y2, (0, 12), (0, 3.0), "4 Model - 4 GPU", f"./figures/{workload_name}.png")
+    y1_m, y2_m = [pl1_m, pl2_m, bl4_m], [bl1_m, bl2_m, bl4_m]
+    lim_m = max(pl1_m, pl2_m, bl1_m, bl2_m, bl4_m) + 0.2
+    y1_t, y2_t = [pl1_t, pl2_t, bl4_t], [bl1_t, bl2_t, bl4_t]
+    lim_t = max(pl1_t, pl2_t, bl1_t, bl2_t, bl4_t) + 0.2
+    plot_memory_saving(model_size, 4, x, y1_m, x, y2_m, (0, 12), (0, lim_m), "Mean Latency (s)", workload_name, f"./figures/{workload_name}_mean.png")
+    plot_memory_saving(model_size, 4, x, y1_t, x, y2_t, (0, 12), (0, lim_t), "99% Tail Latency (s)", workload_name, f"./figures/{workload_name}_tail.png")
 
 
 def eight_gpu():
@@ -99,16 +100,17 @@ def eight_gpu():
 def workload():
     # generate_workload(2, 10, [0.5]*2, 60, [200]*2, "./workload/test_workload_2_even_10Hz_60s")
     # generate_workload(2, 10, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_10Hz_3600s")
-    generate_workload(2, 12, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_12Hz_3600s")
-    generate_workload(2, 14, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_14Hz_3600s")
-    # generate_workload(4, 20, [0.25]*4, 3600, [200]*4, "test_workload_4_even_20Hz_3600s")
+    # generate_workload(2, 12, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_12Hz_3600s")
+    # generate_workload(2, 14, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_14Hz_3600s")
+
+    generate_workload(4, 20, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_20Hz_3600s")
+    generate_workload(4, 22, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_22Hz_3600s")
+    generate_workload(4, 24, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_24Hz_3600s")
+    generate_workload(4, 26, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_26Hz_3600s")
+    generate_workload(4, 28, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_28Hz_3600s")
+
     # generate_workload(8, 40, [0.125]*8, 3600, [200]*8, "test_workload_8_even_40Hz_3600s")
     # generate_workload(16, 80, [0.0625]*16, 3600, [200]*16, "test_workload_16_even_80Hz_3600s")
-    # generate_workload(4, 20, [0.25]*4, 60, [200]*4, "test_workload_4_even_20Hz_60s")
-    # generate_workload(4, 28, [0.25]*4, 60, [200]*4, "test_workload_4_even_28Hz_60s")
-    # generate_workload(4, 22, [0.25]*4, 60, [200]*4, "./workload/test_workload_4_even_22Hz_60s")
-    # generate_workload(4, 24, [0.25]*4, 60, [200]*4, "./workload/test_workload_4_even_24Hz_60s")
-    # generate_workload(4, 26, [0.25]*4, 60, [200]*4, "./workload/test_workload_4_even_26Hz_60s")
 
 if __name__ == "__main__":
     gpu_num = int(sys.argv[1])
