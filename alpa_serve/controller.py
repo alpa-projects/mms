@@ -21,6 +21,7 @@ from alpa_serve.http_util import (HTTPRequestWrapper, receive_http_body,
                                   Response, set_socket_reuse_port, ASGIHandler,
                                   build_starlette_request, new_port,
                                   RelayException, make_error_response)
+from alpa_serve.util import build_logger
 
 logger = logging.getLogger(__file__)
 
@@ -109,6 +110,8 @@ class Controller:
         self.ssl_keyfile = ssl_keyfile
         self.ssl_certfile = ssl_certfile
 
+        self.logger = build_logger()
+
         self.manager_lock = defaultdict(asyncio.Lock)
 
         # Dict[str -> ModelInfo]
@@ -127,6 +130,7 @@ class Controller:
             num_gpus: int = 0):
         assert group_id not in self.mesh_group_managers, (
             f"Mesh group {group_id} is already launched")
+        self.logger.info(f"Launch mesh group manager {group_id}")
         self.mesh_group_managers[group_id] = (DeviceMeshGroupManager.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
@@ -164,6 +168,8 @@ class Controller:
 
             logger.info(
                 f"Create replica of model={name} on mesh={mesh_group_id}")
+            self.logger.info(f"Create replica of {name} "
+                             f"on group manager {group_id}")
             await manager.create_replica.remote(name, create_info)
             model_info.managers.append(manager)
 

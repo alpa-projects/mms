@@ -5,12 +5,14 @@ import logging
 import math
 import time
 
-import alpa
 from alpa import (PipeshardParallel, get_global_cluster,
-                  get_global_virtual_physical_mesh, set_global_virtual_physical_mesh,
-                  AutoShardingOption, ManualStageOption)
+                  get_global_virtual_physical_mesh,
+                  set_global_virtual_physical_mesh,
+                  AutoShardingOption, ManualStageOption,
+                  parallelize)
 from alpa_serve import run_controller
-from alpa.util import compute_bytes, compute_param_number
+from alpa_serve.placement_policy import SelectiveReplication, ModelData
+from alpa.util import compute_bytes, compute_param_number, GB
 import jax
 import jax.numpy as jnp
 from jax.tree_util import tree_flatten, tree_unflatten, tree_leaves, tree_map
@@ -22,8 +24,6 @@ from benchmarks.alpa.util import build_logger
 BertModelConfig = namedtuple(
     "BertModelConfig",
     ["seq_len", "hidden_size", "num_layers", "num_heads", "vocab_size"])
-
-ParallelConfig = namedtuple("ParallelConfig", ["dp", "op", "pp"])
 
 
 bert_specs = {
@@ -189,7 +189,7 @@ class BertModel:
                 submesh_autosharding_option_dicts=[{}] * pp))
 
         # Compile executable
-        @alpa.parallelize(method=parallel_method)
+        @parallelize(method=parallel_method)
         def forward_func(params, batch):
             return module.apply(params, head_mask=None, **batch)
 
@@ -253,7 +253,7 @@ class BertModel:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--strategy", type=int, default=0)
+    parser.add_argument("--policy", type=str, choices=["sr"])
     parser.add_argument("--port", type=int, default=20001)
     args = parser.parse_args()
 
@@ -265,28 +265,33 @@ if __name__ == "__main__":
     controller.register_model.remote("alpa/bert-2",
         BertModel, (bert_specs["1.3B"],))
 
-    strategy = args.strategy
-    if strategy == 0:
-        group_id = 0
-        controller.launch_mesh_group_manager.remote(group_id, [1, 1])
-        controller.create_replica.remote(
-            "alpa/bert-1", group_id, (ParallelConfig(1, 1, 1),))
-        controller.create_replica.remote(
-            "alpa/bert-2", group_id, (ParallelConfig(1, 1, 1),))
+    mem_budget = 15 * GB
+    num_gpus = 2
+    model_datas = [
+        ModelData("alpa/bert-1", 1.0, 3 * GB, 1.0),
+        ModelData("alpa/bert-1", 1.0, 3 * GB, 1.0),
+    ]
 
-        group_id = 1
-        controller.launch_mesh_group_manager.remote(group_id, [1, 1])
-        controller.create_replica.remote(
-            "alpa/bert-1", group_id, (ParallelConfig(1, 1, 1),))
-        controller.create_replica.remote(
-            "alpa/bert-2", group_id, (ParallelConfig(1, 1, 1),))
-    elif strategy == 1:
-        group_id = 0
-        controller.launch_mesh_group_manager.remote(group_id, [1, 2])
-        controller.create_replica.remote(
-            "alpa/bert-1", group_id, (ParallelConfig(1, 1, 2),))
-        controller.create_replica.remote(
-            "alpa/bert-2", group_id, (ParallelConfig(1, 1, 2),))
+    if args.policy == "sr":
+        policy = SelectiveReplication()
+        policy.place_models(
+            controller,
+            mem_budget,
+            num_gpus,
+            model_datas,
+        )
+    else:
+        raise ValueError(f"Invalid policy: {args.policy}")
 
     while True:
         pass
+
+#    elif strategy == 1:
+#        group_id = 0
+#        controller.launch_mesh_group_manager.remote(group_id, [1, 2])
+#        controller.create_replica.remote(
+#            "alpa/bert-1", group_id, (ParallelConfig(1, 1, 2),))
+#        controller.create_replica.remote(
+#            "alpa/bert-2", group_id, (ParallelConfig(1, 1, 2),))
+#
+
