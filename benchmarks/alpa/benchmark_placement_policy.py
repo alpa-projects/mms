@@ -56,7 +56,8 @@ def bench_cases(cases):
 
         for j, mem_budget in enumerate(mem_budgets):
             obj1, _ = sr.solve(model_datas, num_gpus, mem_budget)
-            obj2, _ = srp.solve(model_datas, num_gpus, mem_budget, [0, 1, 2, 4])
+            obj2, (group_sizes, group_models) = srp.solve(
+                model_datas, num_gpus, mem_budget, [0, 1, 2, 4])
             #obj2 = obj1
 
             if obj1 <= 1e-5:
@@ -64,7 +65,8 @@ def bench_cases(cases):
             else:
                 gain = obj2 / obj1
 
-            print(mem_budget, obj1, obj2)
+            print(f"mem_budget = {mem_budget}, obj1 = {obj1}, obj2 = {obj2}")
+            print(f"group sizes = {group_sizes}, group models = {group models}")
 
             res[i][j] = gain
 
