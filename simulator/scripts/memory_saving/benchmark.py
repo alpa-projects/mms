@@ -40,10 +40,10 @@ def run_exp(workload_name, placement_filename, model_id_to_service_name, experim
     scheduler = FIFOScheduler(workload, meshexecutors, model_id_to_service_name)
     simulator = Simulator(scheduler, cluster)
     simulator.start()
-    latencies, overall_latencies = compute_statistics_from_simulation(scheduler.completed_requests)
+    latencies, overall_latencies = compute_statistics_from_simulation(scheduler.completed_tasks)
     sorted_latencies = np.sort(overall_latencies)
     if dump_trace:
-        dump_chrome_tracing_from_simulation(scheduler.completed_requests, f"./traces/{workload_name}_{experiment_name}.json")
+        dump_chrome_tracing_from_simulation(scheduler.completed_tasks, f"./traces/{workload_name}_{experiment_name}.json")
     return np.mean(overall_latencies), sorted_latencies[int(0.99 * len(sorted_latencies))]
 
 
@@ -68,7 +68,7 @@ def two_gpu():
 
 def four_gpu():
     model_size = 2.6
-    throughput = 20
+    throughput = 26
     workload_name = f"test_workload_4_even_{throughput}Hz_3600s"
     pipeline_placement_memx1 = "./placements/placement_pipeline_4GPUs_memx1.json"
     pipeline_placement_memx2 = "./placements/placement_pipeline_4GPUs_memx2.json"
@@ -98,7 +98,6 @@ def four_gpu_uneven():
     baseline_placement_memx3 = "./placements/placement_baseline_4GPUs_memx3_3to1.json"
     baseline_placement_memx4 = "./placements/placement_baseline_4GPUs_memx4.json"
     pipeline_placement_memx1 = "./placements/placement_pipeline_4GPUs_memx1.json"
-    pipeline_placement_memx1dot5 = "./placements/placement_pipeline_4GPUs_memx1dot5_3to1.json"
     pipeline_placement_memx2 = "./placements/placement_pipeline_4GPUs_memx2.json"
     model_id_to_service_name = {0: "Bert_2.6B_0", 1: "Bert_2.6B_1", 2: "Bert_2.6B_2", 3: "Bert_2.6B_3"}
     bl1_m, bl1_t = run_exp(workload_name, baseline_placement_memx1, model_id_to_service_name, "4 GPU baseline memx1")
@@ -106,13 +105,12 @@ def four_gpu_uneven():
     bl3_m, bl3_t = run_exp(workload_name, baseline_placement_memx3, model_id_to_service_name, "4 GPU baseline memx3")
     bl4_m, bl4_t = run_exp(workload_name, baseline_placement_memx4, model_id_to_service_name, "4 GPU baseline memx4")
     pl1_m, pl1_t = run_exp(workload_name, pipeline_placement_memx1, model_id_to_service_name, "4 GPU pipeline memx1")
-    pl1dot5_m, pl1dot5_t = run_exp(workload_name, pipeline_placement_memx1dot5, model_id_to_service_name, "4 GPU pipeline memx1.5")
     pl2_m, pl2_t = run_exp(workload_name, pipeline_placement_memx2, model_id_to_service_name, "4 GPU pipeline memx2")
     x1 = [model_size, model_size * 2, model_size * 3, model_size * 4]
-    y1_m, y2_m = [bl1_m, bl2_m, bl3_m, bl4_m], [pl1_m, pl1dot5_m, pl2_m, bl4_m]
+    y1_m, y2_m = [bl1_m, bl2_m, bl3_m, bl4_m], [pl1_m, pl2_m, bl4_m]
     lim_m = max(pl1_m, pl2_m, bl1_m, bl2_m, bl4_m) + 0.2
-    x2 = [model_size, model_size * 1.5, model_size * 2, model_size * 4]
-    y1_t, y2_t = [bl1_t, bl2_t, bl3_t, bl4_t], [pl1_t, pl1dot5_t, pl2_t, bl4_t]
+    x2 = [model_size, model_size * 2, model_size * 4]
+    y1_t, y2_t = [bl1_t, bl2_t, bl3_t, bl4_t], [pl1_t, pl2_t, bl4_t]
     lim_t = max(pl1_t, pl2_t, bl1_t, bl2_t, bl4_t) + 0.2
     plot_memory_saving(model_size, 4, x1, y1_m, x2, y2_m, x1, y1_t, x2, y2_t, (0, 12), (0, lim_t), workload_name, f"./figures/{workload_name}.png")
 
@@ -146,7 +144,7 @@ def workload():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run memory saving experiments")
     parser.add_argument('--gpu_num', type=int, default=4, help='Number of GPUs')
-    parser.add_argument('--workload', type=bool, default=False, action='store_true', help='Generate new workload')
+    parser.add_argument('--workload', default=False, action='store_true', help='Generate new workload')
     args = parser.parse_args()
     if args.workload:
         workload()
