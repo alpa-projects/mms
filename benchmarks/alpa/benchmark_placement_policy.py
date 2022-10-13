@@ -60,8 +60,11 @@ def bench_cases(cases):
                 model_datas, num_gpus, mem_budget, [0, 1, 2, 4])
             #obj2 = obj1
 
-            if obj1 <= 1e-5:
-                gain = float("inf")
+            if obj1 <= 0.1:
+                if obj2 <= 0.1:
+                    gain = 1
+                else:
+                    gain = float("inf")
             else:
                 gain = obj2 / obj1
 
