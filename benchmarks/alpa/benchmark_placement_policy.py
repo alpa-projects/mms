@@ -38,7 +38,7 @@ def bench_cases(cases):
     res = np.zeros((len(cases), len(mem_budgets)))
 
     for i, case in enumerate(cases):
-        print(case)
+        print(f"\n----- {case} -----")
         num_models, num_gpus, model_size, load_distribution = case
 
         if load_distribution == "uniform":
@@ -66,7 +66,7 @@ def bench_cases(cases):
                 gain = obj2 / obj1
 
             print(f"mem_budget = {mem_budget}, obj1 = {obj1}, obj2 = {obj2}")
-            print(f"group sizes = {group_sizes}, group models = {group models}")
+            print(f"group sizes = {group_sizes}, group models = {group_models}\n")
 
             res[i][j] = gain
 
