@@ -16,29 +16,29 @@ class FIFOScheduler:
         """
         self.workload = workload
         self.meshexecutors = meshexecutors
-        self.requests = []
-        next_meshexecutor = dict.fromkeys(meshexecutors.keys(), 0)
-        
-        for i, (model_id, arrive_time) in enumerate(zip(workload.model_ids, workload.arrive_times)):
-            service_name = model_id_to_service_name[model_id]
-            self.requests.append(ScheduledTask(i, model_id, arrive_time, arrive_time, 
-                                               meshexecutors[service_name][next_meshexecutor[service_name]]))
-            # round-robin
-            next_meshexecutor[service_name] += 1
-            next_meshexecutor[service_name] %= len(meshexecutors[service_name])
-        self.completed_requests = []
+        self.model_id_to_service_name = model_id_to_service_name
+        self.tasks = list(iter(self.workload))
+        self.scheduled_tasks = []
+        self.completed_tasks = []
 
     def handle_event(self):
-        task = self.requests.pop(0)
-        task.start_execution()
-        self.completed_requests.append(task)
+        task = self.tasks.pop(0)
+        service_name = self.model_id_to_service_name[task.model_id]
+        # choose the meshexecutor with shortest queue
+        designated_meshexecutor = min(self.meshexecutors[service_name], key=lambda m: m.next_idle_time)
+        scheduled_task = ScheduledTask(task.task_id, task.model_id, task.arrive_time, 
+                                       task.arrive_time, task.SLO, designated_meshexecutor)
+        self.scheduled_tasks.append(scheduled_task)
+        scheduled_task.start_execution()
+        self.completed_tasks.append(scheduled_task)
    
     @property
     def next_event_time(self):
-        if len(self.requests) == 0:
+        if len(self.tasks) == 0:
             return float('inf')
         else:
-            return self.requests[0].schedule_time
+            # FIFO scheduler schedules tasks in the order of arrival
+            return self.tasks[0].arrive_time
     
 
     
