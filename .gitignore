@@ -1,3 +1,7 @@
+# project-specific
+figures/
+chrome_trace/
+
 # Python cache
 __pycache__
 *.pyc
