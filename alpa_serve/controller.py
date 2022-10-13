@@ -132,7 +132,8 @@ class Controller:
             num_gpus: int = 0):
         assert group_id not in self.mesh_group_managers, (
             f"Mesh group {group_id} is already launched")
-        self.logger.info(f"Launch mesh group manager {group_id}")
+        self.logger.info(f"Launch mesh group manager {group_id} with "
+                         f"shape={virtual_mesh_shape}")
         self.mesh_group_managers[group_id] = (GroupManager.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
