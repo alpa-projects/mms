@@ -30,6 +30,7 @@ class SelectiveReplication(PlacementPolicy):
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
         self.time_limit = 20
+        self.sum_k = 1e-4
 
     def place_models(self,
                      controller,
@@ -74,7 +75,7 @@ class SelectiveReplication(PlacementPolicy):
 
         # 2. Objective
         prob = LpProblem("myProblem", LpMaximize)
-        obj = min_tolerance  #+ 0.001 * sum_tolerance
+        obj = min_tolerance + self.sum_k * sum_tolerance
         prob += obj
 
         # 3. Constraints
@@ -89,7 +90,7 @@ class SelectiveReplication(PlacementPolicy):
         # (c). min tolerance and sum tolerance
         for i in range(N):
             prob += min_tolerance <= rep[i] * (t[i] / a[i])
-        #prob += sum_tolerance == lpSum(rep[i] * (t[i] / a[i]) for i in range(N))
+        prob += sum_tolerance == lpSum(rep[i] for i in range(N))
 
         msg = self.verbose
         assert "PULP_CBC_CMD" in pulp.listSolvers(onlyAvailable=True), (
@@ -126,6 +127,7 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
         self.time_limit = 20
+        self.sum_k = 1e-4
 
     def place_models(self,
                      controller,
@@ -192,7 +194,7 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
 
         # 2. Objective
         prob = LpProblem("myProblem", LpMaximize)
-        obj = min_tolerance  #+ 0.001 * sum_tolerance
+        obj = min_tolerance + self.sum_k * sum_tolerance
         prob += obj
 
         # 3. Constraints
@@ -210,7 +212,7 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
         for i in range(N):
             prob += min_tolerance <= rep[i] * t[i] / a[i]
 
-        #prob += sum_tolerance == lpSum(rep[i] * t[i] / a[i] for i in range(N))
+        prob += sum_tolerance == lpSum(rep[i] for i in range(N))
 
         # (d). group size
         prob += lpSum(s[j][k] * g[k] for j in range(G) for k in range(K)) == M
