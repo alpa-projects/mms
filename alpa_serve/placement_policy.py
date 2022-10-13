@@ -59,9 +59,9 @@ class SelectiveReplication(PlacementPolicy):
         # Load constants
         N = len(model_datas)
         M = num_gpus
-        C = mem_budget
+        C = 1
         a = [x.average_load for x in model_datas]
-        c = [x.model_mem for x in model_datas]
+        c = [x.model_mem / mem_budget for x in model_datas]
         t = [x.single_throughput for x in model_datas]
 
         # 1. Create variables
@@ -135,9 +135,9 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
         # Load constants
         N = len(model_datas)
         M = num_gpus
-        C = mem_budget
+        C = 1
         a = [x.average_load for x in model_datas]
-        c = [x.model_mem for x in model_datas]
+        c = [x.model_mem / mem_budget for x in model_datas]
         t = [x.single_throughput for x in model_datas]
 
         G = num_gpus
