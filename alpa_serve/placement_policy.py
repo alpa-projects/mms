@@ -33,14 +33,16 @@ class SelectiveReplication(PlacementPolicy):
 
     def place_models(self,
                      controller,
-                     mem_budget: float,
+                     model_datas: List[ModelData],
                      num_gpus: int,
-                     model_datas: List[ModelData]):
-        placement = self.solve(mem_budget, num_gpus, model_datas)
+                     mem_budget: float):
+        obj, placement = self.solve(model_datas, num_gpus, mem_budget)
 
+        # Launch mesh groups
         for g_id in range(num_gpus):
             controller.launch_mesh_group_manager.remote(g_id, [1, 1])
 
+        # Launch model replicas
         tasks = []
         for m_id in range(len(model_datas)):
             for g_id in range(num_gpus):
@@ -124,6 +126,32 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
         self.time_limit = 20
+
+    def place_models(self,
+                     controller,
+                     model_datas: List[ModelData],
+                     num_gpus: int,
+                     mem_budget: float,
+                     group_sizes: List[int]):
+        obj, (group_sizes, group_models) = self.solve(
+            model_datas, num_gpus, mem_budget, group_sizes)
+        num_groups = len(group_sizes)
+
+        # Launch mesh groups
+        for g_id in range(num_groups):
+            pp_size = group_sizes[g_id]
+            controller.launch_mesh_group_manager.remote(g_id, [1, pp_size])
+
+        # Launch model replicas
+        tasks = []
+        for g_id in range(num_groups):
+            pp_size = group_sizes[g_id]
+            for m_id in group_models[g_id]:
+                name = model_datas[m_id].name
+                tasks.append(controller.create_replica.remote(
+                    name, g_id, (ParallelConfig(1, 1, pp_size),)))
+
+        return tasks
 
     def solve(self,
               model_datas: List[ModelData],
