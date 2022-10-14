@@ -122,24 +122,24 @@ def eight_gpu():
 
 def workload():
     # 2GPU workload
-    # generate_workload(2, 10, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_10Hz_3600s")
-    # generate_workload(2, 12, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_12Hz_3600s")
-    # generate_workload(2, 14, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_14Hz_3600s")
+    generate_workload(2, 10, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_10Hz_3600s")
+    generate_workload(2, 12, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_12Hz_3600s")
+    generate_workload(2, 14, [0.5]*2, 3600, [200]*2, "./workload/test_workload_2_even_14Hz_3600s")
 
     # 4GPU even workload
-    # generate_workload(4, 20, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_20Hz_3600s")
-    # generate_workload(4, 22, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_22Hz_3600s")
-    # generate_workload(4, 24, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_24Hz_3600s")
-    # generate_workload(4, 26, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_26Hz_3600s")
-    # generate_workload(4, 28, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_28Hz_3600s")
+    generate_workload(4, 20, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_20Hz_3600s")
+    generate_workload(4, 22, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_22Hz_3600s")
+    generate_workload(4, 24, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_24Hz_3600s")
+    generate_workload(4, 26, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_26Hz_3600s")
+    generate_workload(4, 28, [0.25]*4, 3600, [200]*4, "./workload/test_workload_4_even_28Hz_3600s")
 
     # 4GPU uneven workload
-    # generate_workload(4, 16, [3/8, 3/8, 1/8, 1/8], 3600, [200]*4, "./workload/test_workload_4_uneven3to1_16Hz_3600s")
+    generate_workload(4, 16, [3/8, 3/8, 1/8, 1/8], 3600, [200]*4, "./workload/test_workload_4_uneven3to1_16Hz_3600s")
     generate_workload(4, 17, [3/8, 3/8, 1/8, 1/8], 3600, [200]*4, "./workload/test_workload_4_uneven3to1_17Hz_3600s")
 
     # 8GPU workload
-    # generate_workload(8, 40, [0.125]*8, 3600, [200]*8, "test_workload_8_even_40Hz_3600s")
-    # generate_workload(16, 80, [0.0625]*16, 3600, [200]*16, "test_workload_16_even_80Hz_3600s")
+    generate_workload(8, 40, [0.125]*8, 3600, [200]*8, "test_workload_8_even_40Hz_3600s")
+    generate_workload(16, 80, [0.0625]*16, 3600, [200]*16, "test_workload_16_even_80Hz_3600s")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run memory saving experiments")
