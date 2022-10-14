@@ -57,7 +57,7 @@ class ModelInfo:
 
 
 @ray.remote(num_cpus=1)
-class DeviceMeshGroupManager:
+class GroupManager:
 
     def __init__(self, virtual_mesh_shape: Optional[Tuple[int]] = None):
         if virtual_mesh_shape:
@@ -132,8 +132,9 @@ class Controller:
             num_gpus: int = 0):
         assert group_id not in self.mesh_group_managers, (
             f"Mesh group {group_id} is already launched")
-        self.logger.info(f"Launch mesh group manager {group_id}")
-        self.mesh_group_managers[group_id] = (DeviceMeshGroupManager.options(
+        self.logger.info(f"Launch mesh group manager {group_id} with "
+                         f"shape={virtual_mesh_shape}")
+        self.mesh_group_managers[group_id] = (GroupManager.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
 
@@ -156,24 +157,24 @@ class Controller:
 
     async def create_replica(self,
                              name: str,
-                             mesh_group_id: int,
+                             group_id: int,
                              append_init_args: Optional[List] = None,
                              append_init_kwargs: Optional[Dict] = None):
         async with self.manager_lock[name]:
-            assert mesh_group_id in self.mesh_group_managers, (
-                f"Group {mesh_group_id} does not exist")
+            assert group_id in self.mesh_group_managers, (
+                f"Group {group_id} does not exist")
             model_info = self.model_info[name]
-            manager = self.mesh_group_managers[mesh_group_id]
+            manager = self.mesh_group_managers[group_id]
             assert manager not in model_info.managers
             create_info = model_info.create_info.append_init_args(
                 append_init_args, append_init_kwargs)
 
             logger.info(
-                f"Create replica of model={name} on mesh={mesh_group_id}")
+                f"Create replica of model={name} on mesh={group_id}")
             self.logger.info(f"Create replica of {name} "
-                             f"on group manager {mesh_group_id}")
-            await manager.create_replica.remote(name, create_info)
+                             f"on group {group_id}")
             model_info.managers.append(manager)
+        await manager.create_replica.remote(name, create_info)
 
     async def handle_asgi(self, scope, receive, send):
         scope["ts"] = [("a", time.time())]

@@ -12,7 +12,8 @@ from alpa import (PipeshardParallel, get_global_cluster,
                   parallelize)
 from alpa_serve import run_controller
 from alpa_serve.placement_policy import (
-    SelectiveReplication, ModelData, ParallelConfig)
+    SelectiveReplication, SelectiveReplicationWithPipeline,
+    ModelData, ParallelConfig)
 from alpa.util import compute_bytes, compute_param_number, GB
 import jax
 import jax.numpy as jnp
@@ -292,11 +293,22 @@ if __name__ == "__main__":
             "alpa/bert-2", group_id, (ParallelConfig(1, 1, 2),))
     elif args.policy == "sr":
         policy = SelectiveReplication()
-        policy.place_models(controller, mem_budget=14*GB, num_gpus=2,
+        policy.place_models(controller,
             model_datas=[
                 ModelData("alpa/bert-1", 3*GB, 1, 1),
                 ModelData("alpa/bert-2", 3*GB, 1, 1),
-            ])
+            ],
+            mem_budget=14*GB,
+            num_gpus=2,
+        )
+    elif args.policy == "srp":
+        policy = SelectiveReplicationWithPipeline()
+        pipeline_decay = [(1, 1), (2, 0.95), (4, 0.90)]
+        policy.place_models(controller, mem_budget=3*GB, num_gpus=2,
+            model_datas=[
+                ModelData("alpa/bert-1", 3*GB, 1, 1, pipeline_decay),
+                ModelData("alpa/bert-2", 3*GB, 1, 1, pipeline_decay),
+            ], group_sizes=(0, 1, 2, 4))
     else:
         raise ValueError(f"Invalid policy: {args.policy}")
 
