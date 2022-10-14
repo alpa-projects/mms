@@ -125,11 +125,11 @@ class Test(unittest.TestCase):
         scheduler = FIFOScheduler(workload, meshexecutors, model_id_to_service_name)
         simulator = Simulator(scheduler, cluster)
         simulator.start()
-        dump_chrome_tracing_from_simulation(scheduler.completed_requests, simu_chrome_trace_filename)
+        dump_chrome_tracing_from_simulation(scheduler.completed_tasks, simu_chrome_trace_filename)
         dump_chrome_tracing_from_cluster_trace(cluster_trace_filename, cluster_chrome_trace_filename)
-        compute_statistics_from_simulation(scheduler.completed_requests)
+        compute_statistics_from_simulation(scheduler.completed_tasks)
         compute_statistics_from_cluster_trace(cluster_trace_filename)
-        self.check_simulation_error(cluster_trace_filename, scheduler.completed_requests, assertion)
+        self.check_simulation_error(cluster_trace_filename, scheduler.completed_tasks, assertion)
  
     def test_2dot6B_Bert_baseline_trace(self):
         workload_name = "test_workload_8to2_6.667Hz_20s"
@@ -200,8 +200,8 @@ class Test(unittest.TestCase):
         scheduler = FIFOScheduler(workload, meshexecutors, model_id_to_service_name)
         simulator = Simulator(scheduler, cluster)
         simulator.start()
-        dump_chrome_tracing_from_simulation(scheduler.completed_requests, simu_chrome_trace_filename)
-        compute_statistics_from_simulation(scheduler.completed_requests)
+        dump_chrome_tracing_from_simulation(scheduler.completed_tasks, simu_chrome_trace_filename)
+        compute_statistics_from_simulation(scheduler.completed_tasks)
 
   
 def suite():

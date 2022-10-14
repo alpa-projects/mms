@@ -32,6 +32,7 @@ model_configs = {
         "Bert_2.6B_1_device": Executable("Bert_2.6B", "Bert_2.6B_1_device", [(1,1)], [0.14520]),
         "Bert_2.6B_2_device_intra": Executable("Bert_2.6B", "Bert_2.6B_2_device_intra", [(1,2)], [0.0985]),
         "Bert_2.6B_2_device_inter": Executable("Bert_2.6B", "Bert_2.6B_2_device_inter", [(1,1),(1,1)], [0.0730, 0.0734]),
+        "Bert_2.6B_4_device_inter": Executable("Bert_2.6B", "Bert_2.6B_4_device_inter", [(1,1),(1,1),(1,1),(1,1)], [0.037, 0.037, 0.037, 0.037]),
     }
 }
 

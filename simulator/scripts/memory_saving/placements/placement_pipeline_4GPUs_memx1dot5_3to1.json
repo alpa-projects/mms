@@ -1,0 +1,204 @@
+[
+    {
+        "service_name": "Bert_2.6B_0",
+        "model_name": "Bert_2.6B",
+        "executable_name": "Bert_2.6B_2_device_inter",
+        "mesh_group": [
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        0
+                    ]
+                ]
+            },
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        1
+                    ]
+                ]
+            }
+        ]
+    },
+    {
+        "service_name": "Bert_2.6B_0",
+        "model_name": "Bert_2.6B",
+        "executable_name": "Bert_2.6B_2_device_inter",
+        "mesh_group": [
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        2
+                    ]
+                ]
+            },
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        3
+                    ]
+                ]
+            }
+        ]
+    },
+    {
+        "service_name": "Bert_2.6B_1",
+        "model_name": "Bert_2.6B",
+        "executable_name": "Bert_2.6B_2_device_inter",
+        "mesh_group": [
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        0
+                    ]
+                ]
+            },
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        1
+                    ]
+                ]
+            }
+        ]
+    },
+    {
+        "service_name": "Bert_2.6B_1",
+        "model_name": "Bert_2.6B",
+        "executable_name": "Bert_2.6B_2_device_inter",
+        "mesh_group": [
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        2
+                    ]
+                ]
+            },
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        3
+                    ]
+                ]
+            }
+        ]
+    },
+    {
+        "service_name": "Bert_2.6B_2",
+        "model_name": "Bert_2.6B",
+        "executable_name": "Bert_2.6B_4_device_inter",
+        "mesh_group": [
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        0
+                    ]
+                ]
+            },
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        1
+                    ]
+                ]
+            },
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        2
+                    ]
+                ]
+            },
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        3
+                    ]
+                ]
+            }
+        ]
+    },
+    {
+        "service_name": "Bert_2.6B_3",
+        "model_name": "Bert_2.6B",
+        "executable_name": "Bert_2.6B_4_device_inter",
+        "mesh_group": [
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        0
+                    ]
+                ]
+            },
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        1
+                    ]
+                ]
+            },
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        2
+                    ]
+                ]
+            },
+            {
+                "node_ids": [
+                    0
+                ],
+                "devices": [
+                    [
+                        3
+                    ]
+                ]
+            }
+        ]
+    }
+]

@@ -43,7 +43,7 @@ def run_strong_baseline():
     scheduler = FIFOScheduler(workload, meshexecutors, model_id_to_service_name)
     simulator = Simulator(scheduler, cluster)
     simulator.start()
-    latencies, overall_latencies = compute_statistics_from_simulation(scheduler.completed_requests)
+    latencies, overall_latencies = compute_statistics_from_simulation(scheduler.completed_tasks)
     plot_cdf(latencies, overall_latencies, True)
 
 def run_interop():
@@ -59,7 +59,7 @@ def run_interop():
     scheduler = FIFOScheduler(workload, meshexecutors, model_id_to_service_name)
     simulator = Simulator(scheduler, cluster)
     simulator.start()
-    latencies, overall_latencies = compute_statistics_from_simulation(scheduler.completed_requests)
+    latencies, overall_latencies = compute_statistics_from_simulation(scheduler.completed_tasks)
     plot_cdf(latencies, overall_latencies, False)
 
 def run_intraop():
@@ -75,7 +75,7 @@ def run_intraop():
     scheduler = FIFOScheduler(workload, meshexecutors, model_id_to_service_name)
     simulator = Simulator(scheduler, cluster)
     simulator.start()
-    latencies, overall_latencies = compute_statistics_from_simulation(scheduler.completed_requests)
+    latencies, overall_latencies = compute_statistics_from_simulation(scheduler.completed_tasks)
     plot_cdf(latencies, overall_latencies, False)
 
 parallel_method = "interop"

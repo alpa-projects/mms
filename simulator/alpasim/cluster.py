@@ -180,6 +180,10 @@ class MeshGroup:
     @property
     def devices_lists(self):
         return [mesh.devices for mesh in self.meshes]
+    
+    @property
+    def next_idle_time(self):
+        return self.meshes[0].next_idle_time
 
     def __str__(self):
         ret = ""
@@ -208,12 +212,13 @@ class ScheduledTask:
         - meshexecutor: which meshexecutor the task is sent to
         - current_stage: which pipeline stage this task is running in
     """
-    def __init__(self, request_id, model_id, arrive_time, schedule_time, meshexecutor):
+    def __init__(self, request_id, model_id, arrive_time, schedule_time, SLO, meshexecutor):
         # set by scheduler
         self.model_id = model_id
         self.request_id = request_id
         self.arrive_time = arrive_time
         self.schedule_time = schedule_time
+        self.SLO = SLO
         self.meshexecutor = meshexecutor
         self.num_stage = meshexecutor.executable.num_stage
         self.unit_works_per_stage = [num_node * num_devices for num_node, num_devices in meshexecutor.executable.stage_shapes]
@@ -263,6 +268,10 @@ class MeshExecutor:
         self.service_name = service_name
         self.meshgroup = meshgroup
         self.executable = executable
+    
+    @property
+    def next_idle_time(self):
+        return self.meshgroup.next_idle_time
     
     def receive_task(self, task: ScheduledTask, stage_num: int, timestamp: float):
         """ Receive a task and assign it to all the GPUs in the mesh.

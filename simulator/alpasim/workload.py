@@ -1,11 +1,19 @@
 from copy import deepcopy
 import csv
+from dataclasses import dataclass
 import time
 from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.random import choice, exponential
+
+@dataclass
+class Task:
+    task_id: int
+    model_id: int
+    arrive_time: float
+    SLO: float
 
 class WorkLoad:
     """
@@ -71,6 +79,19 @@ class WorkLoad:
         # test only
         for t_ref, t_req in zip(self.arrive_times, request_times):
             assert(t_ref - t_req <= tolerance)
+        
+    def __iter__(self):
+        self.tasks = [Task(i, model_id, arrive_time, self.SLOs[model_id]) 
+                      for i, (model_id, arrive_time) in enumerate(zip(self.model_ids, self.arrive_times))]
+        self.iter_idx = 0
+        return self
+    
+    def __next__(self):
+        if self.iter_idx == len(self.tasks):
+            raise StopIteration
+        task = self.tasks[self.iter_idx]
+        self.iter_idx += 1
+        return task
 
 
 class PossoinWorkLoad(WorkLoad):

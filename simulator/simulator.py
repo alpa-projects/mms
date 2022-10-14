@@ -2,7 +2,7 @@ import argparse
 
 from alpasim.cluster import Cluster, load_meshexecutors
 from alpasim.scheduler import FIFOScheduler
-from alpasim.utils import profile_completed_tasks, dump_chrome_tracing_from_simulation
+from alpasim.utils import dump_chrome_tracing_from_simulation
 from alpasim.workload import PossoinWorkLoad
 from alpasim.simulator import Simulator
 
@@ -31,6 +31,5 @@ if __name__ == '__main__':
     scheduler = FIFOScheduler(workload, meshexecutors)
     simulator = Simulator(scheduler, cluster)
     simulator.start()
-    profile_completed_tasks(scheduler.completed_requests)
     if args.chrome_trace:
-        dump_chrome_tracing_from_simulation(scheduler.completed_requests, f"./chrome_trace/{args.name}.json")
+        dump_chrome_tracing_from_simulation(scheduler.completed_tasks, f"./chrome_trace/{args.name}.json")
