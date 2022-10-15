@@ -4,6 +4,7 @@ import asyncio
 from collections import defaultdict
 import dataclasses
 import logging
+import math
 import os
 import pickle
 import socket
@@ -53,7 +54,11 @@ class CreateInfo:
 class ModelInfo:
     create_info: CreateInfo
     managers: List[ActorHandle]
-    next_pt: int
+
+
+@dataclasses.dataclass
+class GroupInfo:
+    queue_size: int
 
 
 @ray.remote(num_cpus=1)
@@ -118,7 +123,10 @@ class Controller:
 
         # Dict[str -> ModelInfo]
         self.model_info = {}
-        self.mesh_group_managers = {}
+        # Dict[int -> GroupInfo]
+        self.group_info = {}
+        # Dict[int -> ActorHandle]
+        self.group_managers = {}
 
         # Launch http server
         self.setup_complete = asyncio.Event()
@@ -130,13 +138,14 @@ class Controller:
             group_id: int,
             virtual_mesh_shape: Optional[Tuple[int]] = None,
             num_gpus: int = 0):
-        assert group_id not in self.mesh_group_managers, (
+        assert group_id not in self.group_managers, (
             f"Mesh group {group_id} is already launched")
         self.logger.info(f"Launch mesh group manager {group_id} with "
                          f"shape={virtual_mesh_shape}")
-        self.mesh_group_managers[group_id] = (GroupManager.options(
+        self.group_managers[group_id] = (GroupManager.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
+        self.group_info[group_id] = GroupInfo(queue_size=0)
 
     async def register_model(self,
                              name: str,
@@ -153,7 +162,7 @@ class Controller:
                     raise ValueError(f"Model {name} is already registered")
 
             self.model_info[name] = ModelInfo(
-                CreateInfo(model_def, init_args, init_kwargs), [], 0)
+                CreateInfo(model_def, init_args, init_kwargs), [])
 
     async def create_replica(self,
                              name: str,
@@ -161,10 +170,10 @@ class Controller:
                              append_init_args: Optional[List] = None,
                              append_init_kwargs: Optional[Dict] = None):
         async with self.manager_lock[name]:
-            assert group_id in self.mesh_group_managers, (
+            assert group_id in self.group_managers, (
                 f"Group {group_id} does not exist")
             model_info = self.model_info[name]
-            manager = self.mesh_group_managers[group_id]
+            manager = self.group_managers[group_id]
             assert manager not in model_info.managers
             create_info = model_info.create_info.append_init_args(
                 append_init_args, append_init_kwargs)
@@ -175,6 +184,16 @@ class Controller:
                              f"on group {group_id}")
             model_info.managers.append(manager)
         await manager.create_replica.remote(name, create_info)
+
+    def select_group_id(self):
+        min_id = -1
+        min_size = math.inf
+        for group_id, group_info in self.group_info.items():
+            if group_info.queue_size < min_size:
+                min_size = group_info.queue_size
+                min_id = group_id
+        assert min_id != -1
+        return min_id
 
     async def handle_asgi(self, scope, receive, send):
         scope["ts"] = [("a", time.time())]
@@ -203,12 +222,15 @@ class Controller:
             model_info = self.model_info[name]
             assert model_info.managers, (
                 f"No replica of model '{name}' is created.")
-            manager = model_info.managers[model_info.next_pt]
-            model_info.next_pt = (model_info.next_pt + 1) % len(
-                model_info.managers)
 
+            # dispatch
+            group_id = self.select_group_id()
+            manager = self.group_managers[group_id]
+
+            self.group_info[group_id].queue_size += 1
             response = await manager.handle_request.remote(
                 name, request_wrapper_bytes)
+            self.group_info[group_id].queue_size -= 1
             if isinstance(response, Exception):
                 raise response
 
