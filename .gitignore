@@ -2,6 +2,8 @@
 workload/
 figures/
 chrome_trace/
+*.csv
+*.txt
 
 # Python cache
 __pycache__
