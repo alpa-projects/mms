@@ -157,6 +157,23 @@ class PossoinWorkLoad(WorkLoad):
                 model_ids.append(int(model_id))
                 arrive_times.append(float(arrive_time))
             return cls(int(model_num), float(tot_arrival_rate), eval(proportions), float(duration), eval(SLOs), workload_name, model_ids, arrive_times)
+
+class AzureFunctionWorkload(WorkLoad):
+    def __init__(self, model_num: int, duration: float, SLOs: List[float], workload_name: str):
+        super().__init__(model_num, duration, SLOs, workload_name)
+    
+    @classmethod
+    def load(cls, filename: str):
+        with open(filename, 'r', newline='') as workload_file:
+            reader = csv.reader(workload_file)
+            # first row is metadata
+            model_num, duration, SLOs, workload_name = next(reader)
+            # request model id, arrival timestamp
+            model_ids, arrive_times = [], []
+            for model_id, arrive_time in reader:
+                model_ids.append(int(model_id))
+                arrive_times.append(float(arrive_time))
+            return cls(int(model_num), float(duration), eval(SLOs), workload_name, model_ids, arrive_times)
     
    
 def generate_workload(model_num: int, tot_arrival_rate: float, proportions: List[float], duration: float, SLOs: List[float], workload_name: str = "PossoinWorkLoad"):
