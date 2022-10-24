@@ -272,21 +272,21 @@ if __name__ == "__main__":
 
     if args.policy == "manual_1":
         group_id = 0
-        controller.launch_mesh_group_manager.remote(group_id, [1, 1])
+        controller.create_mesh_group_manager.remote(group_id, [1, 1])
         controller.create_replica.remote(
             "alpa/bert-1", group_id, (ParallelConfig(1, 1, 1),))
         controller.create_replica.remote(
             "alpa/bert-2", group_id, (ParallelConfig(1, 1, 1),))
 
         group_id = 1
-        controller.launch_mesh_group_manager.remote(group_id, [1, 1])
+        controller.create_mesh_group_manager.remote(group_id, [1, 1])
         controller.create_replica.remote(
             "alpa/bert-1", group_id, (ParallelConfig(1, 1, 1),))
         controller.create_replica.remote(
             "alpa/bert-2", group_id, (ParallelConfig(1, 1, 1),))
     elif args.policy == "manual_2":
         group_id = 0
-        controller.launch_mesh_group_manager.remote(group_id, [1, 2])
+        controller.create_mesh_group_manager.remote(group_id, [1, 2])
         controller.create_replica.remote(
             "alpa/bert-1", group_id, (ParallelConfig(1, 1, 2),))
         controller.create_replica.remote(
