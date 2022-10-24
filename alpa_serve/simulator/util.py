@@ -12,4 +12,3 @@ def install_remote_methods(x):
                 new_value = partial(value)
             setattr(new_value, "remote", new_value)
             setattr(x, key, new_value)
-

@@ -31,7 +31,7 @@ class GroupManager:
 
     @timed_coroutine
     async def handle_request(self, name: str, request):
-        await wait_stream("gpu", 0.05)
+        await wait_stream("gpu", 0.08)
 
 
 class Controller:
@@ -104,7 +104,7 @@ class Controller:
     async def handle_request(self, request):
         start = clock()
 
-        name = request.name
+        name = request.model_name
 
         assert name in self.model_info, (
             f"Model '{name}' is not registered.")
@@ -131,7 +131,7 @@ class Client:
         self.res_dict = dict()
 
     @timed_coroutine
-    async def submit_one(self, idx, request, start, finish):
+    async def submit_one(self, request, idx, start, finish):
         start[idx] = clock()
         await self.controller.handle_request(request)
         finish[idx] = clock()
@@ -141,32 +141,12 @@ class Client:
         self.res_dict[workload] = (start, finish)
 
         for i in range(len(workload)):
-            self.submit_one(i, workload.requests[i], start, finish,
+            self.submit_one(workload.requests[i], i, start, finish,
                             tstamp=workload.arrivals[i])
 
-    def print_stats(self, workload: Workload, warmup=10):
+    def print_stats(self, workload: Workload, warmup: float):
         start, finish = self.res_dict[workload]
-
-        # Skip the first and last `warmup` seconds
-        ct = 0
-        while ct < len(start) and start[ct] - start[0] < warmup:
-            ct += 1
-        start = np.array(start[ct:-ct])
-        finish = np.array(finish[ct:-ct])
-
-        # Compute stats
-        throughput = len(start) / (finish[-1] - start[0])
-        latency = finish - start
-        sorted_latency = np.sort(latency)
-        average_latency = np.mean(latency)
-        tail_latnecy_90 = sorted_latency[int(0.90 * len(sorted_latency))]
-        tail_latnecy_99 = sorted_latency[int(0.99 * len(sorted_latency))]
-
-        print(f"#req: {len(latency)}")
-        print(f"throughput: {throughput:.2f} q/s")
-        print(f"latency mean: {np.mean(latency)*1e3:.2f} ms, "
-              f"std: {np.std(latency)*1e3:.2f} ms, "
-              f"p90 : {tail_latnecy_90*1e3:.2f} ms")
+        workload.print_stats(start, finish, warmup)
 
 
 async def test_main():
@@ -184,7 +164,7 @@ async def test_main():
 
     await main_task()
 
-    client.print_stats(w)
+    client.print_stats(w, warmup=10)
 
 
 if __name__ == "__main__":
