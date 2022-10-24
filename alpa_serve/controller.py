@@ -11,10 +11,10 @@ import socket
 import time
 from typing import Callable, List, Dict, Optional, Tuple, Any, Union
 
-from fastapi.middleware.cors import CORSMiddleware
 import ray
 from ray.actor import ActorHandle
 from starlette.datastructures import QueryParams
+from starlette.middleware.cors import CORSMiddleware
 import uvicorn
 
 from alpa.api import init

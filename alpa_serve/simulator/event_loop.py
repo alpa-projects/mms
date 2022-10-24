@@ -1,13 +1,11 @@
 """A discrete event simulator that supports asyncio"""
 import asyncio
 from collections import defaultdict
-from enum import Enum, auto
 import dataclasses
+from enum import Enum, auto
 from functools import partial
 import queue
 from typing import Callable, Any, List, Dict, Optional, Union
-
-eps = 1e-15
 
 
 class CoroutineStatus(Enum):
@@ -32,8 +30,6 @@ class TimedCoroutine:
         self.resume_future_value = None
         self.waiter = None
 
-        self.start = None
-        self.end = None
         self.ret_value = None
 
     def __lt__(self, other):
@@ -80,7 +76,6 @@ class EventLoop:
                 coroutine = tc.func()
                 atask = asyncio.create_task(coroutine)
                 tc.atask = atask
-                tc.start = self.clock_
             elif tc.status == CoroutineStatus.PAUSE:
                 atask = tc.atask
                 if tc.resume_event:
@@ -100,7 +95,6 @@ class EventLoop:
                 tc.ret_value = await list(done)[0]
                 if tc.afuture:
                     tc.afuture.set_result(tc.ret_value)
-                tc.end = self.clock_
 
                 if tc.waiter:
                     w = tc.waiter
@@ -149,17 +143,17 @@ class EventLoop:
         return self.clock_
 
 
-
 loop = None
-sleep = clock = wait_stream = None
-
 
 def init_event_loop():
-    global loop, sleep, clock, wait_stream
+    global loop
     loop = EventLoop()
-    clock = loop.clock
-    sleep = loop.sleep
-    wait_stream = loop.wait_stream
+
+
+clock = lambda: loop.clock()
+sleep = lambda *args: loop.sleep(*args)
+wait_stream = lambda *args: loop.wait_stream(*args)
+main_task = lambda: loop.main_task
 
 
 def timed_coroutine(func):
@@ -168,6 +162,9 @@ def timed_coroutine(func):
             tstamp = kwargs.pop("tstamp")
         elif "delay" in kwargs:
             tstamp = kwargs.pop("delay") + loop.clock()
+        else:
+            tstamp = loop.clock()
+        assert asyncio.iscoroutinefunction(func), f"{func}"
         return loop.put_coroutine(tstamp, func, args, kwargs)
 
     return ret_func
