@@ -63,12 +63,12 @@ if __name__ == "__main__":
     client = Client(url)
 
     tic = time.time() + 2
-    w1 = Workload.gen_poisson("alpa/bert-1", tic, 8, 50, seed=1)
-    w2 = Workload.gen_uniform("alpa/bert-2", tic, 2, 50, seed=2)
+    w1 = Workload.gen_poisson("alpa/bert-1", tic, 6, 60, seed=1)
+    w2 = Workload.gen_poisson("alpa/bert-2", tic, 6, 60, seed=2)
     w = w1 + w2
 
     fs = client.submit_workload(w)
     assert tic > time.time()
 
     wait(fs)
-    client.print_stats(w, fs, warmup=2)
+    client.print_stats(w, fs, warmup=10)
