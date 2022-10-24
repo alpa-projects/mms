@@ -74,7 +74,7 @@ class GroupManager:
 
         self.logger = build_logger()
 
-        # Dict[str, object]
+        # Dict[str -> object]
         self.replicas = {}
 
     def create_replica(self, name: str, create_info: CreateInfo):
@@ -130,10 +130,9 @@ class Controller:
 
         # Launch http server
         self.setup_complete = asyncio.Event()
-        self.http_server_task = asyncio.get_event_loop().create_task(
-            self.run_http_server())
+        self.http_server_task = asyncio.create_task(self.run_http_server())
 
-    async def launch_mesh_group_manager(
+    async def create_mesh_group_manager(
             self,
             group_id: int,
             virtual_mesh_shape: Optional[Tuple[int]] = None,
