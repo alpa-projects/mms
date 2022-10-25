@@ -30,7 +30,7 @@ class SimulatorTest(unittest.TestCase):
         controller.create_replica.remote("echo", group_id)
 
         request = Request("echo", None, None)
-        ret = controller.handle_request(request)
+        ret = controller.handle_request.remote(request)
         assert request == await ret
 
     def test_query(self):

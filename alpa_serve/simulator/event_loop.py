@@ -1,7 +1,6 @@
 """A discrete event simulator that supports asyncio"""
 import asyncio
 from collections import defaultdict
-import dataclasses
 from enum import Enum, auto
 from functools import partial
 import queue
@@ -56,7 +55,7 @@ class EventLoop:
     def __init__(self):
         self.queue = asyncio.PriorityQueue()
         self.clock_ = 0
-        self.cur_tc = None
+        self.cur_tc = None  # The current TimedCoroutine
         self.pause_event = asyncio.Event()
 
         self.streams = defaultdict(Stream)
@@ -159,6 +158,7 @@ class EventLoop:
 loop = None
 
 def run_event_loop(coroutine):
+    """Run and simulate an event loop"""
     async def main():
         global loop
         loop = EventLoop()
@@ -176,6 +176,7 @@ wait_multi_stream = lambda *args: loop.wait_multi_stream(*args)
 
 
 def timed_coroutine(func):
+    """Convert a coroutine function to a timed coroutine function for simulation."""
     def ret_func(*args, **kwargs):
         if "tstamp" in kwargs:
             tstamp = kwargs.pop("tstamp")
