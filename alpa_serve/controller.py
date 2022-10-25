@@ -11,10 +11,10 @@ import socket
 import time
 from typing import Callable, List, Dict, Optional, Tuple, Any, Union
 
-from fastapi.middleware.cors import CORSMiddleware
 import ray
 from ray.actor import ActorHandle
 from starlette.datastructures import QueryParams
+from starlette.middleware.cors import CORSMiddleware
 import uvicorn
 
 from alpa.api import init
@@ -27,8 +27,6 @@ from alpa_serve.util import build_logger
 logger = logging.getLogger(__file__)
 
 CONTROLLER_NAME = "controller"
-MAX_REPLICA_FAILURE_RETRIES = 10
-DISCONNECT_ERROR_CODE = "disconnection"
 SOCKET_REUSE_PORT_ENABLED = (os.environ.get("SERVE_SOCKET_REUSE_PORT_ENABLED",
                                             "1") == "1")
 
@@ -36,17 +34,18 @@ SOCKET_REUSE_PORT_ENABLED = (os.environ.get("SERVE_SOCKET_REUSE_PORT_ENABLED",
 @dataclasses.dataclass
 class CreateInfo:
     model_def: Any
-    init_args: Optional[List]
-    init_kwargs: Optional[Dict]
+    init_args: Optional[List] = None
+    init_kwargs: Optional[Dict] = None
 
     def append_init_args(self,
                          init_args: Optional[List] = None,
                          init_kwargs: Optional[Dict] = None):
         return CreateInfo(
             self.model_def,
-            self.init_args + init_args if init_args else self.init_args,
-            dict(self.init_kwargs).update(init_kwargs)
-            if init_kwargs else self.init_kwargs,
+            (self.init_args if self.init_args else []) + (
+                init_args if init_args else []),
+            (self.init_kwargs if self.init_kwargs else {}).update(
+                init_kwargs if init_kwargs else {}),
         )
 
 
@@ -74,7 +73,7 @@ class GroupManager:
 
         self.logger = build_logger()
 
-        # Dict[str, object]
+        # Dict[str -> object]
         self.replicas = {}
 
     def create_replica(self, name: str, create_info: CreateInfo):
@@ -130,10 +129,9 @@ class Controller:
 
         # Launch http server
         self.setup_complete = asyncio.Event()
-        self.http_server_task = asyncio.get_event_loop().create_task(
-            self.run_http_server())
+        self.http_server_task = asyncio.create_task(self.run_http_server())
 
-    async def launch_mesh_group_manager(
+    async def create_mesh_group_manager(
             self,
             group_id: int,
             virtual_mesh_shape: Optional[Tuple[int]] = None,

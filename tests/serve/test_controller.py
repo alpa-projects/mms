@@ -48,7 +48,7 @@ class TokenizerModel:
 class ControllerTest(unittest.TestCase):
 
     def setUp(self):
-        ray.init(address="auto", namespace="alpa_serve")
+        ray.init(address="auto")
 
     def tearDown(self):
         ray.shutdown()
@@ -63,7 +63,7 @@ class ControllerTest(unittest.TestCase):
         controller.register_model.remote("add_one", AddOneModel)
         controller.register_model.remote("tokenizer", TokenizerModel)
         group_id = 0
-        controller.launch_mesh_group_manager.remote(group_id, [1, 4])
+        controller.create_mesh_group_manager.remote(group_id, [1, 4])
         a = controller.create_replica.remote("echo", group_id)
         b = controller.create_replica.remote("add_one", group_id)
         c = controller.create_replica.remote("tokenizer", group_id)

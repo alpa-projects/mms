@@ -1,25 +1,21 @@
 """Model placement policy"""
-from collections import namedtuple
-from dataclasses import dataclass
+import dataclasses
 import multiprocessing
 import time
 from typing import List, Tuple
 
 import numpy as np
 import pulp
-from pulp import LpVariable, LpProblem, LpMaximize, lpSum, lpDot, LpStatus
+from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
 
 
-@dataclass
+@dataclasses.dataclass
 class ModelData:
     name: str
     model_mem: float
     average_load: float
     single_throughput: float
     pipeline_decay: List[Tuple[int, float]] = None
-
-
-ParallelConfig = namedtuple("ParallelConfig", ("dp", "mp", "pp"))
 
 
 class PlacementPolicy:
