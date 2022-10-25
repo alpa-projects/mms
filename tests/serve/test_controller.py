@@ -48,7 +48,7 @@ class TokenizerModel:
 class ControllerTest(unittest.TestCase):
 
     def setUp(self):
-        ray.init(address="auto", namespace="alpa_serve")
+        ray.init(address="auto")
 
     def tearDown(self):
         ray.shutdown()

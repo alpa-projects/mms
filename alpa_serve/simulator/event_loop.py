@@ -158,17 +158,21 @@ class EventLoop:
 
 loop = None
 
-def init_event_loop():
-    global loop
-    assert loop is None
-    loop = EventLoop()
+def run_event_loop(coroutine):
+    async def main():
+        global loop
+        loop = EventLoop()
+        ret = await coroutine
+        await loop.main_task
+        return ret
+
+    return asyncio.run(main())
 
 
 clock = lambda: loop.clock()
 sleep = lambda *args: loop.sleep(*args)
 wait_stream = lambda *args: loop.wait_stream(*args)
 wait_multi_stream = lambda *args: loop.wait_multi_stream(*args)
-main_task = lambda: loop.main_task
 
 
 def timed_coroutine(func):
@@ -203,13 +207,11 @@ async def high_event():
 
 
 async def test_main():
-    init_event_loop()
-
     high_event(tstamp=1)
     x = high_event(tstamp=1)
 
-    assert (await x == "high")
+    return await x
 
 
 if __name__ == "__main__":
-    asyncio.run(test_main())
+    run_event_loop(test_main())

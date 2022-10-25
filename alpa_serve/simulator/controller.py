@@ -3,22 +3,16 @@ The serving controller.
 
 This file simulates `alpa_serve/controler.py`.
 """
-import asyncio
-import dataclasses
-from functools import partial
 import math
-from typing import Callable, List, Dict, Optional, Tuple, Any, Union
+from typing import Callable, List, Dict, Optional, Tuple
 
 import numpy as np
 
 from alpa_serve.controller import CreateInfo, ModelInfo, GroupInfo
-from alpa_serve.placement_policy import ParallelConfig
 from alpa_serve.simulator.cluster import VirtualMesh
-from alpa_serve.simulator.event_loop import (timed_coroutine, wait_stream, sleep,
-    clock, init_event_loop, main_task)
-from alpa_serve.simulator.executable import Executable, ProfilingResult
-from alpa_serve.simulator.workload import Workload
+from alpa_serve.simulator.event_loop import timed_coroutine, clock
 from alpa_serve.simulator.util import install_remote_methods
+from alpa_serve.simulator.workload import Workload
 
 
 class GroupManager:
@@ -40,7 +34,7 @@ class GroupManager:
 
     @timed_coroutine
     async def handle_request(self, name: str, request):
-        await self.replicas[name].execute(batch_size=1)
+        return await self.replicas[name].handle_request(request)
 
 
 class Controller:
@@ -110,8 +104,6 @@ class Controller:
 
     @timed_coroutine
     async def handle_request(self, request):
-        start = clock()
-
         name = request.model_name
 
         assert name in self.model_info, (
@@ -155,28 +147,3 @@ class Client:
     def print_stats(self, workload: Workload, warmup: float):
         start, finish = self.res_dict[workload]
         workload.print_stats(start, finish, warmup)
-
-
-async def test_main():
-    init_event_loop()
-
-    controller = Controller()
-    controller.register_model.remote(
-        "a", partial(Executable, ProfilingResult.load("alpa/bert-1.3b")))
-
-    group_id = 0
-    controller.create_mesh_group_manager.remote(group_id, [1, 2])
-    controller.create_replica.remote("a", group_id,
-                                     [ParallelConfig(1, 1, 2)])
-
-    w = Workload.gen_poisson("a", 0, 10, 60)
-    client = Client(controller)
-    client.submit_workload(w)
-
-    await main_task()
-
-    client.print_stats(w, warmup=10)
-
-
-if __name__ == "__main__":
-    asyncio.run(test_main())

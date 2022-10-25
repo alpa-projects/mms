@@ -1,3 +1,4 @@
+"""Workload definition"""
 from collections import defaultdict
 import dataclasses
 import random
@@ -10,12 +11,15 @@ from alpa.util import to_str_round
 
 @dataclasses.dataclass
 class Request:
+    """A single request."""
     model_name: str
     data: Any
     slo: float
 
 
 class Workload:
+    """A sorted list of requests."""
+
     def __init__(self, arrivals: List[float], requests: List[Request]):
         assert len(arrivals) == len(requests)
 
@@ -23,6 +27,8 @@ class Workload:
         self.requests = requests
 
     def print_stats(self, start: Sequence[float], finish: Sequence[float], warmup: float):
+        """Print the statistics of serving results."""
+
         # Skip the first and last `warmup` seconds
         ct = 1
         while ct < len(start) and start[ct] - start[0] < warmup:
