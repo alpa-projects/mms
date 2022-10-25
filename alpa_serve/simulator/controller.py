@@ -1,3 +1,8 @@
+"""
+The serving controller.
+
+This file simulates `alpa_serve/controler.py`.
+"""
 import asyncio
 import dataclasses
 from functools import partial
@@ -7,15 +12,18 @@ from typing import Callable, List, Dict, Optional, Tuple, Any, Union
 import numpy as np
 
 from alpa_serve.controller import CreateInfo, ModelInfo, GroupInfo
+from alpa_serve.placement_policy import ParallelConfig
+from alpa_serve.simulator.cluster import VirtualMesh
 from alpa_serve.simulator.event_loop import (timed_coroutine, wait_stream, sleep,
     clock, init_event_loop, main_task)
+from alpa_serve.simulator.executable import Executable, ProfilingResult
 from alpa_serve.simulator.workload import Workload
 from alpa_serve.simulator.util import install_remote_methods
 
 
 class GroupManager:
     def __init__(self, virtual_mesh_shape):
-        self.virtual_mesh_shape = virtual_mesh_shape
+        self.virtual_mesh = VirtualMesh(virtual_mesh_shape)
 
         # Dict[str -> object]
         self.replicas = {}
@@ -27,15 +35,15 @@ class GroupManager:
                                    create_info.init_kwargs)
         args = args or []
         kwargs = kwargs or {}
+        kwargs["virtual_mesh"] = self.virtual_mesh
         self.replicas[name] = model_def(*args, **kwargs)
 
     @timed_coroutine
     async def handle_request(self, name: str, request):
-        await wait_stream("gpu", 0.08)
+        await self.replicas[name].execute(batch_size=1)
 
 
 class Controller:
-
     def __init__(self):
         # Dict[str -> ModelInfo]
         self.model_info = {}
@@ -153,12 +161,15 @@ async def test_main():
     init_event_loop()
 
     controller = Controller()
-    controller.register_model.remote("a", lambda: None)
-    group_id = 0
-    controller.create_mesh_group_manager.remote(group_id, [1, 4])
-    controller.create_replica.remote("a", group_id)
+    controller.register_model.remote(
+        "a", partial(Executable, ProfilingResult.load("alpa/bert-1.3b")))
 
-    w = Workload.gen_poisson('a', 0, 10, 60)
+    group_id = 0
+    controller.create_mesh_group_manager.remote(group_id, [1, 2])
+    controller.create_replica.remote("a", group_id,
+                                     [ParallelConfig(1, 1, 2)])
+
+    w = Workload.gen_poisson("a", 0, 10, 60)
     client = Client(controller)
     client.submit_workload(w)
 

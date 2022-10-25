@@ -27,8 +27,6 @@ from alpa_serve.util import build_logger
 logger = logging.getLogger(__file__)
 
 CONTROLLER_NAME = "controller"
-MAX_REPLICA_FAILURE_RETRIES = 10
-DISCONNECT_ERROR_CODE = "disconnection"
 SOCKET_REUSE_PORT_ENABLED = (os.environ.get("SERVE_SOCKET_REUSE_PORT_ENABLED",
                                             "1") == "1")
 
@@ -36,17 +34,18 @@ SOCKET_REUSE_PORT_ENABLED = (os.environ.get("SERVE_SOCKET_REUSE_PORT_ENABLED",
 @dataclasses.dataclass
 class CreateInfo:
     model_def: Any
-    init_args: Optional[List]
-    init_kwargs: Optional[Dict]
+    init_args: Optional[List] = None
+    init_kwargs: Optional[Dict] = None
 
     def append_init_args(self,
                          init_args: Optional[List] = None,
                          init_kwargs: Optional[Dict] = None):
         return CreateInfo(
             self.model_def,
-            self.init_args + init_args if init_args else self.init_args,
-            dict(self.init_kwargs).update(init_kwargs)
-            if init_kwargs else self.init_kwargs,
+            (self.init_args if self.init_args else []) + (
+                init_args if init_args else []),
+            (self.init_kwargs if self.init_kwargs else {}).update(
+                init_kwargs if init_kwargs else {}),
         )
 
 

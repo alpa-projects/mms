@@ -19,7 +19,7 @@ class ModelData:
     pipeline_decay: List[Tuple[int, float]] = None
 
 
-ParallelConfig = namedtuple("ParallelConfig", ("dp", "mp", "pp"))
+ParallelConfig = namedtuple("ParallelConfig", ("dp", "op", "pp"))
 
 
 class PlacementPolicy:

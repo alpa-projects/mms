@@ -5,7 +5,7 @@ import dataclasses
 from enum import Enum, auto
 from functools import partial
 import queue
-from typing import Callable, Any, List, Dict, Optional, Union
+from typing import Callable, List, Dict, Union, Sequence
 
 
 class CoroutineStatus(Enum):
@@ -139,6 +139,19 @@ class EventLoop:
 
         return self.sleep(stream.clock - self.clock_)
 
+    def wait_multi_stream(self, names: Sequence[Union[str, int]],
+                          durations: Sequence[float]):
+        assert all(d >= 0 for d in durations)
+        assert len(names) == len(durations)
+
+        max_clock = -1
+        for i in range(len(names)):
+            stream = self.streams[names[i]]
+            stream.clock = max(stream.clock, self.clock_) + durations[i]
+            max_clock = max(max_clock, stream.clock)
+
+        return self.sleep(max_clock - self.clock_)
+
     def clock(self):
         return self.clock_
 
@@ -147,12 +160,14 @@ loop = None
 
 def init_event_loop():
     global loop
+    assert loop is None
     loop = EventLoop()
 
 
 clock = lambda: loop.clock()
 sleep = lambda *args: loop.sleep(*args)
 wait_stream = lambda *args: loop.wait_stream(*args)
+wait_multi_stream = lambda *args: loop.wait_multi_stream(*args)
 main_task = lambda: loop.main_task
 
 
@@ -173,7 +188,7 @@ def timed_coroutine(func):
 @timed_coroutine
 async def low_event():
     print("low event", clock(), flush=True)
-    await wait_stream("gpu", 10)
+    await wait_multi_stream(["gpu1", "gpu2"], [5, 10])
     return "low"
 
 
