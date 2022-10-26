@@ -79,8 +79,10 @@ class EventLoop:
                 atask = tc.atask
                 if tc.resume_event:
                     tc.resume_event.set()
+                    tc.resume_event = None
                 elif tc.resume_future:
                     tc.resume_future.set_result(tc.resume_future_value)
+                    tc.resume_future = None
                 else:
                     raise NotImplementedError()
             else:
@@ -89,7 +91,11 @@ class EventLoop:
             done, pending = await asyncio.wait([atask, self.pause_event.wait()],
                 return_when=asyncio.FIRST_COMPLETED)
 
-            if tc.atask.done():
+            if atask.done():
+                if atask.exception():
+                    exception = atask.exception()
+                    print(f"Exception: {exception}")
+
                 tc.status = CoroutineStatus.FINISH
                 tc.ret_value = await list(done)[0]
                 if tc.afuture:

@@ -208,7 +208,9 @@ class BertModel:
             }
             outputs = executable(params, batch)
             request.scope["ts"].append(("d", time.time()))
-            return await outputs.logits.to_np_async()
+            logits = outputs.logits
+            logits.prefetch()
+            return await logits.to_np_async()
 
         return infer_func
 

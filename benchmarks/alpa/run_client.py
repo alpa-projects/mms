@@ -11,7 +11,7 @@ from alpa_serve.simulator.workload import Workload
 
 
 class Client:
-    def __init__(self, url, max_workers=20):
+    def __init__(self, url, max_workers=10):
         self.url = url
         self.executor = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
 

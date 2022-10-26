@@ -78,7 +78,7 @@ class ControllerTest(unittest.TestCase):
             "input": "Paris is the capital city of",
         }
         resp = requests.post(url=url, json=json)
-        assert resp.json() == json
+        assert resp.json() == json, f"{resp.json()}"
 
         resp = requests.post(url=url,
                              json={
