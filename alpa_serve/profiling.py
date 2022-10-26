@@ -33,7 +33,7 @@ class ProfilingResult:
                         1: [0.099],
                     },
                     ParallelConfig(1, 1, 2): {
-                        1: [0.050, 0.050],
+                        1: [0.051, 0.052],
                     },
                 },
                 preprocess_cpu=0,
