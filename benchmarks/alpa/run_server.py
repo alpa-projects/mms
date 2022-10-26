@@ -11,9 +11,10 @@ from alpa import (PipeshardParallel, get_global_cluster,
                   AutoShardingOption, ManualStageOption,
                   parallelize)
 from alpa_serve import run_controller
+from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy import (
     SelectiveReplication, SelectiveReplicationWithPipeline,
-    ModelData, ParallelConfig)
+    ModelData)
 from alpa.util import compute_bytes, compute_param_number, GB
 import jax
 import jax.numpy as jnp
@@ -259,7 +260,7 @@ class BertModel:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--policy", type=str, required=True)
-    parser.add_argument("--port", type=int, default=20001)
+    parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
 
     ray.init(address="auto")
@@ -312,5 +313,8 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Invalid policy: {args.policy}")
 
+    controller.sync()
+
+    print("Init done")
     while True:
         pass
