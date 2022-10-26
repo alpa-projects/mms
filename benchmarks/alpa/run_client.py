@@ -1,22 +1,22 @@
 import argparse
+import asyncio
 import concurrent.futures
 from concurrent.futures import wait
-import logging
 import time
 
-import numpy as np
-import ray
 import requests
 
 from alpa.util import to_str_round
 from alpa_serve.simulator.workload import Workload
-from benchmarks.alpa.util import build_logger
 
 
 class Client:
     def __init__(self, url, max_workers=20):
         self.url = url
         self.executor = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
+
+        self.futures = dict()
+        self.res_dict = dict()
 
     @staticmethod
     def submit_one(url, model_name, start, idx):
@@ -27,7 +27,7 @@ class Client:
             "input": f"I like this movie {idx}",
         }
         res = requests.post(url=url, params={"model": model_name}, json=json)
-        assert res.status_code == 200
+        assert res.status_code == 200, f"{res.json()}"
         end = time.time()
 
         res = res.json()
@@ -41,34 +41,54 @@ class Client:
                                         workload.requests[i].model_name,
                                         workload.arrivals[i], i)
                    for i in range(len((workload)))]
-        return futures
- 
-    def print_stats(self, workload: Workload, futures, warmup):
-        if not futures:
-            return
-        res = [f.result() for f in futures]
-        start, finish = zip(*res)
+        self.futures[workload] = futures
 
+    async def wait_all(self):
+        for futures in self.futures.values():
+            wait(futures)
+
+        for workload, futures in self.futures.items():
+            res = [f.result() for f in futures]
+            start, finish = zip(*res)
+            self.res_dict[workload] = (start, finish)
+
+        self.futuress = dict()
+
+    def print_stats(self, workload: Workload, warmup: float):
+        start, finish = self.res_dict[workload]
         workload.print_stats(start, finish, warmup)
+
+
+def generate_workload(workload, start=0):
+    if workload == "tmp":
+        w1 = Workload.gen_poisson("a", start, 8, 60, seed=1)
+        w2 = Workload.gen_poisson("b", start, 8, 60, seed=2)
+        w = w1 + w2
+    else:
+        raise ValueError(f"Invalid workload name: {workload}")
+
+    return w
+
+
+async def run_workload(client, workload):
+    client.submit_workload(workload)
+
+    await client.wait_all()
+
+    client.print_stats(workload, warmup=10)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--workload", type=str, default="tmp")
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     url = f"http://localhost:{args.port}"
 
+    # Launch the client
     client = Client(url)
+    workload = generate_workload(args.workload, start=time.time() + 2)
 
-    tic = time.time() + 2
-    w1 = Workload.gen_poisson("alpa/bert-1", tic, 6, 60, seed=1)
-    w2 = Workload.gen_poisson("alpa/bert-2", tic, 6, 60, seed=2)
-    w = w1 + w2
-
-    fs = client.submit_workload(w)
-    assert tic > time.time()
-
-    wait(fs)
-    client.print_stats(w, fs, warmup=10)
+    # Run workloads
+    asyncio.run(run_workload(client, workload))

@@ -60,7 +60,7 @@ class EventLoop:
 
         self.streams = defaultdict(Stream)
 
-        self.main_task = asyncio.create_task(self.run())
+        self.main_loop = asyncio.create_task(self.run())
 
     async def run(self):
         while not self.queue.empty():
@@ -163,7 +163,7 @@ def run_event_loop(coroutine):
         global loop
         loop = EventLoop()
         ret = await coroutine
-        await loop.main_task
+        await loop.main_loop
         return ret
 
     return asyncio.run(main())
@@ -173,6 +173,7 @@ clock = lambda: loop.clock()
 sleep = lambda *args: loop.sleep(*args)
 wait_stream = lambda *args: loop.wait_stream(*args)
 wait_multi_stream = lambda *args: loop.wait_multi_stream(*args)
+main_loop = lambda: loop.main_loop
 
 
 def timed_coroutine(func):
@@ -184,34 +185,32 @@ def timed_coroutine(func):
             tstamp = kwargs.pop("delay") + loop.clock()
         else:
             tstamp = loop.clock()
-        assert asyncio.iscoroutinefunction(func), f"{func}"
+        assert asyncio.iscoroutinefunction(func)
         return loop.put_coroutine(tstamp, func, args, kwargs)
 
     return ret_func
 
 
 @timed_coroutine
-async def low_event():
-    print("low event", clock(), flush=True)
-    await wait_multi_stream(["gpu1", "gpu2"], [5, 10])
-    return "low"
+async def call_model():
+    print("call_model", clock(), flush=True)
+    await wait_stream("gpu", 10)
+    return "answer"
 
 
 @timed_coroutine
-async def high_event():
-    print("high level begin", clock(), flush=True)
-    x = await low_event(delay=5)
-    assert x == "low"
-    print("high level end", clock(), flush=True)
-
-    return "high"
+async def call_controller():
+    print("call_controller begin", clock(), flush=True)
+    x = await call_model(delay=5)
+    print("call_controller end", clock(), flush=True)
+    return x
 
 
 async def test_main():
-    high_event(tstamp=1)
-    x = high_event(tstamp=1)
+    call_controller(tstamp=1)
+    x = call_controller(tstamp=1)
 
-    return await x
+    assert (await x) == "answer"
 
 
 if __name__ == "__main__":

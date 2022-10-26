@@ -4,6 +4,7 @@ from functools import partial
 import unittest
 
 from alpa_serve.profiling import ParallelConfig, ProfilingResult
+from alpa_serve.controller import run_controller
 from alpa_serve.simulator.controller import Controller, Client
 from alpa_serve.simulator.event_loop import run_event_loop
 from alpa_serve.simulator.executable import Executable
@@ -11,7 +12,7 @@ from alpa_serve.simulator.workload import Workload, Request
 
 
 class EchoModel:
-    def __init__(self, virtual_mesh):
+    def __init__(self, virtual_mesh=None):
         pass
 
     async def handle_request(self, request):
@@ -20,21 +21,27 @@ class EchoModel:
 
 class SimulatorTest(unittest.TestCase):
 
-    async def main_test_query(self):
-        controller = Controller()
-
+    async def main_test_query(self, controller):
         controller.register_model.remote("echo", EchoModel)
 
         group_id = 0
         controller.create_mesh_group_manager.remote(group_id, [1, 4])
         controller.create_replica.remote("echo", group_id)
 
+        controller.sync()
+
         request = Request("echo", None, None)
         ret = controller.handle_request.remote(request)
         assert request == await ret
 
     def test_query(self):
-        run_event_loop(self.main_test_query())
+        # Test the simulator
+        controller = Controller()
+        run_event_loop(self.main_test_query(controller))
+
+        # Test the real system
+        controller = run_controller("localhost")
+        asyncio.run(self.main_test_query(controller))
 
     async def main_test_client(self):
         controller = Controller()

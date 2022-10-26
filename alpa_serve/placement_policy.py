@@ -46,7 +46,7 @@ class SelectiveReplication(PlacementPolicy):
                 if placement[m_id][g_id]:
                     name = model_datas[m_id].name
                     tasks.append(controller.create_replica.remote(
-                        name, g_id, (ParallelConfig(1, 1, 1),)))
+                        name, g_id, [ParallelConfig(1, 1, 1)]))
         return tasks
 
     def solve(self,
@@ -147,7 +147,7 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
             for m_id in group_models[g_id]:
                 name = model_datas[m_id].name
                 tasks.append(controller.create_replica.remote(
-                    name, g_id, (ParallelConfig(1, 1, pp_size),)))
+                    name, g_id, [ParallelConfig(1, 1, pp_size)]))
 
         return tasks
 

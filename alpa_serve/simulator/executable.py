@@ -1,7 +1,7 @@
 """A pipeline executable."""
 from alpa_serve.profiling import ParallelConfig, ProfilingResult
 from alpa_serve.simulator.cluster import VirtualMesh
-from alpa_serve.simulator.event_loop import wait_multi_stream
+from alpa_serve.simulator.event_loop import wait_multi_stream, wait_stream
 
 
 class Executable:
@@ -17,7 +17,7 @@ class Executable:
         submesh_shapes = (
             (parallel_config.dp, parallel_config.op),) * parallel_config.pp
         if virtual_mesh.launched_mesh_group:
-            assert submesh_shape == virtual_mesh.submesh_shapes
+            assert submesh_shapes == virtual_mesh.submesh_shapes
             mesh_group = virtual_mesh.launched_mesh_group
         else:
             mesh_group = virtual_mesh.launch_mesh_group(submesh_shapes)
@@ -29,7 +29,12 @@ class Executable:
 
         latencies = self.stage_latency[batch_size]
         for mesh, latency in zip(self.mesh_group.meshes, latencies):
+            # SPMD version
+            stream = mesh.gpus[0].stream_name
+            await wait_stream(stream, latency)
 
-            streams = [g.stream_name for g in mesh.gpus]
-            durations = [latency] * len(streams)
-            await wait_multi_stream(streams, durations)
+            # More accurate version
+            #streams = [g.stream_name for g in mesh.gpus]
+            #durations = [latency] * len(streams)
+            #await wait_multi_stream(streams, durations)
+
