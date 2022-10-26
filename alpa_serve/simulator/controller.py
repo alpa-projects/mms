@@ -13,7 +13,7 @@ import numpy as np
 
 from alpa_serve.controller import CreateInfo, ModelInfo, GroupInfo, build_logger
 from alpa_serve.simulator.cluster import VirtualMesh
-from alpa_serve.simulator.event_loop import timed_coroutine, clock
+from alpa_serve.simulator.event_loop import timed_coroutine, clock, main_loop
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import Workload
 
@@ -187,6 +187,9 @@ class Client:
         for i in range(len(workload)):
             self.submit_one(workload.requests[i], i, start, finish,
                             tstamp=workload.arrivals[i])
+
+    def wait_all(self):
+        return main_loop()
 
     def print_stats(self, workload: Workload, warmup: float):
         start, finish = self.res_dict[workload]

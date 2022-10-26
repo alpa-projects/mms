@@ -185,7 +185,7 @@ def timed_coroutine(func):
             tstamp = kwargs.pop("delay") + loop.clock()
         else:
             tstamp = loop.clock()
-        assert asyncio.iscoroutinefunction(func), f"{func}"
+        assert asyncio.iscoroutinefunction(func)
         return loop.put_coroutine(tstamp, func, args, kwargs)
 
     return ret_func
