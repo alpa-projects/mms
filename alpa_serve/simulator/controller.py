@@ -154,10 +154,7 @@ class Controller:
             f"No replica of model '{name}' is created.")
 
         # Dispatch
-        try:
-            group_id = self.select_group_id()
-        except Exception as e:
-            print(e)
+        group_id = self.select_group_id()
         manager = self.group_managers[group_id]
 
         self.group_info[group_id].queue_size += 1
