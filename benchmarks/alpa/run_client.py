@@ -4,7 +4,6 @@ import concurrent.futures
 from concurrent.futures import wait
 import time
 
-import numpy as np
 import requests
 
 from alpa.util import to_str_round
@@ -58,7 +57,7 @@ class Client:
     def print_stats(self, workload: Workload, warmup: float):
         start, finish = self.res_dict[workload]
         workload.print_stats(start, finish, warmup)
- 
+
 
 def generate_workload(workload, start=0):
     if workload == "tmp":
@@ -87,7 +86,7 @@ if __name__ == "__main__":
 
     url = f"http://localhost:{args.port}"
 
-    # Launch client
+    # Launch the client
     client = Client(url)
     workload = generate_workload(args.workload, start=time.time() + 2)
 

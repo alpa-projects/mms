@@ -27,13 +27,13 @@ if __name__ == "__main__":
     parser.add_argument("--workload", type=str, default="tmp")
     args = parser.parse_args()
 
-    # Launch controller
+    # Launch the controller
     controller = Controller()
     register_models(controller, args.model)
     place_models(controller, args.placement)
     controller.sync()
 
-    # Launch client
+    # Launch the client
     client = Client(controller)
     workload = generate_workload(args.workload)
 

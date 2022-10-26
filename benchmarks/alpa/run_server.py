@@ -74,7 +74,7 @@ if __name__ == "__main__":
 
     ray.init(address="auto")
 
-    # Launch controller
+    # Launch the controller
     controller = run_controller("localhost", port=args.port, name=None)
     register_models(controller, args.model)
     place_models(controller, args.placement)
