@@ -70,8 +70,8 @@ class Controller:
         self.logger = build_logger()
 
         # Simulator specific code
-        np.random.seed(0)
-        self.dispatch_overhead = partial(np.random.normal, loc=0.004, scale=0.0018)
+        np.random.seed(1)
+        self.dispatch_overhead = partial(np.random.normal, loc=0.002, scale=0.0015)
 
         install_remote_methods(self)
 
@@ -173,7 +173,7 @@ class Client:
         self.controller = controller
 
         self.res_dict = dict()
-        self.http_overhead = 0.003
+        self.http_overhead = 0.002
 
     @timed_coroutine
     async def submit_one(self, request, idx, start, finish):

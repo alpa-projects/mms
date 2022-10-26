@@ -30,12 +30,10 @@ class ProfilingResult:
             return ProfilingResult(
                 stage_latency={
                     ParallelConfig(1, 1, 1): {
-                        1: [0.10],
-                        2: [0.15],
+                        1: [0.099],
                     },
                     ParallelConfig(1, 1, 2): {
                         1: [0.050, 0.050],
-                        2: [0.075, 0.075],
                     },
                 },
                 preprocess_cpu=0,

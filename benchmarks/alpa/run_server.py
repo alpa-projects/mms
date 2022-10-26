@@ -26,6 +26,16 @@ def place_models(controller, placement):
         controller.create_mesh_group_manager.remote(group_id, [1, 1])
         controller.create_replica.remote(
             "a", group_id, [ParallelConfig(1, 1, 1)])
+
+        group_id = 1
+        controller.create_mesh_group_manager.remote(group_id, [1, 1])
+        controller.create_replica.remote(
+            "b", group_id, [ParallelConfig(1, 1, 1)])
+    elif placement == "manual_2":
+        group_id = 0
+        controller.create_mesh_group_manager.remote(group_id, [1, 1])
+        controller.create_replica.remote(
+            "a", group_id, [ParallelConfig(1, 1, 1)])
         controller.create_replica.remote(
             "b", group_id, [ParallelConfig(1, 1, 1)])
 
@@ -35,7 +45,7 @@ def place_models(controller, placement):
             "a", group_id, [ParallelConfig(1, 1, 1)])
         controller.create_replica.remote(
             "b", group_id, [ParallelConfig(1, 1, 1)])
-    elif placement == "manual_2":
+    elif placement == "manual_3":
         group_id = 0
         controller.create_mesh_group_manager.remote(group_id, [1, 2])
         controller.create_replica.remote(
