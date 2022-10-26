@@ -22,7 +22,7 @@ from alpa_serve.http_util import (HTTPRequestWrapper, receive_http_body,
                                   Response, set_socket_reuse_port, ASGIHandler,
                                   build_starlette_request, new_port,
                                   RelayException, make_error_response)
-from alpa_serve.util import build_logger
+from alpa_serve.util import build_logger, add_sync_method
 
 logger = logging.getLogger(__file__)
 
@@ -71,10 +71,10 @@ class GroupManager:
         else:
             init(cluster="ray")
 
-        self.logger = build_logger()
-
         # Dict[str -> object]
         self.replicas = {}
+
+        self.logger = build_logger()
 
     def create_replica(self, name: str, create_info: CreateInfo):
         assert name not in self.replicas
@@ -90,13 +90,18 @@ class GroupManager:
         del self.replicas[name]
 
     async def handle_request(self, name: str, request_wrapper: bytes):
-        enter_time = time.time()
-        request_wrapper = pickle.loads(request_wrapper)
-        request = build_starlette_request(request_wrapper)
-        request.scope["ts"].append(("b", enter_time))
+        if isinstance(request_wrapper, bytes):
+            # The normal path
+            enter_time = time.time()
+            request_wrapper = pickle.loads(request_wrapper)
+            request = build_starlette_request(request_wrapper)
+            request.scope["ts"].append(("b", enter_time))
+        else:
+            # A debug path for the API compatbility with simulator
+            request = request_wrapper
+
         try:
-            response = await self.replicas[name].handle_request(request)
-            return response
+            return await self.replicas[name].handle_request(request)
         except Exception as e:  # pylint: disable=broad-except
             return RelayException(e)
 
@@ -116,8 +121,7 @@ class Controller:
         self.ssl_keyfile = ssl_keyfile
         self.ssl_certfile = ssl_certfile
 
-        self.logger = build_logger()
-
+        # Controller metadata
         self.manager_lock = defaultdict(asyncio.Lock)
 
         # Dict[str -> ModelInfo]
@@ -127,7 +131,11 @@ class Controller:
         # Dict[int -> ActorHandle]
         self.group_managers = {}
 
-        # Launch http server
+        self.logger = build_logger()
+
+        self.group_manager_class = GroupManager
+
+        # Http server
         self.setup_complete = asyncio.Event()
         self.http_server_task = asyncio.create_task(self.run_http_server())
 
@@ -138,9 +146,9 @@ class Controller:
             num_gpus: int = 0):
         assert group_id not in self.group_managers, (
             f"Mesh group {group_id} is already launched")
-        self.logger.info(f"Launch mesh group manager {group_id} with "
+        self.logger.info(f"Create mesh group manager {group_id} with "
                          f"shape={virtual_mesh_shape}")
-        self.group_managers[group_id] = (GroupManager.options(
+        self.group_managers[group_id] = (self.group_manager_class.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
         self.group_info[group_id] = GroupInfo(queue_size=0)
@@ -176,10 +184,7 @@ class Controller:
             create_info = model_info.create_info.append_init_args(
                 append_init_args, append_init_kwargs)
 
-            logger.info(
-                f"Create replica of model={name} on mesh={group_id}")
-            self.logger.info(f"Create replica of {name} "
-                             f"on group {group_id}")
+            self.logger.info(f"Create replica of {name} on group {group_id}")
             model_info.managers.append(manager)
         await manager.create_replica.remote(name, create_info)
 
@@ -192,6 +197,25 @@ class Controller:
                 min_id = group_id
         assert min_id != -1
         return min_id
+
+    async def handle_request(self, request):
+        name = request.model_name
+
+        assert name in self.model_info, (
+            f"Model '{name}' is not registered.")
+        model_info = self.model_info[name]
+        assert model_info.managers, (
+            f"No replica of model '{name}' is created.")
+
+        # dispatch
+        group_id = self.select_group_id()
+        manager = self.group_managers[group_id]
+
+        self.group_info[group_id].queue_size += 1
+        response = await manager.handle_request.remote(name, request)
+        self.group_info[group_id].queue_size -= 1
+
+        return response
 
     async def handle_asgi(self, scope, receive, send):
         scope["ts"] = [("a", time.time())]
@@ -318,6 +342,7 @@ def run_controller(host,
                    name=CONTROLLER_NAME,
                    ssl_keyfile: Optional[str] = None,
                    ssl_certfile: Optional[Union[str, os.PathLike]] = None):
+    """Launch a controller"""
     controller = Controller.options(name=name).remote(
         host=host,
         port=port or new_port(),
@@ -326,4 +351,6 @@ def run_controller(host,
         ssl_certfile=ssl_certfile,
     )
     ray.get(controller.ready.remote())
+
+    add_sync_method(controller, ["create_replica", "create_mesh_group_manager"])
     return controller

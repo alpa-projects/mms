@@ -64,11 +64,12 @@ class ControllerTest(unittest.TestCase):
         controller.register_model.remote("tokenizer", TokenizerModel)
         group_id = 0
         controller.create_mesh_group_manager.remote(group_id, [1, 4])
-        a = controller.create_replica.remote("echo", group_id)
-        b = controller.create_replica.remote("add_one", group_id)
-        c = controller.create_replica.remote("tokenizer", group_id)
+        controller.create_replica.remote("echo", group_id)
+        controller.create_replica.remote("add_one", group_id)
+        controller.create_replica.remote("tokenizer", group_id)
 
-        ray.get([a, b, c])
+        controller.sync()
+
         url = f"http://{host}:{port}{root_path}"
 
         json = {
