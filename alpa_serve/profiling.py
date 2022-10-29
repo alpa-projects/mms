@@ -41,5 +41,21 @@ class ProfilingResult:
                 act_mem=None,
                 weight_mem=None,
             )
+        elif name == "alpa/bert-2.6b":
+            return ProfilingResult(
+                stage_latency={
+                    ParallelConfig(1, 1, 1): {
+                        1: [0.148],
+                    },
+                    ParallelConfig(1, 1, 2): {
+                        1: [0.075, 0.076],
+                    },
+                },
+                preprocess_cpu=0,
+                postprocess_cpu=0,
+                act_mem=None,
+                weight_mem=None,
+            )
+
         else:
             raise ValueError("Unsupported model: {name}")

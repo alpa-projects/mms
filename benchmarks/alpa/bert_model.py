@@ -178,6 +178,7 @@ class BertModel:
 
         executable = forward_func.get_executable(params, batch)
         executable.dump_debug_info("tmp")
+        self.executable = executable
 
         # Preshard params
         if use_dummy_weights:
