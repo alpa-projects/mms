@@ -30,7 +30,7 @@ class SimulatorTest(unittest.TestCase):
 
         controller.sync()
 
-        request = Request("echo", None, None)
+        request = Request("echo", None, None, 0)
         ret = controller.handle_request.remote(request)
         assert request == await ret
 
