@@ -23,9 +23,9 @@ class ProfilingResult:
     postprocess_cpu: float
     # The activation memory in bytes.
     # Dict[batch_size -> mem]
-    act_mem: Union[Dict, None]
+    act_mem: Dict
     # The weight memory in bytes.
-    weight_mem: Union[float, None]
+    weight_mem: float
 
     @staticmethod
     def load(name: str):
@@ -42,8 +42,8 @@ class ProfilingResult:
                 },
                 preprocess_cpu=0,
                 postprocess_cpu=0,
-                act_mem=None,
-                weight_mem=None,
+                act_mem={},
+                weight_mem=0.0,
             )
         else:
             raise ValueError("Unsupported model: {name}")
@@ -79,7 +79,7 @@ class ProfilingDatabase:
         """Extract the profiling results from a row of the profiling CSV file."""
         stage_latencies = list(map(float, row["StageLatencies(s)"].strip("[]").split()))
         # TODO: fix the activation memory
-        act_mem = None
+        act_mem = {}
         parallel_config = ParallelConfig(int(row["DP"]), int(row["OP"]), int(row["PP"]))
         return row["ModelName"], parallel_config, int(row["BS"]), stage_latencies, act_mem, float(row["Weights(GB)"])
 
