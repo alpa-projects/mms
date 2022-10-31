@@ -3,7 +3,7 @@ import asyncio
 from functools import partial
 import unittest
 
-from alpa_serve.profiling import ParallelConfig, ProfilingResult
+from alpa_serve.profiling import ParallelConfig, load_test_prof_result
 from alpa_serve.controller import run_controller
 from alpa_serve.simulator.controller import Controller, Client
 from alpa_serve.simulator.event_loop import run_event_loop
@@ -46,7 +46,7 @@ class SimulatorTest(unittest.TestCase):
     async def main_test_client(self):
         controller = Controller()
         controller.register_model.remote(
-            "a", partial(Executable, ProfilingResult.load("alpa/bert-1.3b")))
+            "a", partial(Executable, load_test_prof_result("test-2GB-100ms")))
 
         group_id = 0
         controller.create_mesh_group_manager.remote(group_id, [1, 2])

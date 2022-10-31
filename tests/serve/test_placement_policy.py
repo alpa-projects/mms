@@ -16,10 +16,10 @@ class PlacementPolicyTest(unittest.TestCase):
 
         cluster_env = ClusterEnv(num_gpus=4, mem_budget=4.5*GB)
         model_datas = [
-            ModelData("m1", 2, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m2", 2, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m3", 2, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m4", 2, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m1", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m2", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m3", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m4", 1, 5, load_test_prof_result("test-2GB-100ms")),
         ]
 
         obj, placement = policy.solve(model_datas, cluster_env)
@@ -30,24 +30,27 @@ class PlacementPolicyTest(unittest.TestCase):
         assert col_sum.tolist() == [2, 2, 2, 2]
 
     def test_selective_replication_with_pipeline(self):
-        cluster_env = ClusterEnv(num_gpus=4, mem_budget=4*GB)
+        cluster_env = ClusterEnv(num_gpus=4, mem_budget=4.5*GB)
         model_datas = [
-            ModelData("m1", 2, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m2", 2, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m3", 2, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m4", 2, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m1", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m2", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m3", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m4", 1, 5, load_test_prof_result("test-2GB-100ms")),
         ]
 
         policy = SelectiveReplicationWithPipeline()
         obj, (group_configs, group_models) = policy.solve(model_datas, cluster_env)
 
-        print(group_configs)
-        print(group_models)
+        assert len(group_configs) == 2
+        assert group_configs[0].pp == 2
+        assert group_configs[1].pp == 2
+        assert group_models[0] == [0, 1, 2, 3]
+        assert group_models[1] == [0, 1, 2, 3]
 
 
 def suite():
     suite = unittest.TestSuite()
-    #suite.addTest(PlacementPolicyTest("test_selective_replication"))
+    suite.addTest(PlacementPolicyTest("test_selective_replication"))
     suite.addTest(PlacementPolicyTest("test_selective_replication_with_pipeline"))
     return suite
 

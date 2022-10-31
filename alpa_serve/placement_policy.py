@@ -57,7 +57,7 @@ class SelectiveReplication(PlacementPolicy):
 
         controller.sync()
 
-    def compute_sinlge_throuhput(self, model_data):
+    def compute_single_throuhput(self, model_data):
         parallel_config = ParallelConfig(1, 1, 1)
         stage_latency = model_data.profiling_result.para_dict[
             parallel_config].latency
@@ -82,7 +82,7 @@ class SelectiveReplication(PlacementPolicy):
         a = [x.average_load for x in model_datas]
         c = [x.profiling_result.para_dict[ParallelConfig(1,1,1)].weight_mem[0]
              for x in model_datas]
-        t = [self.compute_sinlge_throuhput(x) for x in model_datas]
+        t = [self.compute_single_throuhput(x) for x in model_datas]
 
         # 1. Create variables
         p = LpVariable.matrix("p", (range(N), range(M)), cat="Binary")
@@ -147,23 +147,26 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
         self.sum_k = 1e-4
         self.max_bs = 1
 
+        # Hard coded for now. Expose this as parameters later
         self.group_configs = [
+            ParallelConfig(0, 0, 0),
             ParallelConfig(1, 1, 1),
             ParallelConfig(1, 1, 2),
             ParallelConfig(1, 1, 4),
             ParallelConfig(1, 1, 8),
         ]
         self.group_sizes = [
-            np.prod(*x) for x in self.group_configs
+            np.prod(x) for x in self.group_configs
         ]
 
     def compute_capability(self, model_data, parallel_config):
-        slo = model.slo
-        latency_mem = model.profiling_result.para_dict.get(parallel_config, None)
+        slo = model_data.slo
+        latency_mem = model_data.profiling_result.para_dict.get(parallel_config, None)
 
         if latency_mem is None:
             return 0
 
+        num_stages = parallel_config.pp
         max_cap = 0
         for b, ls in latency_mem.latency.items():
             if b > self.max_bs:
@@ -173,11 +176,10 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
             # so, n = ceil((slo - sum(ls)) / max(ls)) + 1
             max_cap = max(max_cap, (slo - sum(ls)) // max(ls) + 1)
 
-        return max_cap
+        return max_cap * (0.99 ** num_stages)
 
     def compute_max_stage_mem(self, model_data, parallel_config, mem_budget):
-        slo = model.slo
-        latency_mem = model.profiling_result.para_dict.get(parallel_config, None)
+        latency_mem = model_data.profiling_result.para_dict.get(parallel_config, None)
 
         if latency_mem is None:
             return mem_budget * 2
@@ -192,12 +194,12 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
         # Load constants
         N = len(model_datas)
         M = cluster_env.num_gpus
-        C = 1
+        C = cluster_env.mem_budget
         a = [x.average_load for x in model_datas]
         c = [x.profiling_result.para_dict[ParallelConfig(1,1,1)].weight_mem[0]
              for x in model_datas]
 
-        G = num_gpus
+        G = cluster_env.num_gpus
         K = len(self.group_configs)
         g = self.group_sizes
         f = np.zeros((N, K))
@@ -206,10 +208,10 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
             model_data = model_datas[i]
             for k in range(K):
                 parallel_config = self.group_configs[k]
-                f[i][k] = self.compute_capability_mem(
+                f[i][k] = self.compute_capability(
                     model_data, parallel_config)
                 d[i][k] = self.compute_max_stage_mem(
-                    model_data, parallel_config)
+                    model_data, parallel_config, cluster_env.mem_budget)
 
         # 1. Create variables
         p = LpVariable.matrix("p", (range(N), range(G)), cat="Binary")
@@ -269,7 +271,6 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
                                    msg=msg,
                                    timeLimit=self.time_limit,
                                    threads=multiprocessing.cpu_count())
-        #solver = pulp.GLPK_CMD(mip=True, msg=msg)
         prob.solve(solver)
 
         status = prob.status
@@ -303,7 +304,7 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
         group_models = []
         for j in range(G):
             config_id = s_res[j]
-            if self.group_size[config_id]:
+            if self.group_sizes[config_id]:
                 tmp = []
                 for i in range(N):
                     if p_res[i][j]:

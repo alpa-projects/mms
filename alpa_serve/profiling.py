@@ -10,10 +10,11 @@ from alpa_serve.util import GB
 
 
 # 3D parallel configuration
+# (data parallel, operator parallel, pipeline parallel)
 ParallelConfig = namedtuple("ParallelConfig", ("dp", "op", "pp"))
 
 @dataclasses.dataclass
-class LatencyMem:
+class LatencyMemData:
     # The latency of each stage
     # Type: Dict[batch_size -> List[stage_latency]]
     latency: Dict
@@ -92,7 +93,7 @@ def load_test_prof_result(name: str):
     if name == "alpa/bert-1.3b":
         return ProfilingResult("alpa/bert-1.3b",
             para_dict={
-                ParallelConfig(1, 1, 1): LatencyMem(
+                ParallelConfig(1, 1, 1): LatencyMemData(
                     latency={     # Dict[batch_size -> List[stage_latency]]
                         1: [0.099],
                     },
@@ -103,7 +104,7 @@ def load_test_prof_result(name: str):
                         2.6*GB,
                     ],
                 ),
-                ParallelConfig(1, 1, 2): LatencyMem(
+                ParallelConfig(1, 1, 2): LatencyMemData(
                     latency={     # Dict[batch_size -> List[stage_latency]]
                         1: [0.051, 0.052],
                     },
@@ -121,7 +122,7 @@ def load_test_prof_result(name: str):
     elif name == "alpa/bert-2.6b":
         return ProfilingResult("alpa/bert-2.6b",
             para_dict={
-                ParallelConfig(1, 1, 1): LatencyMem(
+                ParallelConfig(1, 1, 1): LatencyMemData(
                     latency={     # Dict[batch_size -> List[stage_latency]]
                         1: [0.148],
                     },
@@ -132,7 +133,7 @@ def load_test_prof_result(name: str):
                         5.2*GB,
                     ],
                 ),
-                ParallelConfig(1, 1, 2): LatencyMem(
+                ParallelConfig(1, 1, 2): LatencyMemData(
                     latency={     # Dict[batch_size -> List[stage_latency]]
                         1: [0.075, 0.076],
                     },
@@ -150,7 +151,7 @@ def load_test_prof_result(name: str):
     elif name == "test-2GB-100ms":
         return ProfilingResult("test-2GB-100ms",
             para_dict={
-                ParallelConfig(1, 1, 1): LatencyMem(
+                ParallelConfig(1, 1, 1): LatencyMemData(
                     latency={     # Dict[batch_size -> List[stage_latency]]
                         1: [0.100],
                     },
@@ -161,7 +162,7 @@ def load_test_prof_result(name: str):
                         2*GB,
                     ],
                 ),
-                ParallelConfig(1, 1, 2): LatencyMem(
+                ParallelConfig(1, 1, 2): LatencyMemData(
                     latency={     # Dict[batch_size -> List[stage_latency]]
                         1: [0.051, 0.051],
                     },
@@ -172,7 +173,7 @@ def load_test_prof_result(name: str):
                         1*GB, 1*GB
                     ],
                 ),
-                ParallelConfig(1, 1, 4): LatencyMem(
+                ParallelConfig(1, 1, 4): LatencyMemData(
                     latency={     # Dict[batch_size -> List[stage_latency]]
                         1: [0.026, 0.026, 0.026, 0.026],
                     },
@@ -190,7 +191,7 @@ def load_test_prof_result(name: str):
     elif name == "test-4GB-150ms":
         return ProfilingResult("test-4GB-150ms",
             para_dict={
-                ParallelConfig(1, 1, 1): LatencyMem(
+                ParallelConfig(1, 1, 1): LatencyMemData(
                     latency={     # Dict[batch_size -> List[stage_latency]]
                         1: [0.150],
                     },
@@ -201,7 +202,7 @@ def load_test_prof_result(name: str):
                         4*GB,
                     ],
                 ),
-                ParallelConfig(1, 1, 2): LatencyMem(
+                ParallelConfig(1, 1, 2): LatencyMemData(
                     latency={     # Dict[batch_size -> List[stage_latency]]
                         1: [0.076, 0.076],
                     },
@@ -212,7 +213,7 @@ def load_test_prof_result(name: str):
                         2*GB, 2*GB
                     ],
                 ),
-                ParallelConfig(1, 1, 4): LatencyMem(
+                ParallelConfig(1, 1, 4): LatencyMemData(
                     latency={     # Dict[batch_size -> List[stage_latency]]
                         1: [0.039, 0.039, 0.039, 0.039],
                     },
