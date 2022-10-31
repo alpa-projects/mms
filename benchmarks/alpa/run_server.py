@@ -13,9 +13,12 @@ from benchmarks.alpa.bert_model import BertModel, bert_specs
 
 
 def register_models(controller, model):
-    if model == "tmp":
+    if model == "even":
         controller.register_model.remote("a", BertModel, [bert_specs["1.3B"]])
         controller.register_model.remote("b", BertModel, [bert_specs["1.3B"]])
+    elif model == "uneven":
+        controller.register_model.remote("a", BertModel, [bert_specs["1.3B"]])
+        controller.register_model.remote("b", BertModel, [bert_specs["2.6B"]])
     else:
         raise ValueError(f"Invalid model: {model}")
 
@@ -76,9 +79,8 @@ def place_models(controller, placement):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="tmp")
+    parser.add_argument("--model", type=str, default="even")
     parser.add_argument("--placement", type=str, default="manual_1")
-    parser.add_argument("--workload", type=str, default="tmp")
     parser.add_argument("--port", type=int, required=True)
     args = parser.parse_args()
 

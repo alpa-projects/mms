@@ -15,6 +15,7 @@ class Request:
     model_name: str
     data: Any
     slo: float
+    idx: int
 
 
 class Workload:
@@ -70,7 +71,8 @@ class Workload:
         number = int(duration * throughput)
         interval = 1 / throughput
         ticks = [start + i * interval for i in range(number)]
-        return Workload(ticks, [Request(model_name, None, 1)] * number)
+        return Workload(ticks, [
+            Request(model_name, None, 1, i) for i in range(number)])
 
     @staticmethod
     def gen_poisson(model_name: str, start: float, throughput: float,
@@ -83,7 +85,8 @@ class Workload:
         for i in range(number):
             cur += random.expovariate(throughput)
             ticks.append(cur)
-        return Workload(ticks, [Request(model_name, None, 1)] * number)
+        return Workload(ticks, [
+            Request(model_name, None, 1, i) for i in range(number)])
 
     @staticmethod
     def merge(*args):

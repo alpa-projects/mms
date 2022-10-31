@@ -11,18 +11,23 @@ from benchmarks.alpa.run_client import generate_workload, run_workload
 
 
 def register_models(controller, model):
-    if model == "tmp":
+    if model == "even":
         controller.register_model.remote(
             "a", partial(Executable, ProfilingResult.load("alpa/bert-1.3b")))
         controller.register_model.remote(
             "b", partial(Executable, ProfilingResult.load("alpa/bert-1.3b")))
+    elif model == "uneven":
+        controller.register_model.remote(
+            "a", partial(Executable, ProfilingResult.load("alpa/bert-1.3b")))
+        controller.register_model.remote(
+            "b", partial(Executable, ProfilingResult.load("alpa/bert-2.6b")))
     else:
         raise ValueError(f"Invalid model: {model}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="tmp")
+    parser.add_argument("--model", type=str, default="even")
     parser.add_argument("--placement", type=str, default="manual_1")
     parser.add_argument("--workload", type=str, default="tmp")
     args = parser.parse_args()
