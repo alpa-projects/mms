@@ -1,7 +1,7 @@
 import argparse
 from functools import partial
 
-from alpa_serve.profiling import ProfilingResult, ParallelConfig
+from alpa_serve.profiling import ParallelConfig, load_test_prof_result
 from alpa_serve.simulator.controller import Controller, Client
 from alpa_serve.simulator.event_loop import run_event_loop
 from alpa_serve.simulator.executable import Executable
@@ -13,14 +13,14 @@ from benchmarks.alpa.run_client import generate_workload, run_workload
 def register_models(controller, model):
     if model == "even":
         controller.register_model.remote(
-            "a", partial(Executable, ProfilingResult.load("alpa/bert-1.3b")))
+            "a", partial(Executable, load_test_prof_result("alpa/bert-1.3b")))
         controller.register_model.remote(
-            "b", partial(Executable, ProfilingResult.load("alpa/bert-1.3b")))
+            "b", partial(Executable, load_test_prof_result("alpa/bert-1.3b")))
     elif model == "uneven":
         controller.register_model.remote(
-            "a", partial(Executable, ProfilingResult.load("alpa/bert-1.3b")))
+            "a", partial(Executable, load_test_prof_result("alpa/bert-1.3b")))
         controller.register_model.remote(
-            "b", partial(Executable, ProfilingResult.load("alpa/bert-2.6b")))
+            "b", partial(Executable, load_test_prof_result("alpa/bert-2.6b")))
     else:
         raise ValueError(f"Invalid model: {model}")
 

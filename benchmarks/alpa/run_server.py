@@ -56,23 +56,9 @@ def place_models(controller, placement):
         controller.create_replica.remote(
             "b", group_id, [ParallelConfig(1, 1, 2)])
     elif placement == "sr":
-        policy = SelectiveReplication()
-        policy.place_models(controller,
-            model_datas=[
-                ModelData("a", 3*GB, 1, 1),
-                ModelData("b", 3*GB, 1, 1),
-            ],
-            mem_budget=14*GB,
-            num_gpus=2,
-        )
+        raise NotImplementedError()
     elif placement == "srp":
-        policy = SelectiveReplicationWithPipeline()
-        pipeline_decay = [(1, 1), (2, 0.95), (4, 0.90)]
-        policy.place_models(controller, mem_budget=3*GB, num_gpus=2,
-            model_datas=[
-                ModelData("a", 3*GB, 1, 1, pipeline_decay),
-                ModelData("b", 3*GB, 1, 1, pipeline_decay),
-            ], group_sizes=(0, 1, 2, 4))
+        raise NotImplementedError()
     else:
         raise ValueError(f"Invalid placement: {placement}")
 
