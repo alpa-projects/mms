@@ -3,9 +3,19 @@ import unittest
 
 import numpy as np
 
-from alpa_serve.placement_policy import (SelectiveReplication, ModelData,
-    SelectiveReplicationWithPipeline)
+from alpa_serve.simulator.controller import Controller
+from alpa_serve.placement_policy import (ModelData, ClusterEnv,
+    SelectiveReplication, SelectiveReplicationWithPipeline)
+from alpa_serve.profiling import ParallelConfig, load_test_prof_result
 from alpa.util import GB
+
+
+class EchoModel:
+    def __init__(self, parallel_config, virtual_mesh):
+        pass
+
+    async def handle_request(self, request):
+        return request
 
 
 class PlacementPolicyTest(unittest.TestCase):
@@ -13,48 +23,66 @@ class PlacementPolicyTest(unittest.TestCase):
     def test_selective_replication(self):
         policy = SelectiveReplication()
 
-        mem_budget = 2 * GB
-        num_gpus = 4
+        cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
         model_datas = [
-            ModelData("m1", 1.0 * GB, 1.0, 1.0),
-            ModelData("m2", 1.0 * GB, 1.0, 1.0),
-            ModelData("m3", 1.0 * GB, 1.0, 1.0),
-            ModelData("m4", 1.0 * GB, 1.0, 1.0),
+            ModelData("m1", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m2", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m3", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m4", 1, 5, load_test_prof_result("test-2GB-100ms")),
         ]
+        group_configs, group_models, _ = policy.solve_placement(
+            model_datas, cluster_env)
 
-        obj, placement = policy.solve(model_datas, num_gpus, mem_budget)
-
-        row_sum = np.sum(placement, axis=1)
-        col_sum = np.sum(placement, axis=0)
-        assert row_sum.tolist() == [2, 2, 2, 2]
-        assert col_sum.tolist() == [2, 2, 2, 2]
+        # Check result
+        assert all(g == ParallelConfig(1, 1, 1) for g in group_configs)
+        for i in range(4):
+            assert sum(x.count(i) for x in group_models) == 2
 
     def test_selective_replication_with_pipeline(self):
-        mem_budget = 2 * GB
-        num_gpus = 4
+        cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
         model_datas = [
-            ModelData("m1", 1.0 * GB, 1.0, 1.0, [(1, 1), (2, 0.95), (4, 0.9)]),
-            ModelData("m2", 1.0 * GB, 1.0, 1.0, [(1, 1), (2, 0.95), (4, 0.9)]),
-            ModelData("m3", 1.0 * GB, 1.0, 1.0, [(1, 1), (2, 0.95), (4, 0.9)]),
-            ModelData("m4", 1.0 * GB, 1.0, 1.0, [(1, 1), (2, 0.95), (4, 0.9)]),
+            ModelData("m1", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m2", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m3", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m4", 1, 5, load_test_prof_result("test-2GB-100ms")),
         ]
 
         policy = SelectiveReplicationWithPipeline()
-        obj, (group_sizes, group_models) = policy.solve(
-            model_datas, num_gpus, mem_budget, [0, 1, 2, 4])
+        group_configs, group_models, _ = policy.solve(model_datas, cluster_env)
 
-        assert group_sizes == [2, 2]
-        assert group_models == [[0, 1, 2, 3], [0, 1, 2, 3]]
+        assert len(group_configs) == 2
+        assert group_configs[0].pp == 2
+        assert group_configs[1].pp == 2
+        assert group_models[0] == [0, 1, 2, 3]
+        assert group_models[1] == [0, 1, 2, 3]
+
+    def test_placement_api(self):
+        for policy in [SelectiveReplication(), SelectiveReplicationWithPipeline()]:
+            controller = Controller()
+            controller.register_model.remote("m1", EchoModel)
+            controller.register_model.remote("m2", EchoModel)
+            controller.register_model.remote("m3", EchoModel)
+            controller.register_model.remote("m4", EchoModel)
+
+            policy = SelectiveReplication()
+            cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
+            model_datas = [
+                ModelData("m1", 1, 5, load_test_prof_result("test-2GB-100ms")),
+                ModelData("m2", 1, 5, load_test_prof_result("test-2GB-100ms")),
+                ModelData("m3", 1, 5, load_test_prof_result("test-2GB-100ms")),
+                ModelData("m4", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ]
+            policy.place_models(controller, model_datas, cluster_env)
 
 
 def suite():
     suite = unittest.TestSuite()
     suite.addTest(PlacementPolicyTest("test_selective_replication"))
     suite.addTest(PlacementPolicyTest("test_selective_replication_with_pipeline"))
+    suite.addTest(PlacementPolicyTest("test_placement_api"))
     return suite
 
 
 if __name__ == "__main__":
     runner = unittest.TextTestRunner()
     runner.run(suite())
-

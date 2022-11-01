@@ -6,72 +6,41 @@ import json
 import pickle
 from typing import List, Dict, Union
 
+from alpa_serve.util import GB
+
 
 # 3D parallel configuration
+# (data parallel, operator parallel, pipeline parallel)
 ParallelConfig = namedtuple("ParallelConfig", ("dp", "op", "pp"))
+
+@dataclasses.dataclass
+class LatencyMemData:
+    # The latency of each stage
+    # Type: Dict[batch_size -> List[stage_latency]]
+    latency: Dict
+    # The activation memory of each stage
+    # Type: Dict[batch_size -> List[stage_act_mem]]
+    act_mem: Dict
+    # The weight memory of each stage
+    # Type: List[stage_weight_mem]
+    weight_mem: Dict
+
 
 @dataclasses.dataclass
 class ProfilingResult:
     """Store the profiling result of a model."""
     model_name: str
-    # The latency of each pipeline stage on GPUs.
-    # type: Dict[parallel_config -> Dict[batch_size -> List[stage_latency]]]
-    stage_latency: Dict
+    # The latency and memory usage of each pipeline stage on GPUs.
+    # type: Dict[parallel_config -> latency_mem]
+    para_dict: Dict
     # The latency of preprocess on CPU.
     preprocess_cpu: float
     # The latency of postprocess on CPU.
     postprocess_cpu: float
-    # The activation memory in bytes.
-    # Dict[batch_size -> mem]
-    act_mem: Dict
-    # The weight memory in bytes.
-    weight_mem: float
 
-    @staticmethod
-    def load(name: str):
-        if name == "alpa/bert-1.3b":
-            return ProfilingResult(
-                "alpa/bert-1.3b",
-                stage_latency={
-                    ParallelConfig(1, 1, 1): {
-                        1: [0.099],
-                    },
-                    ParallelConfig(1, 1, 2): {
-                        1: [0.051, 0.052],
-                    },
-                },
-                preprocess_cpu=0,
-                postprocess_cpu=0,
-                act_mem={},
-                weight_mem=0.0,
-            )
-        elif name == "alpa/bert-2.6b":
-            return ProfilingResult(
-                stage_latency={
-                    ParallelConfig(1, 1, 1): {
-                        1: [0.148],
-                    },
-                    ParallelConfig(1, 1, 2): {
-                        1: [0.075, 0.076],
-                    },
-                },
-                preprocess_cpu=0,
-                postprocess_cpu=0,
-                act_mem=None,
-                weight_mem=None,
-            )
-
-        else:
-            raise ValueError("Unsupported model: {name}")
-    
     def add_result(self, parallel_config: ParallelConfig, batch_size: int, stage_latency: List[float], act_mem: float):
         """Add or overwrite the profiling results of a model."""
-        if parallel_config not in self.stage_latency:
-            self.stage_latency[parallel_config] = {}
-        self.stage_latency[parallel_config][batch_size] = stage_latency
-        if self.act_mem is None:
-            self.act_mem = {}
-        self.act_mem[batch_size] = act_mem
+        raise NotImplementedError
 
 
 class ProfilingDatabase:
@@ -87,7 +56,7 @@ class ProfilingDatabase:
 
     def get(self, model_name: str) -> ProfilingResult:
         return self.results[model_name]
-    
+
     def update(self, result: ProfilingResult):
         self.results[result.model_name] = result
 
@@ -106,14 +75,158 @@ class ProfilingDatabase:
             for row in reader:
                 model_name, parallel_config, batch_size, stage_latencies, act_mem, weight_mem = self._extract_data(row)
                 if model_name not in results:
-                    results[model_name] = ProfilingResult(model_name, 
+                    results[model_name] = ProfilingResult(model_name,
                                                           {parallel_config: {batch_size: stage_latencies}},
                                                           0, 0, act_mem, weight_mem)
                 else:
                     results[model_name].add_result(parallel_config, batch_size, stage_latencies, act_mem)
         self.results = results
- 
+
     def materialize(self):
         """Write the profiling results to the database file."""
         with open(self.database_filename, "wb") as f:
             pickle.dump(self.results, f)
+
+
+def load_test_prof_result(name: str):
+    """Load pre-defined profiling results for testing."""
+    if name == "alpa/bert-1.3b":
+        return ProfilingResult("alpa/bert-1.3b",
+            para_dict={
+                ParallelConfig(1, 1, 1): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.099],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        2.6*GB,
+                    ],
+                ),
+                ParallelConfig(1, 1, 2): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.051, 0.052],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO", "TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        1.3*GB, 1.3*GB,
+                    ],
+                ),
+            },
+            preprocess_cpu=0,
+            postprocess_cpu=0,
+        )
+    elif name == "alpa/bert-2.6b":
+        return ProfilingResult("alpa/bert-2.6b",
+            para_dict={
+                ParallelConfig(1, 1, 1): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.148],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        5.2*GB,
+                    ],
+                ),
+                ParallelConfig(1, 1, 2): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.075, 0.076],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO", "TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        2.6*GB, 2.6*GB,
+                    ],
+                ),
+            },
+            preprocess_cpu=0,
+            postprocess_cpu=0,
+        )
+    elif name == "test-2GB-100ms":
+        return ProfilingResult("test-2GB-100ms",
+            para_dict={
+                ParallelConfig(1, 1, 1): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.100],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        2*GB,
+                    ],
+                ),
+                ParallelConfig(1, 1, 2): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.051, 0.051],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO", "TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        1*GB, 1*GB
+                    ],
+                ),
+                ParallelConfig(1, 1, 4): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.026, 0.026, 0.026, 0.026],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO", "TODO", "TODO", "TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        0.5*GB, 0.5*GB, 0.5*GB, 0.5*GB
+                    ],
+                ),
+            },
+            preprocess_cpu=0,
+            postprocess_cpu=0,
+        )
+    elif name == "test-4GB-150ms":
+        return ProfilingResult("test-4GB-150ms",
+            para_dict={
+                ParallelConfig(1, 1, 1): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.150],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        4*GB,
+                    ],
+                ),
+                ParallelConfig(1, 1, 2): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.076, 0.076],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO", "TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        2*GB, 2*GB
+                    ],
+                ),
+                ParallelConfig(1, 1, 4): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.039, 0.039, 0.039, 0.039],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO", "TODO", "TODO", "TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        1*GB, 1*GB, 1*GB, 1*GB
+                    ],
+                ),
+            },
+            preprocess_cpu=0,
+            postprocess_cpu=0,
+        )
+    else:
+        raise ValueError("Unsupported model: {name}")

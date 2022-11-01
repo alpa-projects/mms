@@ -4,6 +4,7 @@ from functools import partial
 
 import ray
 
+GB = 1 << 30
 
 def build_logger(name="alpa_serve"):
     logger = logging.getLogger(name)

@@ -11,7 +11,7 @@ class Executable:
                  virtual_mesh: VirtualMesh):
         self.profile = profiling_result
         self.parallel_config = parallel_config
-        self.stage_latency = profiling_result.stage_latency[parallel_config]
+        self.latency_mem = profiling_result.para_dict[parallel_config]
 
         # launch or connect to a mesh group
         submesh_shapes = (
@@ -27,8 +27,8 @@ class Executable:
     async def handle_request(self, request):
         batch_size = 1
 
-        latencies = self.stage_latency[batch_size]
-        for mesh, latency in zip(self.mesh_group.meshes, latencies):
+        stage_latency = self.latency_mem.latency[batch_size]
+        for mesh, latency in zip(self.mesh_group.meshes, stage_latency):
             # SPMD version
             stream = mesh.gpus[0].stream_name
             await wait_stream(stream, latency)
