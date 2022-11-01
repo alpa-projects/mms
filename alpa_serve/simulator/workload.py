@@ -37,6 +37,7 @@ class Workload:
         start = np.asarray(start[ct:-ct])
         finish = np.asarray(finish[ct:-ct])
         workload = self[ct:-ct]
+        slo = np.array([r.slo for r in workload.requests])
 
         # Compute stats per model
         model_indices = defaultdict(list)
@@ -50,16 +51,19 @@ class Workload:
             indices = model_indices[name]
             tmp_start = start[indices]
             tmp_finish = finish[indices]
+            tmp_slo = slo[indices]
 
             # Compute stats
             throughput = len(tmp_start) / (tmp_finish[-1] - tmp_start[0])
             latency = tmp_finish - tmp_start
+            goodput = np.sum(latency < tmp_slo) / len(latency)
             sorted_latency = np.sort(latency)
             average_latency = np.mean(latency)
             tail_latnecy_90 = sorted_latency[int(0.90 * len(sorted_latency))]
             tail_latnecy_99 = sorted_latency[int(0.99 * len(sorted_latency))]
 
             print(f"model: {name}, #req: {len(latency)}")
+            print(f"goodput: {goodput*100:.2f} %")
             print(f"throughput: {throughput:.2f} q/s")
             print(f"latency mean: {np.mean(latency)*1e3:.2f} ms, "
                   f"std: {np.std(latency)*1e3:.2f} ms, "
@@ -67,16 +71,16 @@ class Workload:
 
     @staticmethod
     def gen_uniform(model_name: str, start: float, throughput: float,
-                    duration: float, seed: int=0):
+                    duration: float, slo: float=1, seed: int=0):
         number = int(duration * throughput)
         interval = 1 / throughput
         ticks = [start + i * interval for i in range(number)]
         return Workload(ticks, [
-            Request(model_name, None, 1, i) for i in range(number)])
+            Request(model_name, None, slo, i) for i in range(number)])
 
     @staticmethod
     def gen_poisson(model_name: str, start: float, throughput: float,
-                    duration: float, seed: int=0):
+                    duration: float, slo: float=1, seed: int=0):
         random.seed(seed)
 
         number = int(duration * throughput)
@@ -86,7 +90,7 @@ class Workload:
             cur += random.expovariate(throughput)
             ticks.append(cur)
         return Workload(ticks, [
-            Request(model_name, None, 1, i) for i in range(number)])
+            Request(model_name, None, slo, i) for i in range(number)])
 
     @staticmethod
     def merge(*args):
