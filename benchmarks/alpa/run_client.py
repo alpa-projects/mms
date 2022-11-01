@@ -61,8 +61,8 @@ class Client:
 
 def generate_workload(workload, start=0):
     if workload == "tmp":
-        w1 = Workload.gen_poisson("a", start, 8, 60, seed=1)
-        w2 = Workload.gen_poisson("b", start, 8, 60, seed=2)
+        w1 = Workload.gen_poisson("a", start, 8, 60, slo=0.5, seed=1)
+        w2 = Workload.gen_poisson("b", start, 8, 60, slo=0.5, seed=2)
         w = w1 + w2
     else:
         raise ValueError(f"Invalid workload name: {workload}")

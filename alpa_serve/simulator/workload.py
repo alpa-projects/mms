@@ -16,6 +16,7 @@ class Request:
     data: Any
     slo: float
     idx: int
+    submit_time: float = None   # This will be filled later
 
 
 class Workload:
@@ -27,17 +28,17 @@ class Workload:
         self.arrivals = arrivals
         self.requests = requests
 
-    def print_stats(self, start: Sequence[float], finish: Sequence[float], warmup: float):
+    def print_stats(self, start: Sequence[float], finish: Sequence[float],
+                    good: Sequence[bool], warmup: float):
         """Print the statistics of serving results."""
-
         # Skip the first and last `warmup` seconds
         ct = 1
         while ct < len(start) and start[ct] - start[0] < warmup:
             ct += 1
         start = np.asarray(start[ct:-ct])
         finish = np.asarray(finish[ct:-ct])
+        good = np.asarray(good[ct:-ct])
         workload = self[ct:-ct]
-        slo = np.array([r.slo for r in workload.requests])
 
         # Compute stats per model
         model_indices = defaultdict(list)
@@ -49,20 +50,25 @@ class Workload:
 
         for name in names:
             indices = model_indices[name]
-            tmp_start = start[indices]
-            tmp_finish = finish[indices]
-            tmp_slo = slo[indices]
+            tmp_good = good[indices]
+            tmp_start = start[indices][tmp_good]
+            tmp_finish = finish[indices][tmp_good]
 
             # Compute stats
-            throughput = len(tmp_start) / (tmp_finish[-1] - tmp_start[0])
-            latency = tmp_finish - tmp_start
-            goodput = np.sum(latency < tmp_slo) / len(latency)
+            goodput = np.sum(tmp_good) / len(tmp_good)
+            if goodput > 0:
+                throughput = len(tmp_start) / (tmp_finish[-1] - tmp_start[0])
+                latency = tmp_finish - tmp_start
+            else:
+                throughput = 0
+                latency = [0]
+
             sorted_latency = np.sort(latency)
             average_latency = np.mean(latency)
             tail_latnecy_90 = sorted_latency[int(0.90 * len(sorted_latency))]
             tail_latnecy_99 = sorted_latency[int(0.99 * len(sorted_latency))]
 
-            print(f"model: {name}, #req: {len(latency)}")
+            print(f"model: {name}, #req: {len(indices)}")
             print(f"goodput: {goodput*100:.2f} %")
             print(f"throughput: {throughput:.2f} q/s")
             print(f"latency mean: {np.mean(latency)*1e3:.2f} ms, "

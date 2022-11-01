@@ -31,7 +31,15 @@ class GroupManager:
         # Dict[str -> object]
         self.replicas = {}
 
+        # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
+        self.latency_dict = defaultdict(dict)
+
+        self.stage_clock = [0] * np.prod(virtual_mesh_shape)
+
         self.logger = build_logger()
+
+        # Constants
+        self.fixed_overhead = 0.005
 
         # Simulator specific code
         install_remote_methods(self)
@@ -46,9 +54,30 @@ class GroupManager:
         kwargs["virtual_mesh"] = self.virtual_mesh
         self.replicas[name] = model_def(*args, **kwargs)
 
+        self.latency_dict[name] = self.replicas[name].get_latency_dict()
+
     @timed_coroutine
     async def handle_request(self, name: str, request):
-        return await self.replicas[name].handle_request(request)
+        stage_latency = self.latency_dict[name][1]
+
+        # Simulate clock
+        req_stage_clock = []
+        t = clock()
+        for i in range(len(stage_latency)):
+            t = max(self.stage_clock[i], t) + stage_latency[i]
+            req_stage_clock.append(t)
+        ret_time = req_stage_clock[-1]
+
+        # Drop this request if it will exceed deadline
+        if ret_time + self.fixed_overhead > request.submit_time + request.slo:
+            return None
+
+        # Accept this request
+        for i in range(len(stage_latency)):
+            self.stage_clock[i] = req_stage_clock[i]
+
+        ret = await self.replicas[name].handle_request(request)
+        return ret
 
 
 class Controller:
@@ -176,22 +205,28 @@ class Client:
         self.http_overhead = 0.002
 
     @timed_coroutine
-    async def submit_one(self, request, idx, start, finish):
-        start[idx] = clock()
-        await self.controller.handle_request(request, delay=self.http_overhead)
-        finish[idx] = clock()
+    async def submit_one(self, request, idx, start, finish, good):
+        t = clock()
+        start[idx] = t
+        request.submit_time = t
+        res = await self.controller.handle_request(request, delay=self.http_overhead)
+        t = clock()
+        finish[idx] = t
+        good[idx] = (res is not None and
+                     t <= request.submit_time + request.slo)
 
     def submit_workload(self, workload: Workload):
-        start, finish = np.zeros(len(workload)), np.zeros(len(workload))
-        self.res_dict[workload] = (start, finish)
+        start, finish, good = (np.zeros(len(workload)),
+            np.zeros(len(workload)), np.zeros((len(workload),), dtype=np.bool))
+        self.res_dict[workload] = (start, finish, good)
 
         for i in range(len(workload)):
-            self.submit_one(workload.requests[i], i, start, finish,
+            self.submit_one(workload.requests[i], i, start, finish, good,
                             tstamp=workload.arrivals[i])
 
     def wait_all(self):
         return main_loop()
 
     def print_stats(self, workload: Workload, warmup: float):
-        start, finish = self.res_dict[workload]
-        workload.print_stats(start, finish, warmup)
+        start, finish, good = self.res_dict[workload]
+        workload.print_stats(start, finish, good, warmup)
