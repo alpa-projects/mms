@@ -21,41 +21,55 @@ class ModelData:
 
 @dataclasses.dataclass
 class ClusterEnv:
-    num_gpus: int
+    num_devices: int
     mem_budget: float
+    num_devices_per_node: int = 8
 
 
 class PlacementPolicy:
-    pass
+    """The baseclass of placement policy"""
+
+    def place_models(self, controller,
+                     model_datas: List[ModelData], cluster_env: ClusterEnv):
+        group_configs, group_models, debug_info = self.solve_placement(model_datas, cluster_env)
+
+        assert len(group_configs) == len(group_models)
+        num_groups = len(group_configs)
+
+        # Create mesh group manager
+        for g_id in range(num_groups):
+            num_devices = np.prod(group_configs[g_id])
+            num_devices_per_node = cluster_env.num_devices_per_node
+            pp_size = group_configs[g_id].pp
+
+            if num_devices <= num_devices_per_node:
+                virtual_mesh_shape = (1, num_devices)
+            else:
+                assert num_devices % num_devices_per_node == 0
+                virtual_mesh_shape = (num_devices // num_devices_per_node,
+                                      num_devices_per_node)
+
+            controller.create_mesh_group_manager.remote(g_id, virtual_mesh_shape)
+
+        # Create model replicas
+        for g_id in range(num_groups):
+            for m_id in group_models[g_id]:
+                name = model_datas[m_id].name
+                controller.create_replica.remote(name, g_id, [group_configs[g_id]])
+
+        controller.sync()
 
 
 class SelectiveReplication(PlacementPolicy):
+
     def __init__(self, verbose: bool = False):
+        super().__init__()
+
         self.verbose = verbose
 
         self.max_bs = 1
         self.time_limit = 20
         self.sum_k = 1e-4
-
-    def place_models(self,
-                     controller,
-                     model_datas: List[ModelData],
-                     cluster_env: ClusterEnv):
-        obj, placement = self.solve(model_datas, cluster_envs)
-
-        # Launch mesh groups
-        for g_id in range(num_gpus):
-            controller.launch_mesh_group_manager.remote(g_id, [1, 1])
-
-        # Launch model replicas
-        for m_id in range(len(model_datas)):
-            for g_id in range(num_gpus):
-                if placement[m_id][g_id]:
-                    name = model_datas[m_id].name
-                    controller.create_replica.remote(
-                        name, g_id, [ParallelConfig(1, 1, 1)])
-
-        controller.sync()
 
     def compute_single_throuhput(self, model_data):
         parallel_config = ParallelConfig(1, 1, 1)
@@ -70,14 +84,14 @@ class SelectiveReplication(PlacementPolicy):
             single_throughput = max(single_throughput, 1 / s)
         return single_throughput
 
-    def solve(self,
-              model_datas: List[ModelData],
-              cluster_env: ClusterEnv):
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv):
         tic = time.time()
 
         # Load constants
         N = len(model_datas)
-        M = cluster_env.num_gpus
+        M = cluster_env.num_devices
         C = cluster_env.mem_budget
         a = [x.average_load for x in model_datas]
         c = [x.profiling_result.para_dict[ParallelConfig(1,1,1)].weight_mem[0]
@@ -131,17 +145,30 @@ class SelectiveReplication(PlacementPolicy):
                 "Cannot run the function under the given memory budget. "
                 "Please increase the memory budget.")
 
+        # Parse solution
         p_res = np.zeros((N, M), dtype=np.int8)
         for i in range(N):
             for j in range(M):
                 if pulp.value(p[i][j]):
                     p_res[i][j] = 1
 
-        return objective, p_res
+        group_configs = []
+        group_models = []
+        for j in range(M):
+            tmp = []
+            for i in range(N):
+                if p_res[i][j]:
+                    tmp.append(i)
+            group_configs.append(ParallelConfig(1, 1, 1))
+            group_models.append(tmp)
+
+        return group_configs, group_models, {"objective": objective}
 
 
 class SelectiveReplicationWithPipeline(PlacementPolicy):
     def __init__(self, verbose: bool = False):
+        super().__init__()
+
         self.verbose = verbose
         self.time_limit = 20
         self.sum_k = 1e-4
@@ -193,13 +220,13 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
 
         # Load constants
         N = len(model_datas)
-        M = cluster_env.num_gpus
+        M = cluster_env.num_devices
         C = cluster_env.mem_budget
         a = [x.average_load for x in model_datas]
         c = [x.profiling_result.para_dict[ParallelConfig(1,1,1)].weight_mem[0]
              for x in model_datas]
 
-        G = cluster_env.num_gpus
+        G = cluster_env.num_devices
         K = len(self.group_configs)
         g = self.group_sizes
         f = np.zeros((N, K))
@@ -312,4 +339,4 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
                 group_configs.append(self.group_configs[config_id])
                 group_models.append(tmp)
 
-        return objective, (group_configs, group_models)
+        return group_configs, group_models, {"objective": objective}
