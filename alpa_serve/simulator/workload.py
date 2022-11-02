@@ -48,6 +48,9 @@ class Workload:
         names = list(model_indices.keys())
         names.sort()
 
+        if not names:
+            print("No requests after warmup!")
+
         for name in names:
             indices = model_indices[name]
             tmp_good = good[indices]

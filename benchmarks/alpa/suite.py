@@ -23,8 +23,8 @@ def debug_case(placement):
             "b", get_model_def("alpa/bert-1.3b", is_simulator))
 
     def generate_workload(start=0):
-        w1 = Workload.gen_poisson("a", start, 8, 10, slo=0.5, seed=1)
-        w2 = Workload.gen_poisson("b", start, 8, 10, slo=0.5, seed=2)
+        w1 = Workload.gen_poisson("a", start, 8, 60, slo=0.5, seed=1)
+        w2 = Workload.gen_poisson("b", start, 8, 60, slo=0.5, seed=2)
         w = w1 + w2
         return w
 
