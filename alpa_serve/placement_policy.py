@@ -165,7 +165,7 @@ class SelectiveReplication(PlacementPolicy):
         return group_configs, group_models, {"objective": objective}
 
 
-class SelectiveReplicationWithPipeline(PlacementPolicy):
+class ModelParallelismPlacement(PlacementPolicy):
     def __init__(self, verbose: bool = False):
         super().__init__()
 
