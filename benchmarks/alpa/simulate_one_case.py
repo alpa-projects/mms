@@ -7,14 +7,7 @@ from alpa_serve.simulator.event_loop import run_event_loop
 from alpa_serve.simulator.executable import Executable
 
 from benchmarks.alpa.suite import cases
-
-
-async def run_workload(client, workload):
-    client.submit_workload(workload)
-
-    await client.wait_all()
-
-    client.print_stats(workload, warmup=10)
+from benchmarks.alpa.run_one_case import run_workload
 
 
 def simulate_one_case(case):
