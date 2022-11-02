@@ -213,9 +213,9 @@ class ModelParallelismPlacement(PlacementPolicy):
 
         return max(latency_mem.weight_mem)
 
-    def solve(self,
-              model_datas: List[ModelData],
-              cluster_env: ClusterEnv):
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv):
         tic = time.time()
 
         # Load constants

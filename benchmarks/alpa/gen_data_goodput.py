@@ -1,3 +1,4 @@
+import argparse
 from collections import namedtuple
 
 from alpa_serve.simulator.controller import Controller
@@ -5,21 +6,22 @@ from alpa_serve.simulator.workload import Workload
 from alpa_serve.profiling import ParallelConfig, load_test_prof_result
 from alpa_serve.placement_policy import (SelectiveReplication,
     ModelParallelismPlacement, ClusterEnv, ModelData)
-from alpa_serve.util import GB
+from alpa_serve.util import GB, write_tsv
 
 from benchmarks.alpa.util import get_model_def
 from benchmarks.alpa.suite import BenchmarkCase
 from benchmarks.alpa.simulate_one_case import simulate_one_case
 
 
-def gen_case(slo, placement):
-    cluster_env = ClusterEnv(num_devices=8, mem_budget=10*GB)
-    num_models = 16
+def gen_case(slo, placement, num_devices, num_models,
+             mem_budget=10*GB, duration=100, average_rate=5):
+    cluster_env = ClusterEnv(num_devices=num_devices, mem_budget=mem_budget)
+    num_models = num_models
 
     slos = [slo] * num_models
     model_types = ["alpa/bert-1.3b"] * num_models
-    average_rates = [10] * num_models
-    duration = 60
+    average_rates = [average_rate] * num_models
+    duration = duration
 
     def register_models(controller):
         is_simulator = isinstance(controller, Controller)
@@ -54,5 +56,23 @@ def gen_case(slo, placement):
 
 
 if __name__ == "__main__":
-    stats = simulate_one_case(gen_case(0.2, "sr"))
-    print(stats.average_goodput)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--exp-name", type=str, default="default")
+    parser.add_argument("--output", type=str, default="res_goodput.tsv")
+    args = parser.parse_args()
+
+    policies = ["mp", "sr"]
+    slos = [0.1, 0.2, 0.4, 0.8, 1.6, 3.2]
+    goodputs = []
+
+    heads = ["exp_name", "policy", "slo", "goodput"]
+
+    for policy in policies:
+        for slo in slos:
+            stats = simulate_one_case(
+                gen_case(slo, policy, num_devices=8, num_models=16))
+            goodput = stats.average_goodput
+            goodputs.append(goodput)
+
+            values = [args.exp_name, policy, slo, goodput]
+            write_tsv(heads, values, args.output)

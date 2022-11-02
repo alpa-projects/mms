@@ -1,6 +1,7 @@
 """Common utilities."""
 import logging
 from functools import partial
+from typing import Sequence, Any
 
 import ray
 
@@ -33,3 +34,22 @@ def wrapped_remote_call(old_remote, calls, *args, **kwargs):
     ret = old_remote(*args, *kwargs)
     calls.append(ret)
     return ret
+
+
+def write_tsv(heads: Sequence[str],
+              values: Sequence[Any],
+              filename: str,
+              print_line: bool = True):
+    """Write tsv data to a file."""
+    assert len(heads) == len(values)
+
+    values = [str(x) for x in values]
+
+    with open(filename, "a", encoding="utf-8") as fout:
+        fout.write("\t".join(values) + "\n")
+
+    if print_line:
+        line = ""
+        for i in range(len(heads)):
+            line += heads[i] + ": " + values[i] + "  "
+        print(line)

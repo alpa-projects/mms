@@ -48,7 +48,8 @@ class PlacementPolicyTest(unittest.TestCase):
         ]
 
         policy = ModelParallelismPlacement()
-        group_configs, group_models, _ = policy.solve(model_datas, cluster_env)
+        group_configs, group_models, _ = policy.solve_placement(
+            model_datas, cluster_env)
 
         assert len(group_configs) == 2
         assert group_configs[0].pp == 2
