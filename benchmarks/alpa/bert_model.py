@@ -194,7 +194,6 @@ class BertModel:
 
         # Final inference function
         async def infer_func(src, request):
-            request.scope["ts"].append(("c", time.time()))
             inputs = tokenizer(src,
                                max_length=seq_len,
                                padding="max_length",
@@ -218,10 +217,9 @@ class BertModel:
     async def handle_request(self, request):
         obj = await request.json()
 
-        tic = time.time()
+        request.scope["ts"].append(("c", time.time()))
         res = await self.infer_func(obj["input"], request)
-        latency = time.time() - tic
-        self.logger.info(f"handle request. latency = {latency*1e3:.2f} ms")
+        request.scope["ts"].append(("e", time.time()))
 
         return {
             "logits": res.tolist(),

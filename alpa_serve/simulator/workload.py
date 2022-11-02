@@ -16,6 +16,7 @@ class Request:
     data: Any
     slo: float
     idx: int
+    submit_time: float = None   # This will be filled later
 
 
 class Workload:
@@ -27,15 +28,16 @@ class Workload:
         self.arrivals = arrivals
         self.requests = requests
 
-    def print_stats(self, start: Sequence[float], finish: Sequence[float], warmup: float):
+    def print_stats(self, start: Sequence[float], finish: Sequence[float],
+                    good: Sequence[bool], warmup: float):
         """Print the statistics of serving results."""
-
         # Skip the first and last `warmup` seconds
         ct = 1
         while ct < len(start) and start[ct] - start[0] < warmup:
             ct += 1
         start = np.asarray(start[ct:-ct])
         finish = np.asarray(finish[ct:-ct])
+        good = np.asarray(good[ct:-ct])
         workload = self[ct:-ct]
 
         # Compute stats per model
@@ -46,20 +48,31 @@ class Workload:
         names = list(model_indices.keys())
         names.sort()
 
+        if not names:
+            print("No requests after warmup!")
+
         for name in names:
             indices = model_indices[name]
-            tmp_start = start[indices]
-            tmp_finish = finish[indices]
+            tmp_good = good[indices]
+            tmp_start = start[indices][tmp_good]
+            tmp_finish = finish[indices][tmp_good]
 
             # Compute stats
-            throughput = len(tmp_start) / (tmp_finish[-1] - tmp_start[0])
-            latency = tmp_finish - tmp_start
+            goodput = np.sum(tmp_good) / len(tmp_good)
+            if goodput > 0:
+                throughput = len(tmp_start) / (tmp_finish[-1] - tmp_start[0])
+                latency = tmp_finish - tmp_start
+            else:
+                throughput = 0
+                latency = [0]
+
             sorted_latency = np.sort(latency)
             average_latency = np.mean(latency)
             tail_latnecy_90 = sorted_latency[int(0.90 * len(sorted_latency))]
             tail_latnecy_99 = sorted_latency[int(0.99 * len(sorted_latency))]
 
-            print(f"model: {name}, #req: {len(latency)}")
+            print(f"model: {name}, #req: {len(indices)}")
+            print(f"goodput: {goodput*100:.2f} %")
             print(f"throughput: {throughput:.2f} q/s")
             print(f"latency mean: {np.mean(latency)*1e3:.2f} ms, "
                   f"std: {np.std(latency)*1e3:.2f} ms, "
@@ -67,16 +80,16 @@ class Workload:
 
     @staticmethod
     def gen_uniform(model_name: str, start: float, throughput: float,
-                    duration: float, seed: int=0):
+                    duration: float, slo: float=1, seed: int=0):
         number = int(duration * throughput)
         interval = 1 / throughput
         ticks = [start + i * interval for i in range(number)]
         return Workload(ticks, [
-            Request(model_name, None, 1, i) for i in range(number)])
+            Request(model_name, None, slo, i) for i in range(number)])
 
     @staticmethod
     def gen_poisson(model_name: str, start: float, throughput: float,
-                    duration: float, seed: int=0):
+                    duration: float, slo: float=1, seed: int=0):
         random.seed(seed)
 
         number = int(duration * throughput)
@@ -86,7 +99,7 @@ class Workload:
             cur += random.expovariate(throughput)
             ticks.append(cur)
         return Workload(ticks, [
-            Request(model_name, None, 1, i) for i in range(number)])
+            Request(model_name, None, slo, i) for i in range(number)])
 
     @staticmethod
     def merge(*args):

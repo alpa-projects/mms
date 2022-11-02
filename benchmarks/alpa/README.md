@@ -1,11 +1,10 @@
-## Run server/client test
+## Run one case
 ```
-python3 run_server.py --placement manual_1 --port 20001
-python3 run_client.py --workload tmp --port 20001
+python3 run_one_case.py --case debug_manual_1
 ```
 
-## Run simulator
+## Simulate one case
 ```
-python3 run_simulator.py --placement manual_1 --workload tmp
+python3 simulate_one_case.py --case debug_manual_1
 ```
 

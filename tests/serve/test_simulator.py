@@ -53,7 +53,7 @@ class SimulatorTest(unittest.TestCase):
         controller.create_replica.remote("a", group_id,
                                          [ParallelConfig(1, 1, 2)])
 
-        w = Workload.gen_poisson("a", 0, 10, 60)
+        w = Workload.gen_poisson("a", 0, 10, 60, slo=0.15)
         client = Client(controller)
         client.submit_workload(w)
 
@@ -66,7 +66,7 @@ class SimulatorTest(unittest.TestCase):
 
 def suite():
     suite = unittest.TestSuite()
-    suite.addTest(SimulatorTest("test_query"))
+    #suite.addTest(SimulatorTest("test_query"))
     suite.addTest(SimulatorTest("test_client"))
     return suite
 

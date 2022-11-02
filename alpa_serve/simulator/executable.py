@@ -24,6 +24,9 @@ class Executable:
 
         self.mesh_group = mesh_group
 
+    def get_latency_dict(self):
+        return self.latency_mem.latency
+
     async def handle_request(self, request):
         batch_size = 1
 
@@ -38,3 +41,4 @@ class Executable:
             #durations = [latency] * len(streams)
             #await wait_multi_stream(streams, durations)
 
+        return True

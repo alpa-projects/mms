@@ -1,0 +1,73 @@
+from collections import namedtuple
+
+from alpa_serve.simulator.controller import Controller
+from alpa_serve.simulator.workload import Workload
+from alpa_serve.profiling import ParallelConfig
+from alpa_serve.placement_policy import (SelectiveReplication,
+    SelectiveReplicationWithPipeline)
+
+from benchmarks.alpa.util import get_model_def
+
+
+cases = {
+}
+
+
+def debug_case(placement):
+    def register_models(controller):
+        is_simulator = isinstance(controller, Controller)
+
+        controller.register_model.remote(
+            "a", get_model_def("alpa/bert-1.3b", is_simulator))
+        controller.register_model.remote(
+            "b", get_model_def("alpa/bert-1.3b", is_simulator))
+
+    def generate_workload(start=0):
+        w1 = Workload.gen_poisson("a", start, 8, 60, slo=0.5, seed=1)
+        w2 = Workload.gen_poisson("b", start, 8, 60, slo=0.5, seed=2)
+        w = w1 + w2
+        return w
+
+    def place_models(controller):
+        if placement == "manual_1":
+            group_id = 0
+            controller.create_mesh_group_manager.remote(group_id, [1, 1])
+            controller.create_replica.remote(
+                "a", group_id, [ParallelConfig(1, 1, 1)])
+
+            group_id = 1
+            controller.create_mesh_group_manager.remote(group_id, [1, 1])
+            controller.create_replica.remote(
+                "b", group_id, [ParallelConfig(1, 1, 1)])
+        elif placement == "manual_2":
+            group_id = 0
+            controller.create_mesh_group_manager.remote(group_id, [1, 1])
+            controller.create_replica.remote(
+                "a", group_id, [ParallelConfig(1, 1, 1)])
+            controller.create_replica.remote(
+                "b", group_id, [ParallelConfig(1, 1, 1)])
+
+            group_id = 1
+            controller.create_mesh_group_manager.remote(group_id, [1, 1])
+            controller.create_replica.remote(
+                "a", group_id, [ParallelConfig(1, 1, 1)])
+            controller.create_replica.remote(
+                "b", group_id, [ParallelConfig(1, 1, 1)])
+        elif placement == "manual_3":
+            group_id = 0
+            controller.create_mesh_group_manager.remote(group_id, [1, 2])
+            controller.create_replica.remote(
+                "a", group_id, [ParallelConfig(1, 1, 2)])
+            controller.create_replica.remote(
+                "b", group_id, [ParallelConfig(1, 1, 2)])
+        else:
+            raise ValueError(f"Invalid placement: {placement}")
+
+        controller.sync()
+
+    return register_models, generate_workload, place_models
+
+
+cases["debug_manual_1"] = debug_case("manual_1")
+cases["debug_manual_2"] = debug_case("manual_2")
+cases["debug_manual_3"] = debug_case("manual_3")
