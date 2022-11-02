@@ -76,8 +76,8 @@ class ProfilingDatabase:
         stage_latencies = list(map(float, row["StageLatencies(s)"].strip("[]").split()))
         weight_mem = list(map(float, row["StageWeights(GB)"].strip("[]").split()))
         peak_mem = list(map(float, row["StagePeakMem(GB)"].strip("[]").split()))
-        # TODO: fix the activation memory
         act_mem = [peak_mem - weight_mem for peak_mem, weight_mem in zip(peak_mem, weight_mem)]
+        assert min(act_mem) > 0, "negative activation memory"
         parallel_config = ParallelConfig(int(row["DP"]), int(row["OP"]), int(row["PP"]))
         return row["ModelName"], parallel_config, int(row["BS"]), stage_latencies, weight_mem, act_mem
 
@@ -259,4 +259,8 @@ def load_test_prof_result(name: str):
 
 # database = ProfilingDatabase("profiling_result.pkl", False)
 # bert_1_3b = database.get("bert-1.3b")
-# print(bert_1_3b.para_dict[ParallelConfig(1, 4, 4)].latency[8])
+# bert_2_6b = database.get("bert-2.6b")
+# bert_6_7b = database.get("bert-6.7b")
+# print(bert_1_3b.para_dict[ParallelConfig(1,4,4)].latency[8])
+# print(bert_2_6b.para_dict[ParallelConfig(1,4,4)].latency[8])
+# print(bert_6_7b.para_dict[ParallelConfig(1,4,4)].latency[8])
