@@ -60,7 +60,8 @@ tests/tmp
 benchmark/deepspeed/data
 
 # plots
-benchmark/**.pdf
+benchmarks/*/*.pdf
+benchmarks/*/*.png
 
 # Numpy cache
 *.npy
