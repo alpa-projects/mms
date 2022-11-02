@@ -4,9 +4,13 @@ from alpa_serve.simulator.controller import Controller
 from alpa_serve.simulator.workload import Workload
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy import (SelectiveReplication,
-    SelectiveReplicationWithPipeline)
+    ModelParallelismPlacement)
 
 from benchmarks.alpa.util import get_model_def
+
+
+BenchmarkCase = namedtuple("BenchmarkCase",
+    ("register_models", "generate_workload", "placement_policy"))
 
 
 cases = {
@@ -65,7 +69,7 @@ def debug_case(placement):
 
         controller.sync()
 
-    return register_models, generate_workload, place_models
+    return BenchmarkCase(register_models, generate_workload, place_models)
 
 
 cases["debug_manual_1"] = debug_case("manual_1")

@@ -5,7 +5,7 @@ import numpy as np
 
 from alpa_serve.simulator.controller import Controller
 from alpa_serve.placement_policy import (ModelData, ClusterEnv,
-    SelectiveReplication, SelectiveReplicationWithPipeline)
+    SelectiveReplication, ModelParallelismPlacement)
 from alpa_serve.profiling import ParallelConfig, load_test_prof_result
 from alpa.util import GB
 
@@ -21,8 +21,6 @@ class EchoModel:
 class PlacementPolicyTest(unittest.TestCase):
 
     def test_selective_replication(self):
-        policy = SelectiveReplication()
-
         cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
         model_datas = [
             ModelData("m1", 1, 5, load_test_prof_result("test-2GB-100ms")),
@@ -30,6 +28,8 @@ class PlacementPolicyTest(unittest.TestCase):
             ModelData("m3", 1, 5, load_test_prof_result("test-2GB-100ms")),
             ModelData("m4", 1, 5, load_test_prof_result("test-2GB-100ms")),
         ]
+
+        policy = SelectiveReplication()
         group_configs, group_models, _ = policy.solve_placement(
             model_datas, cluster_env)
 
@@ -47,8 +47,9 @@ class PlacementPolicyTest(unittest.TestCase):
             ModelData("m4", 1, 5, load_test_prof_result("test-2GB-100ms")),
         ]
 
-        policy = SelectiveReplicationWithPipeline()
-        group_configs, group_models, _ = policy.solve(model_datas, cluster_env)
+        policy = ModelParallelismPlacement()
+        group_configs, group_models, _ = policy.solve_placement(
+            model_datas, cluster_env)
 
         assert len(group_configs) == 2
         assert group_configs[0].pp == 2

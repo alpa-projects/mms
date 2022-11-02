@@ -8,12 +8,7 @@ import requests
 import ray
 
 from alpa_serve import run_controller
-from alpa_serve.profiling import ParallelConfig
-from alpa_serve.placement_policy import (
-    SelectiveReplication, SelectiveReplicationWithPipeline,
-    ModelData)
 from alpa_serve.simulator.workload import Workload
-from alpa.util import GB
 from alpa.util import to_str_round
 
 from benchmarks.alpa.suite import cases
@@ -65,9 +60,9 @@ class Client:
 
         self.futuress = dict()
 
-    def print_stats(self, workload: Workload, warmup: float):
+    def compute_stats(self, workload: Workload, warmup: float):
         start, finish, good = self.res_dict[workload]
-        workload.print_stats(start, finish, good, warmup)
+        return workload.compute_stats(start, finish, good, warmup)
 
 
 async def run_workload(client, workload):
@@ -75,7 +70,7 @@ async def run_workload(client, workload):
 
     await client.wait_all()
 
-    client.print_stats(workload, warmup=10)
+    return client.compute_stats(workload, warmup=10)
 
 
 def run_one_case(case, port=20001):
@@ -91,7 +86,7 @@ def run_one_case(case, port=20001):
     workload = generate_workload(start=time.time() + 2)
 
     # Run workloads
-    asyncio.run(run_workload(client, workload))
+    return asyncio.run(run_workload(client, workload))
 
 
 if __name__ == "__main__":
@@ -101,4 +96,5 @@ if __name__ == "__main__":
 
     ray.init(address="auto")
 
-    run_one_case(cases[args.case])
+    stats = run_one_case(cases[args.case])
+    Workload.print_stats(stats)

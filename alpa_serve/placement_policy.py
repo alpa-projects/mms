@@ -165,7 +165,7 @@ class SelectiveReplication(PlacementPolicy):
         return group_configs, group_models, {"objective": objective}
 
 
-class SelectiveReplicationWithPipeline(PlacementPolicy):
+class ModelParallelismPlacement(PlacementPolicy):
     def __init__(self, verbose: bool = False):
         super().__init__()
 
@@ -213,9 +213,9 @@ class SelectiveReplicationWithPipeline(PlacementPolicy):
 
         return max(latency_mem.weight_mem)
 
-    def solve(self,
-              model_datas: List[ModelData],
-              cluster_env: ClusterEnv):
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv):
         tic = time.time()
 
         # Load constants
