@@ -215,9 +215,10 @@ class BertModel:
         return infer_func
 
     async def handle_request(self, request):
+        request.scope["ts"].append(("c", time.time()))
         obj = await request.json()
 
-        request.scope["ts"].append(("c", time.time()))
+        #request.scope["ts"].append(("c", time.time()))
         res = await self.infer_func(obj["input"], request)
         request.scope["ts"].append(("e", time.time()))
 

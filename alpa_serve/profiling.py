@@ -66,7 +66,7 @@ class ProfilingDatabase:
                 self.results = pickle.load(f)
 
     def get(self, model_name: str) -> ProfilingResult:
-        return self.results[model_name]
+        return self.results.get(model_name)
 
     def update(self, result: ProfilingResult):
         self.results[result.model_name] = result

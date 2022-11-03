@@ -15,15 +15,15 @@ from benchmarks.alpa.suite import cases
 
 
 class Client:
-    def __init__(self, url, max_workers=10):
+    def __init__(self, url, max_workers=10, debug=False):
         self.url = url
         self.executor = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
+        self.debug = debug
 
         self.futures = dict()
         self.res_dict = dict()
 
-    @staticmethod
-    def submit_one(url, model_name, slo, start, idx):
+    def submit_one(self, url, model_name, slo, start, idx):
         while time.time() < start:
             pass
 
@@ -37,12 +37,13 @@ class Client:
         good = e2e_latency <= slo and res.status_code == 200
 
         res = res.json()
-        tstamps = to_str_round({x: (y - start) * 1e3 for x, y in res["ts"]}, 2)
-        print(f"ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
+        if self.debug:
+            tstamps = to_str_round({x: (y - start) * 1e3 for x, y in res["ts"]}, 2)
+            print(f"idx: {idx} ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
         return start, end, good
 
     def submit_workload(self, workload: Workload):
-        futures = [self.executor.submit(Client.submit_one, self.url,
+        futures = [self.executor.submit(self.submit_one, self.url,
                                         workload.requests[i].model_name,
                                         workload.requests[i].slo,
                                         workload.arrivals[i], i)
@@ -73,7 +74,7 @@ async def run_workload(client, workload):
     return client.compute_stats(workload, warmup=10)
 
 
-def run_one_case(case, port=20001):
+def run_one_case(case, port=20001, debug=False):
     register_models, generate_workload, place_models = case
 
     # Launch the controller
@@ -82,7 +83,7 @@ def run_one_case(case, port=20001):
     place_models(controller)
 
     # Launch the client
-    client = Client(f"http://localhost:{port}")
+    client = Client(f"http://localhost:{port}", debug=debug)
     workload = generate_workload(start=time.time() + 2)
 
     # Run workloads
@@ -92,9 +93,10 @@ def run_one_case(case, port=20001):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", type=str, default="debug_manual_1")
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 
     ray.init(address="auto")
 
-    stats = run_one_case(cases[args.case])
+    stats = run_one_case(cases[args.case], debug=args.debug)
     Workload.print_stats(stats)

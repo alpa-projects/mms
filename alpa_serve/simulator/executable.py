@@ -1,7 +1,7 @@
 """A pipeline executable."""
 from alpa_serve.profiling import ParallelConfig, ProfilingResult
 from alpa_serve.simulator.cluster import VirtualMesh
-from alpa_serve.simulator.event_loop import wait_multi_stream, wait_stream
+from alpa_serve.simulator.event_loop import clock, wait_stream
 
 
 class Executable:
@@ -28,6 +28,7 @@ class Executable:
         return self.latency_mem.latency
 
     async def handle_request(self, request):
+        request.time_stamp["c"] = clock()
         batch_size = 1
 
         stage_latency = self.latency_mem.latency[batch_size]
@@ -40,5 +41,5 @@ class Executable:
             #streams = [g.stream_name for g in mesh.gpus]
             #durations = [latency] * len(streams)
             #await wait_multi_stream(streams, durations)
-
+        request.time_stamp["e"] = clock()
         return True

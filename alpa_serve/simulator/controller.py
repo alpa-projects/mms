@@ -16,6 +16,7 @@ from alpa_serve.simulator.cluster import VirtualMesh
 from alpa_serve.simulator.event_loop import timed_coroutine, clock, main_loop, sleep
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import Workload
+from alpa.util import to_str_round
 
 
 class GroupManager:
@@ -58,6 +59,7 @@ class GroupManager:
 
     @timed_coroutine
     async def handle_request(self, name: str, request):
+        request.time_stamp["b"] = clock()
 
         if False:  # SLO awareness, disabled temporarily
             stage_latency = self.latency_dict[name][1]
@@ -176,6 +178,7 @@ class Controller:
 
     @timed_coroutine
     async def handle_request(self, request):
+        request.time_stamp["a"] = clock()
         name = request.model_name
 
         assert name in self.model_info, (
@@ -200,8 +203,9 @@ class Controller:
 
 
 class Client:
-    def __init__(self, controller):
+    def __init__(self, controller, debug=False):
         self.controller = controller
+        self.debug = debug
 
         self.res_dict = dict()
         self.http_overhead = 0.002
@@ -216,6 +220,11 @@ class Client:
         finish[idx] = t
         good[idx] = (res is not None and
                      t <= request.submit_time + request.slo)
+
+        if self.debug:
+            e2e_latency = finish[idx] - start[idx]
+            tstamps = to_str_round({x: (y - request.submit_time) * 1e3 for x, y in request.time_stamp.items()}, 2)
+            print(f"idx: {idx} ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
 
     def submit_workload(self, workload: Workload):
         start, finish, good = (np.zeros(len(workload)),
