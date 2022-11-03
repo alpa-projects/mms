@@ -42,6 +42,8 @@ class GroupManager:
         # Constants
         self.fixed_overhead = 0.005
 
+        self.alpa_overhead = partial(np.random.normal, loc=0.004, scale=0.001)
+
         # Simulator specific code
         install_remote_methods(self)
 
@@ -80,7 +82,7 @@ class GroupManager:
             for i in range(len(stage_latency)):
                 self.stage_clock[i] = req_stage_clock[i]
 
-        ret = await self.replicas[name].handle_request(request)
+        ret = await self.replicas[name].handle_request(request, delay=self.alpa_overhead())
         return ret
 
 
@@ -208,14 +210,14 @@ class Client:
         self.debug = debug
 
         self.res_dict = dict()
-        self.http_overhead = 0.002
+        self.http_overhead = partial(np.random.normal, loc=0.0023, scale=0.0005)
 
     @timed_coroutine
     async def submit_one(self, request, idx, start, finish, good):
         t = clock()
         start[idx] = t
         request.submit_time = t
-        res = await self.controller.handle_request(request, delay=self.http_overhead)
+        res = await self.controller.handle_request(request, delay=self.http_overhead())
         t = clock()
         finish[idx] = t
         good[idx] = (res is not None and

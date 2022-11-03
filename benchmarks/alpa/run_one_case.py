@@ -25,11 +25,12 @@ class Client:
     @staticmethod
     def submit_one(url, model_name, slo, start, idx):
         while time.time() < start:
-            pass
+            time.sleep(0.001)
 
         json = {
             "input": f"I like this movie {idx}",
         }
+        start = time.time()
         res = requests.post(url=url, params={"model": model_name}, json=json)
         assert res.status_code == 200 or res.status_code == 503, f"{res.json()}"
         end = time.time()

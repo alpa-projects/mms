@@ -1,7 +1,7 @@
 """A pipeline executable."""
 from alpa_serve.profiling import ParallelConfig, ProfilingResult
 from alpa_serve.simulator.cluster import VirtualMesh
-from alpa_serve.simulator.event_loop import clock, wait_stream
+from alpa_serve.simulator.event_loop import clock, timed_coroutine, wait_stream
 
 
 class Executable:
@@ -27,8 +27,9 @@ class Executable:
     def get_latency_dict(self):
         return self.latency_mem.latency
 
+    @timed_coroutine
     async def handle_request(self, request):
-        request.time_stamp["c"] = clock()
+        request.time_stamp["d"] = clock()
         batch_size = 1
 
         stage_latency = self.latency_mem.latency[batch_size]
