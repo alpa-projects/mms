@@ -32,7 +32,8 @@ bert_specs = {
 
 
 class BertModel:
-    def __init__(self, model_config, parallel_config):
+    def __init__(self, model_config, profiling_result, parallel_config):
+        self.latency_mem = profiling_result.para_dict[parallel_config]
         self.logger = logging.getLogger("bert_model")
         self.logger.setLevel(logging.INFO)
         tic = time.time()
@@ -222,9 +223,14 @@ class BertModel:
         request.scope["ts"].append(("e", time.time()))
 
         return {
+            "rejected": False,
             "logits": res.tolist(),
             "ts": request.scope["ts"],
         }
+    
+    def get_latency_dict(self):
+        return self.latency_mem.latency
+
 
 
 def get_hf_pt_sentiment_model():

@@ -11,6 +11,7 @@ import socket
 import time
 from typing import Callable, List, Dict, Optional, Tuple, Any, Union
 
+import numpy as np
 import ray
 from ray.actor import ActorHandle
 from starlette.datastructures import QueryParams
@@ -75,6 +76,11 @@ class GroupManager:
         # Dict[str -> object]
         self.replicas = {}
 
+        # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
+        self.latency_dict = defaultdict(dict)
+
+        self.stage_clock = [0] * np.prod(virtual_mesh_shape)
+
         self.logger = build_logger()
 
     def create_replica(self, name: str, create_info: CreateInfo):
@@ -85,6 +91,8 @@ class GroupManager:
         args = args or []
         kwargs = kwargs or {}
         self.replicas[name] = model_def(*args, **kwargs)
+
+        self.latency_dict[name] = self.replicas[name].get_latency_dict()
 
     def delete_replica(self, name: str):
         assert name in self.replicas
@@ -100,6 +108,30 @@ class GroupManager:
         else:
             # A debug path for the API compatbility with simulator
             request = request_wrapper
+
+        obj = await request.json()
+
+        # SLO awareness
+        stage_latency = self.latency_dict[name][1]
+
+        # Simulate clock
+        req_stage_clock = []
+        t = time.time()
+        for i in range(len(stage_latency)):
+            t = max(self.stage_clock[i], t) + stage_latency[i]
+            req_stage_clock.append(t)
+        ret_time = req_stage_clock[-1]
+
+        # Drop this request if it will exceed deadline
+        if ret_time  > obj["submit_time"] + obj["slo"]:
+            return {
+                "rejected": True,
+                "ts": request.scope["ts"],
+            }
+
+        # Accept this request
+        for i in range(len(stage_latency)):
+            self.stage_clock[i] = req_stage_clock[i]
 
         try:
             return await self.replicas[name].handle_request(request)

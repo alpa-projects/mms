@@ -8,6 +8,8 @@ import requests
 import ray
 
 from alpa_serve import run_controller
+# import all of the classes defined in profiling module before pickle loading
+from alpa_serve.profiling import *
 from alpa_serve.simulator.workload import Workload
 from alpa.util import to_str_round
 
@@ -28,15 +30,18 @@ class Client:
             time.sleep(0.0001)
 
         json = {
+            "model": model_name, 
+            "submit_time": start,
+            "slo": slo, 
             "input": f"I like this movie {idx}",
         }
-        res = requests.post(url=url, params={"model": model_name}, json=json)
-        assert res.status_code == 200 or res.status_code == 503, f"{res.json()}"
+        res = requests.post(url=url, json=json)
+        status_code, res = res.status_code, res.json()
+        assert status_code == 200 or status_code == 503, f"{res}"
         end = time.time()
         e2e_latency = end - start
-        good = e2e_latency <= slo and res.status_code == 200
+        good = e2e_latency <= slo and status_code == 200 and not res["rejected"]
 
-        res = res.json()
         tstamps = to_str_round({x: (y - start) * 1e3 for x, y in res["ts"]}, 2)
         print(f"idx: {idx} ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
         return start, end, good
@@ -73,12 +78,12 @@ async def run_workload(client, workload):
     return client.compute_stats(workload, warmup=10)
 
 
-def run_one_case(case, port=20001):
+def run_one_case(case, prof_database, port=20001):
     register_models, generate_workload, place_models = case
 
     # Launch the controller
     controller = run_controller("localhost", port=port, name=None)
-    register_models(controller)
+    register_models(controller, prof_database)
     place_models(controller)
 
     # Launch the client
@@ -96,5 +101,6 @@ if __name__ == "__main__":
 
     ray.init(address="auto")
 
-    stats = run_one_case(cases[args.case])
+    prof_database = ProfilingDatabase("profiling_result.pkl", False)
+    stats = run_one_case(cases[args.case], prof_database)
     Workload.print_stats(stats)

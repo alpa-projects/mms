@@ -13,19 +13,19 @@ def build_logger():
     return logger
 
 
-def get_model_def(name, is_simulator, prof_database=None):
+def get_model_def(name, is_simulator, prof_database):
+    result = prof_database.get(name)
     if is_simulator:
-        result = prof_database.get(name)
         if result is None:
             raise ValueError(f"Invalid model name: {name}")
         else:
             return partial(Executable, result)
     else:
         if name == "bert-1.3b":
-            return partial(BertModel, bert_specs["1.3B"])
+            return partial(BertModel, bert_specs["1.3B"], result)
         elif name == "bert-2.6b":
-            return partial(BertModel, bert_specs["2.6B"])
+            return partial(BertModel, bert_specs["2.6B"], result)
         elif name == "bert-6.7b":
-            return partial(BertModel, bert_specs["6.7B"])
+            return partial(BertModel, bert_specs["6.7B"], result)
         else:
             raise ValueError(f"Invalid model name: {name}")

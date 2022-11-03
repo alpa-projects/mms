@@ -40,7 +40,7 @@ class GroupManager:
         self.logger = build_logger()
 
         # Constants
-        self.fixed_overhead = 0.005
+        self.fixed_overhead = 0.004
 
         self.alpa_overhead = partial(np.random.normal, loc=0.004, scale=0.001)
 
@@ -75,7 +75,7 @@ class GroupManager:
         ret_time = req_stage_clock[-1]
 
         # Drop this request if it will exceed deadline
-        if ret_time + self.fixed_overhead > request.submit_time + request.slo:
+        if ret_time + self.fixed_overhead * len(stage_latency) > request.submit_time + request.slo:
             return None
 
         # Accept this request
