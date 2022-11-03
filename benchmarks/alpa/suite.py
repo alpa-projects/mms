@@ -21,15 +21,15 @@ def debug_case(placement):
     def register_models(controller, prof_database=None):
         is_simulator = isinstance(controller, Controller)
 
-        # controller.register_model.remote(
-        #     "a", get_model_def("bert-1.3b", is_simulator, prof_database))
-        # controller.register_model.remote(
-        #     "b", get_model_def("bert-1.3b", is_simulator, prof_database))
+        controller.register_model.remote(
+            "a", get_model_def("bert-1.3b", is_simulator, prof_database))
+        controller.register_model.remote(
+            "b", get_model_def("bert-1.3b", is_simulator, prof_database))
 
-        controller.register_model.remote(
-            "a", get_model_def("bert-6.7b", is_simulator, prof_database))
-        controller.register_model.remote(
-            "b", get_model_def("bert-6.7b", is_simulator, prof_database))
+        # controller.register_model.remote(
+        #     "a", get_model_def("bert-6.7b", is_simulator, prof_database))
+        # controller.register_model.remote(
+        #     "b", get_model_def("bert-6.7b", is_simulator, prof_database))
 
     def generate_workload(start=0):
         w1 = Workload.gen_poisson("a", start, 4, 60, slo=0.5, seed=1)
@@ -71,11 +71,11 @@ def debug_case(placement):
                 "b", group_id, [ParallelConfig(1, 1, 2)])
         elif placement == "manual_4":
             group_id = 0
-            controller.create_mesh_group_manager.remote(group_id, [1, 8])
+            controller.create_mesh_group_manager.remote(group_id, [1, 1])
             controller.create_replica.remote(
-                "a", group_id, [ParallelConfig(1, 1, 8)])
+                "a", group_id, [ParallelConfig(1, 1, 1)])
             controller.create_replica.remote(
-                "b", group_id, [ParallelConfig(1, 1, 8)])
+                "b", group_id, [ParallelConfig(1, 1, 1)])
         else:
             raise ValueError(f"Invalid placement: {placement}")
 
