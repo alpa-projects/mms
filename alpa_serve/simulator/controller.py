@@ -63,24 +63,24 @@ class GroupManager:
     async def handle_request(self, name: str, request):
         request.time_stamp["b"] = clock()
 
-        if False:  # SLO awareness, disabled temporarily
-            stage_latency = self.latency_dict[name][1]
+        # SLO awareness
+        stage_latency = self.latency_dict[name][1]
 
-            # Simulate clock
-            req_stage_clock = []
-            t = clock()
-            for i in range(len(stage_latency)):
-                t = max(self.stage_clock[i], t) + stage_latency[i]
-                req_stage_clock.append(t)
-            ret_time = req_stage_clock[-1]
+        # Simulate clock
+        req_stage_clock = []
+        t = clock()
+        for i in range(len(stage_latency)):
+            t = max(self.stage_clock[i], t) + stage_latency[i]
+            req_stage_clock.append(t)
+        ret_time = req_stage_clock[-1]
 
-            # Drop this request if it will exceed deadline
-            if ret_time + self.fixed_overhead > request.submit_time + request.slo:
-                return None
+        # Drop this request if it will exceed deadline
+        if ret_time + self.fixed_overhead > request.submit_time + request.slo:
+            return None
 
-            # Accept this request
-            for i in range(len(stage_latency)):
-                self.stage_clock[i] = req_stage_clock[i]
+        # Accept this request
+        for i in range(len(stage_latency)):
+            self.stage_clock[i] = req_stage_clock[i]
 
         ret = await self.replicas[name].handle_request(request, delay=self.alpa_overhead())
         return ret
