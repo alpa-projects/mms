@@ -18,7 +18,7 @@ cases = {
 
 
 def debug_case(placement):
-    def register_models(controller, prof_database=None):
+    def register_models(controller, prof_database):
         is_simulator = isinstance(controller, Controller)
 
         controller.register_model.remote(
@@ -32,8 +32,8 @@ def debug_case(placement):
         #     "b", get_model_def("bert-6.7b", is_simulator, prof_database))
 
     def generate_workload(start=0):
-        w1 = Workload.gen_poisson("a", start, 5, 60, slo=0.5, seed=1)
-        w2 = Workload.gen_poisson("b", start, 5, 60, slo=0.5, seed=2)
+        w1 = Workload.gen_poisson("a", start, 8, 60, slo=0.5, seed=1)
+        w2 = Workload.gen_poisson("b", start, 8, 60, slo=0.5, seed=2)
         w = w1 + w2
         return w
 
