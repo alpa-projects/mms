@@ -26,14 +26,9 @@ def debug_case(placement):
         controller.register_model.remote(
             "b", get_model_def("bert-1.3b", is_simulator, prof_database))
 
-        # controller.register_model.remote(
-        #     "a", get_model_def("bert-6.7b", is_simulator, prof_database))
-        # controller.register_model.remote(
-        #     "b", get_model_def("bert-6.7b", is_simulator, prof_database))
-
     def generate_workload(start=0):
-        w1 = Workload.gen_poisson("a", start, 8, 60, slo=0.5, seed=1)
-        w2 = Workload.gen_poisson("b", start, 8, 60, slo=0.5, seed=2)
+        w1 = Workload.gen_poisson("a", start, 4, 60, slo=0.5, seed=1)
+        w2 = Workload.gen_poisson("b", start, 4, 60, slo=0.5, seed=2)
         w = w1 + w2
         return w
 

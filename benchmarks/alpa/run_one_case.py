@@ -8,8 +8,7 @@ import requests
 import ray
 
 from alpa_serve import run_controller
-# import all of the classes defined in profiling module before pickle loading
-from alpa_serve.profiling import *
+from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.simulator.workload import Workload
 from alpa.util import to_str_round
 

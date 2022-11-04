@@ -1,7 +1,6 @@
 import argparse
 
-# import all of the classes defined in profiling module before pickle loading
-from alpa_serve.profiling import *
+from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.simulator.controller import Controller, Client
 from alpa_serve.simulator.event_loop import run_event_loop
 from alpa_serve.simulator.workload import Workload
