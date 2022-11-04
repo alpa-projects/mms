@@ -15,10 +15,10 @@ def build_logger():
 
 def get_model_def(name, is_simulator, prof_database):
     result = prof_database.get(name)
+    if result is None:
+        raise ValueError(f"Invalid model name: {name}")
+
     if is_simulator:
-        if result is None:
-            raise ValueError(f"Invalid model name: {name}")
-        else:
             return partial(Executable, result)
     else:
         if name == "bert-1.3b":
