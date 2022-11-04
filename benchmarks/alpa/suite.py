@@ -18,17 +18,17 @@ cases = {
 
 
 def debug_case(placement):
-    def register_models(controller):
+    def register_models(controller, prof_database):
         is_simulator = isinstance(controller, Controller)
 
         controller.register_model.remote(
-            "a", get_model_def("alpa/bert-1.3b", is_simulator))
+            "a", get_model_def("bert-1.3b", is_simulator, prof_database))
         controller.register_model.remote(
-            "b", get_model_def("alpa/bert-1.3b", is_simulator))
+            "b", get_model_def("bert-1.3b", is_simulator, prof_database))
 
     def generate_workload(start=0):
-        w1 = Workload.gen_poisson("a", start, 8, 60, slo=0.5, seed=1)
-        w2 = Workload.gen_poisson("b", start, 8, 60, slo=0.5, seed=2)
+        w1 = Workload.gen_poisson("a", start, 4, 60, slo=0.5, seed=1)
+        w2 = Workload.gen_poisson("b", start, 4, 60, slo=0.5, seed=2)
         w = w1 + w2
         return w
 
@@ -64,6 +64,13 @@ def debug_case(placement):
                 "a", group_id, [ParallelConfig(1, 1, 2)])
             controller.create_replica.remote(
                 "b", group_id, [ParallelConfig(1, 1, 2)])
+        elif placement == "manual_4":
+            group_id = 0
+            controller.create_mesh_group_manager.remote(group_id, [1, 1])
+            controller.create_replica.remote(
+                "a", group_id, [ParallelConfig(1, 1, 1)])
+            controller.create_replica.remote(
+                "b", group_id, [ParallelConfig(1, 1, 1)])
         else:
             raise ValueError(f"Invalid placement: {placement}")
 
@@ -75,3 +82,4 @@ def debug_case(placement):
 cases["debug_manual_1"] = debug_case("manual_1")
 cases["debug_manual_2"] = debug_case("manual_2")
 cases["debug_manual_3"] = debug_case("manual_3")
+cases["debug_manual_4"] = debug_case("manual_4")

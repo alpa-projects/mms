@@ -16,6 +16,7 @@ from alpa_serve.simulator.cluster import VirtualMesh
 from alpa_serve.simulator.event_loop import timed_coroutine, clock, main_loop, sleep
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import Workload
+from alpa.util import to_str_round
 
 
 class GroupManager:
@@ -39,7 +40,9 @@ class GroupManager:
         self.logger = build_logger()
 
         # Constants
-        self.fixed_overhead = 0.005
+        self.fixed_overhead = 0.004
+
+        self.alpa_overhead = partial(np.random.normal, loc=0.004, scale=0.001)
 
         # Simulator specific code
         install_remote_methods(self)
@@ -58,27 +61,28 @@ class GroupManager:
 
     @timed_coroutine
     async def handle_request(self, name: str, request):
+        request.time_stamp["b"] = clock()
 
-        if False:  # SLO awareness, disabled temporarily
-            stage_latency = self.latency_dict[name][1]
+        # SLO awareness
+        stage_latency = self.latency_dict[name][1]
 
-            # Simulate clock
-            req_stage_clock = []
-            t = clock()
-            for i in range(len(stage_latency)):
-                t = max(self.stage_clock[i], t) + stage_latency[i]
-                req_stage_clock.append(t)
-            ret_time = req_stage_clock[-1]
+        # Simulate clock
+        req_stage_clock = []
+        t = clock()
+        for i in range(len(stage_latency)):
+            t = max(self.stage_clock[i], t) + stage_latency[i]
+            req_stage_clock.append(t)
+        ret_time = req_stage_clock[-1]
 
-            # Drop this request if it will exceed deadline
-            if ret_time + self.fixed_overhead > request.submit_time + request.slo:
-                return None
+        # Drop this request if it will exceed deadline
+        if ret_time + self.fixed_overhead > request.submit_time + request.slo:
+            return None
 
-            # Accept this request
-            for i in range(len(stage_latency)):
-                self.stage_clock[i] = req_stage_clock[i]
+        # Accept this request
+        for i in range(len(stage_latency)):
+            self.stage_clock[i] = req_stage_clock[i]
 
-        ret = await self.replicas[name].handle_request(request)
+        ret = await self.replicas[name].handle_request(request, delay=self.alpa_overhead())
         return ret
 
 
@@ -176,6 +180,7 @@ class Controller:
 
     @timed_coroutine
     async def handle_request(self, request):
+        request.time_stamp["a"] = clock()
         name = request.model_name
 
         assert name in self.model_info, (
@@ -200,22 +205,28 @@ class Controller:
 
 
 class Client:
-    def __init__(self, controller):
+    def __init__(self, controller, debug=False):
         self.controller = controller
+        self.debug = debug
 
         self.res_dict = dict()
-        self.http_overhead = 0.002
+        self.http_overhead = partial(np.random.normal, loc=0.0023, scale=0.0005)
 
     @timed_coroutine
     async def submit_one(self, request, idx, start, finish, good):
         t = clock()
         start[idx] = t
         request.submit_time = t
-        res = await self.controller.handle_request(request, delay=self.http_overhead)
+        res = await self.controller.handle_request(request, delay=self.http_overhead())
         t = clock()
         finish[idx] = t
         good[idx] = (res is not None and
                      t <= request.submit_time + request.slo)
+
+        if self.debug:
+            e2e_latency = finish[idx] - start[idx]
+            tstamps = to_str_round({x: (y - request.submit_time) * 1e3 for x, y in request.time_stamp.items()}, 2)
+            print(f"idx: {idx} ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
 
     def submit_workload(self, workload: Workload):
         start, finish, good = (np.zeros(len(workload)),

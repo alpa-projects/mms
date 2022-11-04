@@ -2,7 +2,7 @@
 from collections import defaultdict, namedtuple
 import dataclasses
 import random
-from typing import Any, List, Sequence
+from typing import Any, List, Sequence, Dict
 
 import numpy as np
 
@@ -16,6 +16,7 @@ class Request:
     data: Any
     slo: float
     idx: int
+    time_stamp: Dict            # debug only
     submit_time: float = None   # This will be filled later
 
 
@@ -103,7 +104,7 @@ class Workload:
         interval = 1 / throughput
         ticks = [start + i * interval for i in range(number)]
         return Workload(ticks, [
-            Request(model_name, None, slo, i) for i in range(number)])
+            Request(model_name, None, slo, i, {}) for i in range(number)])
 
     @staticmethod
     def gen_poisson(model_name: str, start: float, throughput: float,
@@ -117,7 +118,7 @@ class Workload:
             cur += random.expovariate(throughput)
             ticks.append(cur)
         return Workload(ticks, [
-            Request(model_name, None, slo, i) for i in range(number)])
+            Request(model_name, None, slo, i, {}) for i in range(number)])
 
     @staticmethod
     def empty():
