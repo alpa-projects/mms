@@ -77,12 +77,12 @@ async def run_workload(client, workload):
     return client.compute_stats(workload, warmup=10)
 
 
-def run_one_case(case, prof_database, port=20001):
+def run_one_case(case, port=20001):
     register_models, generate_workload, place_models = case
 
     # Launch the controller
     controller = run_controller("localhost", port=port, name=None)
-    register_models(controller, prof_database)
+    register_models(controller)
     place_models(controller)
 
     # Launch the client
@@ -100,6 +100,5 @@ if __name__ == "__main__":
 
     ray.init(address="auto")
 
-    prof_database = ProfilingDatabase("profiling_result.pkl", False)
-    stats = run_one_case(cases[args.case], prof_database)
+    stats = run_one_case(cases[args.case])
     Workload.print_stats(stats)

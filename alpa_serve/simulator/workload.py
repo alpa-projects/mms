@@ -85,6 +85,8 @@ class Workload:
             if goodput > 0:
                 throughput = len(tmp_start) / (tmp_finish[-1] - tmp_start[0])
                 latency = tmp_finish - tmp_start
+                total_start = min(total_start, tmp_start[0])
+                total_end = max(total_end, tmp_start[-1])
             else:
                 throughput = 0
                 latency = [0]
@@ -100,8 +102,6 @@ class Workload:
 
             num_good += tmp_num_good
             num_total_requests += len(indices)
-            total_start = min(total_start, tmp_start[0])
-            total_end = max(total_end, tmp_start[-1])
 
         total_request_rate = num_total_requests / (total_end - total_start)
         return StatsResult(stats, num_good / num_total_requests,

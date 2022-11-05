@@ -275,7 +275,7 @@ def load_test_prof_result(name: str):
             postprocess_cpu=0,
         )
     else:
-        raise ValueError("Unsupported model: {name}")
+        raise ValueError(f"Unsupported model: {name}")
 
 # database = ProfilingDatabase("profiling_result.pkl", False)
 # bert_1_3b = database.get("bert-1.3b")

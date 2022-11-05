@@ -19,7 +19,7 @@ def get_model_def(name, is_simulator, prof_database):
         raise ValueError(f"Invalid model name: {name}")
 
     if is_simulator:
-            return partial(Executable, result)
+        return partial(Executable, result)
     else:
         if name == "bert-1.3b":
             return partial(BertModel, bert_specs["1.3B"], result)
