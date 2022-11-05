@@ -141,6 +141,26 @@ def load_test_prof_result(name: str):
                         1.3*GB, 1.3*GB,
                     ],
                 ),
+                ParallelConfig(1, 1, 4): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.028, 0.027, 0.027, 0.029],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO", "TODO", "TODO", "TODO"],
+                    },
+                    weight_mem=[  # List[stage_weight_mem]
+                        0.65*GB, 0.65*GB, 0.65*GB, 0.65*GB,
+                    ],
+                ),
+                ParallelConfig(1, 1, 8): LatencyMemData(
+                    latency={     # Dict[batch_size -> List[stage_latency]]
+                        1: [0.015, 0.014, 0.014, 0.014, 0.014, 0.014, 0.014, 0.016],
+                    },
+                    act_mem={     # Dict[batch_size -> List[stage_act_mem]]
+                        1: ["TODO"] * 8,
+                    },
+                    weight_mem=[0.325*GB] * 8,
+                ),
             },
             preprocess_cpu=0,
             postprocess_cpu=0,

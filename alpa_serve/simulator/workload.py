@@ -20,7 +20,8 @@ class Request:
     submit_time: float = None   # This will be filled later
 
 
-StatsResult = namedtuple("StatsResult", ("average_goodput", "per_model_stats"))
+StatsResult = namedtuple("StatsResult", (
+    "per_model_stats", "average_goodput", "total_num_requests", "total_request_rate"))
 
 PerModelStatsResult = namedtuple("PerModelStatsResult",
         ("name", "num_requests", "goodput", "throughput",
@@ -36,6 +37,15 @@ class Workload:
         self.arrivals = arrivals
         self.requests = requests
 
+        if len(self.arrivals) > 0:
+            tmp_array = np.array(self.arrivals)
+            intervals = tmp_array[1:] - tmp_array[:-1]
+            self.rate = 1 / np.mean(intervals)
+            self.cv = np.std(intervals) * self.rate
+        else:
+            self.rate = 0
+            self.cv = 0
+
     def compute_stats(self, start: Sequence[float], finish: Sequence[float],
                       good: Sequence[bool], warmup: float):
         """Compute the statistics of serving results."""
@@ -48,6 +58,8 @@ class Workload:
         good = np.asarray(good[ct:-ct])
         workload = self[ct:-ct]
 
+        print(start[0])
+
         # Compute stats per model
         model_indices = defaultdict(list)
         for i in range(len(workload)):
@@ -57,15 +69,19 @@ class Workload:
         names.sort()
 
         stats = []
-        goodputs = []
+        num_good = 0
+        num_total_requests = 0
+        total_start = 1e20
+        total_end = 0
         for name in names:
             indices = model_indices[name]
             tmp_good = good[indices]
             tmp_start = start[indices][tmp_good]
             tmp_finish = finish[indices][tmp_good]
+            tmp_num_good = np.sum(tmp_good)
 
             # Compute stats
-            goodput = np.sum(tmp_good) / len(tmp_good)
+            goodput = tmp_num_good / len(tmp_good)
             if goodput > 0:
                 throughput = len(tmp_start) / (tmp_finish[-1] - tmp_start[0])
                 latency = tmp_finish - tmp_start
@@ -81,13 +97,20 @@ class Workload:
                 name, len(indices), goodput, throughput,
                 np.mean(latency), np.std(latency),
                 latency_p90, latency_p99))
-            goodputs.append(goodput)
 
-        return StatsResult(np.mean(goodputs), stats)
+            num_good += tmp_num_good
+            num_total_requests += len(indices)
+            total_start = min(total_start, tmp_start[0])
+            total_end = max(total_end, tmp_start[-1])
+
+        total_request_rate = num_total_requests / (total_end - total_start)
+        return StatsResult(stats, num_good / num_total_requests,
+                           num_total_requests, total_request_rate)
 
     @staticmethod
     def print_stats(stats: StatsResult):
         """Print the statistics of serving results."""
+        print("--- per model ---")
         for stat in stats.per_model_stats:
             print(f"model: {stat.name}, #req: {stat.num_requests}")
             print(f"goodput: {stat.goodput*100:.2f} %")
@@ -95,30 +118,41 @@ class Workload:
             print(f"latency mean: {stat.latency_mean*1e3:.2f} ms, "
                   f"std: {stat.latency_std*1e3:.2f} ms, "
                   f"p90: {stat.latency_p90*1e3:.2f} ms")
+        print("--- overall ---")
+        print(f"total #req: {stats.total_num_requests}, "
+              f"request rate: {stats.total_request_rate:.2f} q/s")
         print(f"average goodput: {stats.average_goodput*100:.2f} %")
 
     @staticmethod
-    def gen_uniform(model_name: str, start: float, throughput: float,
+    def gen_uniform(model_name: str, start: float, rate: float,
                     duration: float, slo: float=1, seed: int=0):
-        number = int(duration * throughput)
-        interval = 1 / throughput
+        number = int(duration * rate)
+        interval = 1 / rate
         ticks = [start + i * interval for i in range(number)]
         return Workload(ticks, [
             Request(model_name, None, slo, i, {}) for i in range(number)])
 
     @staticmethod
-    def gen_poisson(model_name: str, start: float, throughput: float,
+    def gen_poisson(model_name: str, start: float, rate: float,
                     duration: float, slo: float=1, seed: int=0):
-        random.seed(seed)
+        return Workload.gen_gamma(model_name, start, rate, 1, duration,
+                                  slo, seed)
 
-        number = int(duration * throughput)
+    @staticmethod
+    def gen_gamma(model_name: str, start: float, rate: float, cv: float,
+                  duration: float, slo: float=1, seed: int=0):
+        np.random.seed(seed)
+
+        shape = 1 / (cv * cv)
+        scale = cv * cv / rate
+
         ticks = []
         cur = start
-        for i in range(number):
-            cur += random.expovariate(throughput)
+        while cur < duration:
+            cur += np.random.gamma(shape, scale)
             ticks.append(cur)
         return Workload(ticks, [
-            Request(model_name, None, slo, i, {}) for i in range(number)])
+            Request(model_name, None, slo, i, {}) for i in range(len(ticks))])
 
     @staticmethod
     def empty():
@@ -162,12 +196,14 @@ class Workload:
 
     def __str__(self):
         return (f"Workload(len={len(self)}, "
-                f"arrivals={to_str_round(self.arrivals[:20])}...)")
+                f"request_rate={self.rate:.2f}, "
+                f"CV={self.cv:.2f}, "
+                f"arrivals={to_str_round(self.arrivals[:20])} ...)")
 
 
 if __name__ == "__main__":
-    a = Workload.gen_poisson(0, 0, 10, 60)
-    b = Workload.gen_uniform(1, 0, 10, 60)
-    c = a + b
+    w = Workload.gen_poisson("m", start=0, rate=10, duration=1000, seed=0)
+    print(w)
 
-    print(c)
+    w = Workload.gen_gamma("m", start=0, cv=5, rate=10, duration=1000, seed=0)
+    print(w)
