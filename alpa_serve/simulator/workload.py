@@ -148,7 +148,8 @@ class Workload:
 
         ticks = []
         cur = start
-        while cur < duration:
+        end = start + duration
+        while cur < end:
             cur += np.random.gamma(shape, scale)
             ticks.append(cur)
         return Workload(ticks, [

@@ -36,7 +36,7 @@ class Client:
         }
         res = requests.post(url=url, json=json)
         status_code, res = res.status_code, res.json()
-        assert status_code == 200 or status_code == 503, f"{res}"
+        assert status_code == 200, f"{res}"
         end = time.time()
         e2e_latency = end - start
         good = e2e_latency <= slo and status_code == 200 and not res["rejected"]
