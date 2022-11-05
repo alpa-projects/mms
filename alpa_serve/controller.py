@@ -92,7 +92,10 @@ class GroupManager:
         kwargs = kwargs or {}
         self.replicas[name] = model_def(*args, **kwargs)
 
-        self.latency_dict[name] = self.replicas[name].get_latency_dict()
+        if hasattr(self.replicas[name], "get_latency_dict"):
+            self.latency_dict[name] = self.replicas[name].get_latency_dict()
+        else:
+            self.latency_dict[name] = defaultdict(lambda: [0])
 
     def delete_replica(self, name: str):
         assert name in self.replicas
@@ -105,33 +108,34 @@ class GroupManager:
             request_wrapper = pickle.loads(request_wrapper)
             request = build_starlette_request(request_wrapper)
             request.scope["ts"].append(("b", enter_time))
+
+            obj = await request.json()
+
+            if "slo" in obj:
+                # SLO awareness
+                stage_latency = self.latency_dict[name][1]
+
+                # Simulate clock
+                req_stage_clock = []
+                t = time.time()
+                for i in range(len(stage_latency)):
+                    t = max(self.stage_clock[i], t) + stage_latency[i]
+                    req_stage_clock.append(t)
+                ret_time = req_stage_clock[-1]
+
+                # Drop this request if it will exceed deadline
+                if ret_time  > obj["submit_time"] + obj["slo"]:
+                    return {
+                        "rejected": True,
+                        "ts": request.scope["ts"],
+                    }
+
+                # Accept this request
+                for i in range(len(stage_latency)):
+                    self.stage_clock[i] = req_stage_clock[i]
         else:
             # A debug path for the API compatbility with simulator
             request = request_wrapper
-
-        obj = await request.json()
-
-        # SLO awareness
-        stage_latency = self.latency_dict[name][1]
-
-        # Simulate clock
-        req_stage_clock = []
-        t = time.time()
-        for i in range(len(stage_latency)):
-            t = max(self.stage_clock[i], t) + stage_latency[i]
-            req_stage_clock.append(t)
-        ret_time = req_stage_clock[-1]
-
-        # Drop this request if it will exceed deadline
-        if ret_time  > obj["submit_time"] + obj["slo"]:
-            return {
-                "rejected": True,
-                "ts": request.scope["ts"],
-            }
-
-        # Accept this request
-        for i in range(len(stage_latency)):
-            self.stage_clock[i] = req_stage_clock[i]
 
         try:
             return await self.replicas[name].handle_request(request)

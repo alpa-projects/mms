@@ -2,7 +2,7 @@
 from collections import defaultdict, namedtuple
 import dataclasses
 import random
-from typing import Any, List, Sequence, Dict
+from typing import Any, List, Sequence, Dict, Optional
 
 import numpy as np
 
@@ -14,7 +14,7 @@ class Request:
     """A single request."""
     model_name: str
     data: Any
-    slo: float
+    slo: Optional[float]
     idx: int
     time_stamp: Dict            # debug only
     submit_time: float = None   # This will be filled later
@@ -125,7 +125,7 @@ class Workload:
 
     @staticmethod
     def gen_uniform(model_name: str, start: float, rate: float,
-                    duration: float, slo: float=1, seed: int=0):
+                    duration: float, slo: Optional[float] = None, seed: int = 0):
         number = int(duration * rate)
         interval = 1 / rate
         ticks = [start + i * interval for i in range(number)]
@@ -134,13 +134,13 @@ class Workload:
 
     @staticmethod
     def gen_poisson(model_name: str, start: float, rate: float,
-                    duration: float, slo: float=1, seed: int=0):
+                    duration: float, slo: Optional[float] = None, seed: int = 0):
         return Workload.gen_gamma(model_name, start, rate, 1, duration,
                                   slo, seed)
 
     @staticmethod
     def gen_gamma(model_name: str, start: float, rate: float, cv: float,
-                  duration: float, slo: float=1, seed: int=0):
+                  duration: float, slo: Optional[float] = None, seed: int = 0):
         np.random.seed(seed)
 
         shape = 1 / (cv * cv)

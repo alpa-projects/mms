@@ -30,8 +30,7 @@ class PlacementPolicy:
     """The baseclass of placement policy"""
 
     def place_models(self, controller,
-                     model_datas: List[ModelData], cluster_env: ClusterEnv,
-                     verbose=False):
+                     model_datas: List[ModelData], cluster_env: ClusterEnv):
         group_configs, group_models, debug_info = self.solve_placement(model_datas, cluster_env)
 
         assert len(group_configs) == len(group_models)
@@ -58,7 +57,7 @@ class PlacementPolicy:
                 name = model_datas[m_id].name
                 controller.create_replica.remote(name, g_id, [group_configs[g_id]])
 
-        if verbose:
+        if self.verbose:
             print(group_configs)
             print(group_models)
             print(debug_info)
