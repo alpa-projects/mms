@@ -36,7 +36,7 @@ class Client:
         }
         res = requests.post(url=url, json=json)
         status_code, res = res.status_code, res.json()
-        assert status_code == 200 or status_code == 503, f"{res}"
+        assert status_code == 200, f"{res}"
         end = time.time()
         e2e_latency = end - start
         good = e2e_latency <= slo and status_code == 200 and not res["rejected"]
@@ -77,12 +77,12 @@ async def run_workload(client, workload):
     return client.compute_stats(workload, warmup=10)
 
 
-def run_one_case(case, prof_database, port=20001):
+def run_one_case(case, port=20001):
     register_models, generate_workload, place_models = case
 
     # Launch the controller
     controller = run_controller("localhost", port=port, name=None)
-    register_models(controller, prof_database)
+    register_models(controller)
     place_models(controller)
 
     # Launch the client
@@ -100,6 +100,5 @@ if __name__ == "__main__":
 
     ray.init(address="auto")
 
-    prof_database = ProfilingDatabase("profiling_result.pkl", False)
-    stats = run_one_case(cases[args.case], prof_database)
+    stats = run_one_case(cases[args.case])
     Workload.print_stats(stats)

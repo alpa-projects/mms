@@ -1,6 +1,5 @@
 import argparse
 
-from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.simulator.controller import Controller, Client
 from alpa_serve.simulator.event_loop import run_event_loop
 from alpa_serve.simulator.workload import Workload
@@ -9,12 +8,12 @@ from benchmarks.alpa.suite import cases
 from benchmarks.alpa.run_one_case import run_workload
 
 
-def simulate_one_case(case, prof_database, debug=False):
+def simulate_one_case(case, debug=False):
     register_models, generate_workload, place_models = case
 
     # Launch the controller
     controller = Controller()
-    register_models(controller, prof_database)
+    register_models(controller)
     place_models(controller)
 
     # Launch the client
@@ -31,6 +30,5 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 
-    prof_database = ProfilingDatabase("profiling_result.pkl", False)
-    stats = simulate_one_case(cases[args.case], prof_database, debug=args.debug)
+    stats = simulate_one_case(cases[args.case], debug=args.debug)
     Workload.print_stats(stats)

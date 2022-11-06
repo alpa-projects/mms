@@ -51,6 +51,7 @@ def plot_goodput_vs_slo(data, output, show):
     curves = []
     legends = []
     x_max = 0
+    y_max = 0
     for method in methods:
         curve = data[method]
         xs, ys = zip(*curve.items())
@@ -59,9 +60,9 @@ def plot_goodput_vs_slo(data, output, show):
         legends.append(show_name(method))
 
         x_max = max(x_max, *xs)
+        y_max = max(y_max, *ys)
 
-
-    ax.set_ylim(bottom=0, top=1)
+    ax.set_ylim(bottom=0, top=max(y_max * 1.05, 1.0))
     ax.set_xlim(left=0, right=x_max * 1.05)
     ax.set_ylabel("Goodput")
     ax.set_xlabel("SLO (ms)")

@@ -57,6 +57,11 @@ class PlacementPolicy:
                 name = model_datas[m_id].name
                 controller.create_replica.remote(name, g_id, [group_configs[g_id]])
 
+        if self.verbose:
+            print(group_configs)
+            print(group_models)
+            print(debug_info)
+
         controller.sync()
 
 
@@ -123,12 +128,11 @@ class SelectiveReplication(PlacementPolicy):
             prob += min_tolerance <= rep[i] * (t[i] / a[i])
         prob += sum_tolerance == lpSum(rep[i] * (t[i] / a[i]) for i in range(N))
 
-        msg = self.verbose
         assert "PULP_CBC_CMD" in pulp.listSolvers(onlyAvailable=True), (
             "Please install ILP solvers by 'sudo apt install coinor-cbc'")
 
         solver = pulp.PULP_CBC_CMD(mip=True,
-                                   msg=msg,
+                                   msg=False,
                                    timeLimit=self.time_limit,
                                    threads=multiprocessing.cpu_count())
         prob.solve(solver)
@@ -290,12 +294,11 @@ class ModelParallelismPlacement(PlacementPolicy):
                     prob += pxs[i][j][k] <= s[j][k]
                     prob += pxs[i][j][k] >= p[i][j] + s[j][k] - 1
 
-        msg = self.verbose
         assert "PULP_CBC_CMD" in pulp.listSolvers(onlyAvailable=True), (
             "Please install ILP solvers by 'sudo apt install coinor-cbc'")
 
         solver = pulp.PULP_CBC_CMD(mip=True,
-                                   msg=msg,
+                                   msg=False,
                                    timeLimit=self.time_limit,
                                    threads=multiprocessing.cpu_count())
         prob.solve(solver)
