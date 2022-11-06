@@ -6,7 +6,7 @@ from typing import Any, List, Sequence, Dict, Optional
 
 import numpy as np
 
-from util import MMPPSampler
+from alpa_serve.simulator.util import MMPPSampler
 from alpa.util import to_str_round
 
 
