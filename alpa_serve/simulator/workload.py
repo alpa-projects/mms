@@ -6,6 +6,7 @@ from typing import Any, List, Sequence, Dict
 
 import numpy as np
 
+from util import MMPPSampler
 from alpa.util import to_str_round
 
 
@@ -119,6 +120,23 @@ class Workload:
             ticks.append(cur)
         return Workload(ticks, [
             Request(model_name, None, slo, i, {}) for i in range(number)])
+
+    @staticmethod
+    def gen_uniform_mmpp(model_name: str, start: float, num_requests: int,
+                         stream_durations: Sequence[float],
+                         stream_request_rates: Sequence[float],
+                         slo: float = 1, seed: int = 0):
+        np.random.seed(seed)
+        random.seed(seed)
+        stream_durations = np.array(stream_durations)
+        stream_request_rates = np.array(stream_request_rates)
+        sampler = MMPPSampler.unifrom_mmpp(stream_durations,
+                                           stream_request_rates)
+        ticks, _ = sampler.sample(num_requests)
+        ticks = [start + t for t in ticks[1:]]
+        return Workload(ticks, [
+            Request(model_name, None, slo, i, {}) for i in range(num_requests)])
+
 
     @staticmethod
     def empty():
