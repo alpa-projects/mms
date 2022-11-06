@@ -58,7 +58,7 @@ class PlacementPolicyTest(unittest.TestCase):
         assert group_models[1] == [0, 1, 2, 3]
 
     def test_placement_api(self):
-        for policy in [SelectiveReplication(), SelectiveReplicationWithPipeline()]:
+        for policy in [SelectiveReplication(), ModelParallelismPlacement()]:
             controller = Controller()
             controller.register_model.remote("m1", EchoModel)
             controller.register_model.remote("m2", EchoModel)

@@ -15,7 +15,7 @@ class EchoModel:
     def __init__(self, virtual_mesh=None):
         pass
 
-    async def handle_request(self, request):
+    async def handle_request(self, request, delay=None):
         return request
 
 
@@ -30,7 +30,7 @@ class SimulatorTest(unittest.TestCase):
 
         controller.sync()
 
-        request = Request("echo", None, None, 0)
+        request = Request("echo", None, None, 0, {})
         ret = controller.handle_request.remote(request)
         assert request == await ret
 
@@ -61,12 +61,13 @@ class SimulatorTest(unittest.TestCase):
 
     def test_client(self):
         client, w = run_event_loop(self.main_test_client())
-        client.print_stats(w, warmup=10)
+        stats = client.compute_stats(w, warmup=10)
+        Workload.print_stats(stats)
 
 
 def suite():
     suite = unittest.TestSuite()
-    #suite.addTest(SimulatorTest("test_query"))
+    suite.addTest(SimulatorTest("test_query"))
     suite.addTest(SimulatorTest("test_client"))
     return suite
 

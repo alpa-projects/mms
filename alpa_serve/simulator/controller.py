@@ -57,30 +57,34 @@ class GroupManager:
         kwargs["virtual_mesh"] = self.virtual_mesh
         self.replicas[name] = model_def(*args, **kwargs)
 
-        self.latency_dict[name] = self.replicas[name].get_latency_dict()
+        if hasattr(self.replicas[name], "get_latency_dict"):
+            self.latency_dict[name] = self.replicas[name].get_latency_dict()
+        else:
+            self.latency_dict[name] = defaultdict(lambda: [0])
 
     @timed_coroutine
     async def handle_request(self, name: str, request):
         request.time_stamp["b"] = clock()
 
-        # SLO awareness
-        stage_latency = self.latency_dict[name][1]
+        if request.slo is not None:
+            # SLO awareness
+            stage_latency = self.latency_dict[name][1]
 
-        # Simulate clock
-        req_stage_clock = []
-        t = clock()
-        for i in range(len(stage_latency)):
-            t = max(self.stage_clock[i], t) + stage_latency[i]
-            req_stage_clock.append(t)
-        ret_time = req_stage_clock[-1]
+            # Simulate clock
+            req_stage_clock = []
+            t = clock()
+            for i in range(len(stage_latency)):
+                t = max(self.stage_clock[i], t) + stage_latency[i]
+                req_stage_clock.append(t)
+            ret_time = req_stage_clock[-1]
 
-        # Drop this request if it will exceed deadline
-        if ret_time + self.fixed_overhead > request.submit_time + request.slo:
-            return None
+            # Drop this request if it will exceed deadline
+            if ret_time + self.fixed_overhead > request.submit_time + request.slo:
+                return None
 
-        # Accept this request
-        for i in range(len(stage_latency)):
-            self.stage_clock[i] = req_stage_clock[i]
+            # Accept this request
+            for i in range(len(stage_latency)):
+                self.stage_clock[i] = req_stage_clock[i]
 
         ret = await self.replicas[name].handle_request(request, delay=self.alpa_overhead())
         return ret

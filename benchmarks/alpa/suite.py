@@ -2,7 +2,7 @@ from collections import namedtuple
 
 from alpa_serve.simulator.controller import Controller
 from alpa_serve.simulator.workload import Workload
-from alpa_serve.profiling import ParallelConfig
+from alpa_serve.profiling import ParallelConfig, ProfilingDatabase
 from alpa_serve.placement_policy import (SelectiveReplication,
     ModelParallelismPlacement)
 
@@ -16,9 +16,10 @@ BenchmarkCase = namedtuple("BenchmarkCase",
 cases = {
 }
 
+prof_database = ProfilingDatabase("profiling_result.pkl", False)
 
 def debug_case(placement):
-    def register_models(controller, prof_database):
+    def register_models(controller):
         is_simulator = isinstance(controller, Controller)
 
         controller.register_model.remote(
