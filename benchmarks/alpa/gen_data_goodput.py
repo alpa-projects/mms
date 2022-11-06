@@ -48,9 +48,9 @@ def gen_case(slo, placement, prof_database,
                                prof_database.get(model_types[i])))
 
         if placement == "sr":
-            policy = SelectiveReplication()
+            policy = SelectiveReplication(verbose=True)
         elif placement == "mp":
-            policy = ModelParallelismPlacement()
+            policy = ModelParallelismPlacement(verbose=True)
         else:
             raise ValueError(f"Invalid placement policy: {placement}")
 
@@ -68,8 +68,8 @@ if __name__ == "__main__":
 
     prof_database = ProfilingDatabase("profiling_result.pkl")
 
-    policies = ["sr"]
-    slos = [0.1, 0.15, 0.2, 0.3, 0.6, 1.0, 2.0, 4.0, 8.0]
+    policies = ["sr", "mp"]
+    slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
     goodputs = []
 
     heads = ["exp_name", "policy", "slo", "goodput"]
@@ -85,7 +85,7 @@ if __name__ == "__main__":
                 gen_case(slo, policy,
                          prof_database=prof_database,
                          num_devices=8, num_models=16, mem_budget=10*GB,
-                         average_rate=5, cv=4, duration=100))
+                         average_rate=4, cv=4, duration=100))
 
     for policy in policies:
         for slo in slos:

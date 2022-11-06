@@ -58,8 +58,6 @@ class Workload:
         good = np.asarray(good[ct:-ct])
         workload = self[ct:-ct]
 
-        print(start[0])
-
         # Compute stats per model
         model_indices = defaultdict(list)
         for i in range(len(workload)):
