@@ -2,6 +2,7 @@ import argparse
 from collections import defaultdict
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 show_name_dict = {
@@ -55,6 +56,7 @@ def plot_goodput_vs_slo(data, output, show):
     for method in methods:
         curve = data[method]
         xs, ys = zip(*curve.items())
+        ys = np.array(ys) * 100
         curve = ax.plot(xs, ys, color=method2color(method), marker='*')
         curves.append(curve[0])
         legends.append(show_name(method))
@@ -62,10 +64,10 @@ def plot_goodput_vs_slo(data, output, show):
         x_max = max(x_max, *xs)
         y_max = max(y_max, *ys)
 
-    ax.set_ylim(bottom=0, top=max(y_max * 1.05, 1.0))
+    ax.set_ylim(bottom=0, top=max(y_max * 1.05, 100))
     ax.set_xlim(left=0, right=x_max * 1.05)
-    ax.set_ylabel("Goodput")
-    ax.set_xlabel("SLO (ms)")
+    ax.set_ylabel("Goodput (%)")
+    ax.set_xlabel("SLO (second)")
     ax.legend(curves, legends)
 
     if show:
