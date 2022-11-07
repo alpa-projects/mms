@@ -17,6 +17,15 @@ def run_experiment(experiment_name):
                     slo, policy, prof_database,
                     num_devices=8, num_models=16, mem_budget=10*GB,
                     average_rate=4, cv=4, duration=100)
+    if experiment_name == "gamma_2":
+        slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
+        cases = {}
+        for policy in policies:
+            for slo in slos:
+                cases[(policy, slo)] = gen_gamma_case(
+                    slo, policy, prof_database,
+                    num_devices=8, num_models=16, mem_budget=10*GB,
+                    average_rate=4, cv=10, duration=100)
     else:
         raise ValueError(f"Unknown experiment name: {experiment_name}")
     run_experiment_slos(policies, slos, cases,
@@ -27,6 +36,6 @@ def run_experiment(experiment_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("exp-name", type=str, nargs='?', default="gamma_1")
+    parser.add_argument("exp_name", type=str, nargs='?', default="gamma_1")
     args = parser.parse_args()
     run_experiment(args.exp_name)
