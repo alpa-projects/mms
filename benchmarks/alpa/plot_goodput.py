@@ -35,7 +35,7 @@ def read_data(filename):
     data = defaultdict(lambda: defaultdict(dict))
 
     for line in open(filename):
-        exp_name, policy, slo, goodput = line.split("\t")
+        exp_name, policy, slo, goodput, placement = line.split("\t")
         data[policy][float(slo)] = float(goodput)
 
     return data

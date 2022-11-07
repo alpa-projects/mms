@@ -146,6 +146,35 @@ def gen_uniform_mmpp_case(slo, placement, prof_database,
     return BenchmarkCase(register_models_, generate_workload_, place_models_)
 
 
+def run_experiment_slos(policies, slos, cases, exp_name="default",
+                        output_file=None, parallel=False):
+    if parallel:
+        ray.init(address="auto")
+        simulate_one_case_ = ray.remote(num_cpus=2)(simulate_one_case).remote
+    else:
+        simulate_one_case_ = simulate_one_case
+    stats_res = {}
+    for policy in policies:
+        for slo in slos:
+            stats_res[(policy, slo)] = simulate_one_case_(cases[(policy, slo)])
+    heads = ["exp_name", "policy", "slo", "goodput", "placement"]
+    results = []
+    for policy in policies:
+        for slo in slos:
+            if parallel:
+                stats, placement_policy = ray.get(stats_res[(policy, slo)])
+            else:
+                stats, placement_policy = stats_res[(policy, slo)]
+            goodput = stats.average_goodput
+            Workload.print_stats(stats)
+
+            values = [exp_name, policy, slo, goodput, str(placement_policy)]
+            results.append(values)
+            if output_file is not None:
+                write_tsv(heads, values, output_file)
+    return results
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp-name", type=str, default="default")
@@ -157,32 +186,14 @@ if __name__ == "__main__":
 
     policies = ["sr", "mp"]
     slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
-    goodputs = []
-
-    heads = ["exp_name", "policy", "slo", "goodput", "placement"]
-
-    if args.parallel:
-        ray.init(address="auto")
-        simulate_one_case = ray.remote(num_cpus=2)(simulate_one_case).remote
-
-    stats_res = {}
+    cases = {}
     for policy in policies:
         for slo in slos:
-            stats_res[(policy, slo)] = simulate_one_case(
-                gen_gamma_case(slo, policy,
-                               prof_database=prof_database,
-                               num_devices=8, num_models=16, mem_budget=10*GB,
-                               average_rate=4, cv=4, duration=100))
-
-    for policy in policies:
-        for slo in slos:
-            if args.parallel:
-                stats, placement_policy = ray.get(stats_res[(policy, slo)])
-            else:
-                stats, placement_policy = stats_res[(policy, slo)]
-            goodput = stats.average_goodput
-            Workload.print_stats(stats)
-            goodputs.append(goodput)
-
-            values = [args.exp_name, policy, slo, goodput, str(placement_policy)]
-            write_tsv(heads, values, args.output)
+            cases[(policy, slo)] = gen_gamma_case(
+                slo, policy, prof_database,
+                num_devices=8, num_models=16, mem_budget=10*GB,
+                average_rate=4, cv=4, duration=100)
+    run_experiment_slos(policies, slos, cases,
+                        exp_name=args.exp_name,
+                        output_file=args.output,
+                        parallel=args.parallel)
