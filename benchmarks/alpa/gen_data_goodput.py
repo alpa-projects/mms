@@ -86,6 +86,7 @@ def place_models(controller, cluster_env, placement, model_names, model_types,
         raise ValueError(f"Invalid placement policy: {placement}")
 
     policy.place_models(controller, model_datas, cluster_env)
+    return policy
 
 
 def gen_gamma_case(slo, placement, prof_database,
@@ -158,7 +159,7 @@ if __name__ == "__main__":
     slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
     goodputs = []
 
-    heads = ["exp_name", "policy", "slo", "goodput"]
+    heads = ["exp_name", "policy", "slo", "goodput", "placement"]
 
     if args.parallel:
         ray.init(address="auto")
@@ -176,12 +177,12 @@ if __name__ == "__main__":
     for policy in policies:
         for slo in slos:
             if args.parallel:
-                stats = ray.get(stats_res[(policy, slo)])
+                stats, placement_policy = ray.get(stats_res[(policy, slo)])
             else:
-                stats = stats_res[(policy, slo)]
+                stats, placement_policy = stats_res[(policy, slo)]
             goodput = stats.average_goodput
             Workload.print_stats(stats)
             goodputs.append(goodput)
 
-            values = [args.exp_name, policy, slo, goodput]
+            values = [args.exp_name, policy, slo, goodput, str(placement_policy)]
             write_tsv(heads, values, args.output)
