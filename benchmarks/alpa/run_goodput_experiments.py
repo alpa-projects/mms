@@ -1,7 +1,7 @@
 import argparse
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.util import GB
-from gen_data_goodput import gen_gamma_case, run_experiment_slos
+from gen_data_goodput import gen_uniform_mmpp_case, gen_gamma_case, run_experiment_slos
 
 
 def run_experiment(experiment_name):
@@ -17,7 +17,7 @@ def run_experiment(experiment_name):
                     slo, policy, prof_database,
                     num_devices=8, num_models=16, mem_budget=10*GB,
                     average_rate=4, cv=4, duration=100)
-    if experiment_name == "gamma_2":
+    elif experiment_name == "gamma_2":
         slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
         cases = {}
         for policy in policies:
@@ -26,6 +26,16 @@ def run_experiment(experiment_name):
                     slo, policy, prof_database,
                     num_devices=8, num_models=16, mem_budget=10*GB,
                     average_rate=4, cv=10, duration=100)
+    elif experiment_name == "mmpp_1":
+        slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
+        cases = {}
+        for policy in policies:
+            for slo in slos:
+                cases[(policy, slo)] = gen_uniform_mmpp_case(
+                    slo, policy, prof_database,
+                    num_devices=8, num_models=16, mem_budget=10*GB,
+                    state_durations=[1, 3], state_request_rates=[13, 1],
+                    num_requests=1000)
     else:
         raise ValueError(f"Unknown experiment name: {experiment_name}")
     run_experiment_slos(policies, slos, cases,
