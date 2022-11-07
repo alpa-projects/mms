@@ -6,6 +6,7 @@ from typing import Any, List, Sequence, Dict, Optional
 
 import numpy as np
 
+from alpa_serve.simulator.util import MMPPSampler
 from alpa.util import to_str_round
 
 
@@ -135,12 +136,36 @@ class Workload:
     @staticmethod
     def gen_poisson(model_name: str, start: float, rate: float,
                     duration: float, slo: Optional[float] = None, seed: int = 0):
+        """
+        Generate a workload with Poisson arrival process.
+
+        Args:
+            model_name: The name of the model.
+            start: The start time of the workload.
+            rate: The average arrival rate.
+            duration: The duration of the workload.
+            slo: The SLO of the workload.
+            seed: The random seed.
+        """
         return Workload.gen_gamma(model_name, start, rate, 1, duration,
                                   slo, seed)
 
     @staticmethod
     def gen_gamma(model_name: str, start: float, rate: float, cv: float,
                   duration: float, slo: Optional[float] = None, seed: int = 0):
+        """Generate a workload with a Gamma process, where the gap between the
+        requests follows a Gamma distribution.
+
+        Args:
+            model_name: The name of the model.
+            start: The start time of the workload.
+            rate: The mean rate of the workload.
+            cv: The coefficient of variation of the workload, when cv == 1,
+                the workload is a Poisson process.
+            duration: The duration of the workload.
+            slo: The service level objective of the workload.
+            seed: The seed of the random number generator.
+        """
         np.random.seed(seed)
 
         shape = 1 / (cv * cv)
@@ -154,6 +179,48 @@ class Workload:
             ticks.append(cur)
         return Workload(ticks, [
             Request(model_name, None, slo, i, {}) for i in range(len(ticks))])
+
+    @staticmethod
+    def gen_uniform_mmpp(model_name: str, start: float, num_requests: int,
+                         state_durations: Sequence[float],
+                         state_request_rates: Sequence[float],
+                         slo: Optional[float] = None, seed: int = 0):
+        """Generate a workload with a Markov Modulated Poisson Process (MMPP),
+        where the transition probability among the states of the Markov chain
+        is uniform across all states.
+
+        MMPP is a generalization of the Poisson process where the request rate
+        changes over time. An m-state MMPP can be viewed as m independent
+        Poisson processes with different request rates. A switch governed by
+        an m-state Markov chain determines which of m request processes is
+        active, i.e., the one in accordance with which requests are generated.
+        The duration staying on each state is exponentially distributed with
+        the provided mean duration of each state. In this simplified unifrom
+        case, we assume the transition probability among the states of the
+        Markov chain is uniform across all states (i.e., each state will
+        transit to another state with equal probability across all other
+        states).
+
+        Args:
+            model_name: The name of the model.
+            start: The start time of the workload.
+            num_requests: The number of requests to generate.
+            state_durations: The mean duration of each state.
+            state_request_rates: The request rate of each state.
+            slo: The service level objective of the requests.
+            seed: The seed for the random number generator.
+        """
+        np.random.seed(seed)
+        random.seed(seed)
+        state_durations = np.array(state_durations)
+        state_request_rates = np.array(state_request_rates)
+        sampler = MMPPSampler.unifrom_mmpp(state_durations,
+                                           state_request_rates)
+        ticks, _ = sampler.sample(num_requests)
+        ticks = [start + t for t in ticks[1:]]
+        return Workload(ticks, [
+            Request(model_name, None, slo, i, {}) for i in range(num_requests)])
+
 
     @staticmethod
     def empty():

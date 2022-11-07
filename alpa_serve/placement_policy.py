@@ -29,18 +29,25 @@ class ClusterEnv:
 class PlacementPolicy:
     """The baseclass of placement policy"""
 
+    def __init__(self, verbose=False):
+        self.verbose = verbose
+        self.group_configs = None
+        self.group_models = None
+        self.debug_info = None
+
     def place_models(self, controller,
                      model_datas: List[ModelData], cluster_env: ClusterEnv):
-        group_configs, group_models, debug_info = self.solve_placement(model_datas, cluster_env)
+        (self.group_configs, self.group_models, self.debug_info
+         ) = self.solve_placement(model_datas, cluster_env)
 
-        assert len(group_configs) == len(group_models)
-        num_groups = len(group_configs)
+        assert len(self.group_configs) == len(self.group_models)
+        num_groups = len(self.group_configs)
 
         # Create mesh group manager
         for g_id in range(num_groups):
-            num_devices = np.prod(group_configs[g_id])
+            num_devices = np.prod(self.group_configs[g_id])
             num_devices_per_node = cluster_env.num_devices_per_node
-            pp_size = group_configs[g_id].pp
+            pp_size = self.group_configs[g_id].pp
 
             if num_devices <= num_devices_per_node:
                 virtual_mesh_shape = (1, num_devices)
@@ -53,24 +60,27 @@ class PlacementPolicy:
 
         # Create model replicas
         for g_id in range(num_groups):
-            for m_id in group_models[g_id]:
+            for m_id in self.group_models[g_id]:
                 name = model_datas[m_id].name
-                controller.create_replica.remote(name, g_id, [group_configs[g_id]])
+                controller.create_replica.remote(name, g_id, [self.group_configs[g_id]])
 
         if self.verbose:
-            print(group_configs)
-            print(group_models)
-            print(debug_info)
+            print(self.group_configs)
+            print(self.group_models)
+            print(self.debug_info)
 
         controller.sync()
+
+    def __str__(self):
+        group_strs = [f"({config}, {models})" for config, models
+                      in zip(self.group_configs, self.group_models)]
+        return f"{self.__class__.__name__}([" + ", ".join(group_strs) + "])"
 
 
 class SelectiveReplication(PlacementPolicy):
 
-    def __init__(self, verbose: bool = False):
-        super().__init__()
-
-        self.verbose = verbose
+    def __init__(self, verbose=False):
+        super().__init__(verbose=verbose)
 
         self.max_bs = 1
         self.time_limit = 20
@@ -171,9 +181,8 @@ class SelectiveReplication(PlacementPolicy):
 
 class ModelParallelismPlacement(PlacementPolicy):
     def __init__(self, verbose: bool = False):
-        super().__init__()
+        super().__init__(verbose=verbose)
 
-        self.verbose = verbose
         self.time_limit = 20
         self.sum_k = 1e-4
         self.max_bs = 1

@@ -14,14 +14,14 @@ def simulate_one_case(case, debug=False):
     # Launch the controller
     controller = Controller()
     register_models(controller)
-    place_models(controller)
+    placement_poliy = place_models(controller)
 
     # Launch the client
     client = Client(controller, debug=debug)
     workload = generate_workload()
 
     # Run workloads
-    return run_event_loop(run_workload(client, workload))
+    return run_event_loop(run_workload(client, workload)), placement_poliy
 
 
 if __name__ == "__main__":
@@ -30,5 +30,5 @@ if __name__ == "__main__":
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 
-    stats = simulate_one_case(cases[args.case], debug=args.debug)
+    stats, _ = simulate_one_case(cases[args.case], debug=args.debug)
     Workload.print_stats(stats)

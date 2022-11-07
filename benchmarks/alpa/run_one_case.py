@@ -29,9 +29,9 @@ class Client:
             time.sleep(0.0001)
 
         json = {
-            "model": model_name, 
+            "model": model_name,
             "submit_time": start,
-            "slo": slo, 
+            "slo": slo,
             "input": f"I like this movie {idx}",
         }
         res = requests.post(url=url, json=json)
@@ -83,14 +83,14 @@ def run_one_case(case, port=20001):
     # Launch the controller
     controller = run_controller("localhost", port=port, name=None)
     register_models(controller)
-    place_models(controller)
+    placement_policy = place_models(controller)
 
     # Launch the client
     client = Client(f"http://localhost:{port}")
     workload = generate_workload(start=time.time() + 2)
 
     # Run workloads
-    return asyncio.run(run_workload(client, workload))
+    return asyncio.run(run_workload(client, workload)), placement_policy
 
 
 if __name__ == "__main__":
@@ -100,5 +100,5 @@ if __name__ == "__main__":
 
     ray.init(address="auto")
 
-    stats = run_one_case(cases[args.case])
+    stats, _ = run_one_case(cases[args.case])
     Workload.print_stats(stats)
