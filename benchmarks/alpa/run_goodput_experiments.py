@@ -27,6 +27,6 @@ def run_experiment(experiment_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("exp-name", type=str, default="gamma_1")
+    parser.add_argument("exp-name", type=str, nargs='?', default="gamma_1")
     args = parser.parse_args()
     run_experiment(args.exp_name)
