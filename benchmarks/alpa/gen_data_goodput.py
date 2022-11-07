@@ -195,7 +195,7 @@ if __name__ == "__main__":
     prof_database = ProfilingDatabase("profiling_result.pkl")
 
     policies = ["sr", "mp"]
-    slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
+    slos = [0.2]
     cases = {}
     for policy in policies:
         for slo in slos:
