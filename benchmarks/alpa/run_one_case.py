@@ -90,7 +90,10 @@ def run_one_case(case, port=20001):
     workload = generate_workload(start=time.time() + 2)
 
     # Run workloads
-    return asyncio.run(run_workload(client, workload)), placement_policy
+    stats = asyncio.run(run_workload(client, workload))
+    ray.get(controller.shutdown.remote())
+    del controller
+    return stats, placement_policy
 
 
 if __name__ == "__main__":

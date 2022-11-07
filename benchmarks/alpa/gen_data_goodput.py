@@ -14,6 +14,7 @@ from alpa_serve.util import GB, write_tsv
 from benchmarks.alpa.util import get_model_def
 from benchmarks.alpa.suite import BenchmarkCase
 from benchmarks.alpa.simulate_one_case import simulate_one_case
+from benchmarks.alpa.run_one_case import run_one_case
 
 
 def generate_gamma_workloads(model_names, average_rate, cv, duration,
@@ -147,17 +148,22 @@ def gen_uniform_mmpp_case(slo, placement, prof_database,
 
 
 def run_experiment_slos(policies, slos, cases, exp_name="default",
-                        output_file=None, parallel=False):
-    if parallel:
-        ray.init(address="auto")
-        simulate_one_case_ = ray.remote(num_cpus=2)(simulate_one_case).remote
+                        output_file=None, mode="simulate", parallel=False):
+    if mode == "simulate":
+        if parallel:
+            ray.init(address="auto")
+            run_one_case_ = ray.remote(num_cpus=2)(simulate_one_case).remote
+        else:
+            run_one_case_ = simulate_one_case
     else:
-        simulate_one_case_ = simulate_one_case
+        ray.init(address="auto")
+        run_one_case_ = run_one_case
+
     stats_res = {}
     for policy in policies:
         for slo in slos:
-            stats_res[(policy, slo)] = simulate_one_case_(cases[(policy, slo)])
-    heads = ["exp_name", "policy", "slo", "goodput", "placement"]
+            stats_res[(policy, slo)] = run_one_case_(cases[(policy, slo)])
+    heads = ["exp_name", "policy", "slo", "goodput", "placement", "mode"]
     results = []
     for policy in policies:
         for slo in slos:
@@ -168,7 +174,8 @@ def run_experiment_slos(policies, slos, cases, exp_name="default",
             goodput = stats.average_goodput
             Workload.print_stats(stats)
 
-            values = [exp_name, policy, slo, goodput, str(placement_policy)]
+            values = [exp_name, policy, slo, f"{goodput:.3f}", str(placement_policy),
+                      mode]
             results.append(values)
             if output_file is not None:
                 write_tsv(heads, values, output_file)
@@ -180,6 +187,9 @@ if __name__ == "__main__":
     parser.add_argument("--exp-name", type=str, default="default")
     parser.add_argument("--output", type=str, default="res_goodput.tsv")
     parser.add_argument("--parallel", action="store_true")
+    parser.add_argument("--mode", choices=["simulate", "run"],
+                        default="simulate")
+
     args = parser.parse_args()
 
     prof_database = ProfilingDatabase("profiling_result.pkl")
@@ -193,7 +203,9 @@ if __name__ == "__main__":
                 slo, policy, prof_database,
                 num_devices=8, num_models=16, mem_budget=10*GB,
                 average_rate=4, cv=4, duration=100)
+
     run_experiment_slos(policies, slos, cases,
                         exp_name=args.exp_name,
                         output_file=args.output,
+                        mode=args.mode,
                         parallel=args.parallel)

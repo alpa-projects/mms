@@ -18,7 +18,7 @@ from starlette.datastructures import QueryParams
 from starlette.middleware.cors import CORSMiddleware
 import uvicorn
 
-from alpa.api import init
+from alpa.api import init as alpa_init, shutdown as alpa_shutdown
 from alpa_serve.http_util import (HTTPRequestWrapper, receive_http_body,
                                   Response, set_socket_reuse_port, ASGIHandler,
                                   build_starlette_request, new_port,
@@ -67,11 +67,11 @@ class GroupManager:
 
     def __init__(self, virtual_mesh_shape: Optional[Tuple[int]] = None):
         if virtual_mesh_shape:
-            init(cluster="ray",
-                 num_nodes=virtual_mesh_shape[0],
-                 num_devices_per_node=virtual_mesh_shape[1])
+            alpa_init(cluster="ray",
+                      num_nodes=virtual_mesh_shape[0],
+                      num_devices_per_node=virtual_mesh_shape[1])
         else:
-            init(cluster="ray")
+            alpa_init(cluster="ray")
 
         # Dict[str -> object]
         self.replicas = {}
@@ -142,6 +142,10 @@ class GroupManager:
         except Exception as e:  # pylint: disable=broad-except
             return RelayException(e)
 
+    def shutdown(self):
+        del self.replicas
+        alpa_shutdown()
+
 
 @ray.remote(num_cpus=0)
 class Controller:
@@ -171,6 +175,7 @@ class Controller:
         self.group_manager_class = GroupManager
 
         # Http server
+        self.server = None
         self.setup_complete = asyncio.Event()
         self.http_server_task = asyncio.create_task(self.run_http_server())
 
@@ -363,15 +368,24 @@ class Controller:
             ssl_keyfile=self.ssl_keyfile,
             ssl_certfile=self.ssl_certfile,
         )
-        server = uvicorn.Server(config=config)
+        self.server = uvicorn.Server(config=config)
 
         # TODO(edoakes): we need to override install_signal_handlers here
         # because the existing implementation fails if it isn't running in
         # the main thread and uvicorn doesn't expose a way to configure it.
-        server.install_signal_handlers = lambda: None
+        self.server.install_signal_handlers = lambda: None
 
         self.setup_complete.set()
-        await server.serve(sockets=[sock])
+        await self.server.serve(sockets=[sock])
+
+    async def shutdown(self):
+        if self.server is not None:
+            self.server.should_exit = True
+        tasks = []
+        for g in self.group_info.values():
+            tasks.append(g.manager.shutdown.remote())
+        await asyncio.sleep(0.5)
+        await asyncio.gather(*tasks)
 
 
 def run_controller(host,

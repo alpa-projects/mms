@@ -14,14 +14,15 @@ def simulate_one_case(case, debug=False):
     # Launch the controller
     controller = Controller()
     register_models(controller)
-    placement_poliy = place_models(controller)
+    placement_policy = place_models(controller)
 
     # Launch the client
     client = Client(controller, debug=debug)
     workload = generate_workload()
 
     # Run workloads
-    return run_event_loop(run_workload(client, workload)), placement_poliy
+    stats = run_event_loop(run_workload(client, workload))
+    return stats, placement_policy
 
 
 if __name__ == "__main__":
