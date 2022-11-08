@@ -201,15 +201,15 @@ if __name__ == "__main__":
     prof_database = ProfilingDatabase("profiling_result.pkl")
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-ilp", "sr-greedy", "mp-ilp", "mp-greedy-2", "mp-greedy-8"]
-    slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
+    policies = ["sr-greedy", "mp-greedy-2", "mp-greedy-4", "mp-greedy-8"]
+    slos = [0.1, 0.15, 0.2, 0.4, 0.8, 1.6, 2.0, 4.0, 8.0]
     cases = {}
     for policy in policies:
         for slo in slos:
             cases[(policy, slo)] = gen_gamma_case(
                 slo, policy, prof_database,
                 num_devices=8, num_models=16, mem_budget=10*GB,
-                average_rate=4, cv=4, duration=100)
+                average_rate=6, cv=5, duration=100)
 
     run_experiment_slos(policies, slos, cases,
                         exp_name=args.exp_name,

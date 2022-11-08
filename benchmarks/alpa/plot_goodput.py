@@ -1,6 +1,7 @@
 import argparse
 from collections import defaultdict
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -56,7 +57,7 @@ def read_data(filename):
 
 def plot_goodput_vs_slo(data, output, show):
     fig, ax = plt.subplots()
-    figure_size = (4, 4)
+    figure_size = (5, 5)
 
     methods = list(data.keys())
     methods.sort(key=lambda x: method2order(x))
@@ -77,9 +78,12 @@ def plot_goodput_vs_slo(data, output, show):
         y_max = max(y_max, *ys)
 
     ax.set_ylim(bottom=0, top=max(y_max * 1.05, 100))
-    ax.set_xlim(left=0, right=x_max * 1.05)
     ax.set_ylabel("Goodput (%)")
     ax.set_xlabel("SLO (second)")
+    ax.set_xscale("log")
+    xticks = [0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8]
+    ax.set_xticks(ticks=xticks, labels=xticks)
+    ax.set_xticks(ticks=[], minor=True)
     ax.legend(curves, legends)
 
     if show:
@@ -94,6 +98,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, default="res_goodput.tsv")
     parser.add_argument("--output", type=str, default="goodput.png")
+
     parser.add_argument("--show", action="store_true")
     args = parser.parse_args()
 

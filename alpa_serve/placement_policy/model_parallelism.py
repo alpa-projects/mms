@@ -215,6 +215,9 @@ class ModelParallelismGreedy(BasePlacementPolicy):
             for x in model_datas]
         average_load = [x.average_load for x in model_datas]
 
+        if max(single_throughput) <= 1e-5:
+            single_throughput = [1e-5] * len(single_throughput)
+
         # Status variables
         burst_tolerance = np.zeros(num_models)
         used_mem = np.zeros(num_groups)
