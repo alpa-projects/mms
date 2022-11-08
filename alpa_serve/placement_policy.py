@@ -57,6 +57,7 @@ class PlacementPolicy:
                                       num_devices_per_node)
 
             controller.create_mesh_group_manager.remote(g_id, virtual_mesh_shape)
+        controller.sync()
 
         # Create model replicas
         for g_id in range(num_groups):

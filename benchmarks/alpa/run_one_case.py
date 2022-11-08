@@ -39,10 +39,11 @@ class Client:
         assert status_code == 200, f"{res}"
         end = time.time()
         e2e_latency = end - start
-        good = e2e_latency <= slo and status_code == 200 and not res["rejected"]
-
+        #good = e2e_latency <= slo and status_code == 200 and not res["rejected"]
+        good = status_code == 200 and not res["rejected"]
+        exec_time = res["ts"][-1][1] - res["ts"][-2][1]
         tstamps = to_str_round({x: (y - start) * 1e3 for x, y in res["ts"]}, 2)
-        print(f"idx: {idx} ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
+        print(f"idx: {idx} exec_time: {exec_time} ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
         return start, end, good
 
     def submit_workload(self, workload: Workload):
@@ -74,7 +75,7 @@ async def run_workload(client, workload):
 
     await client.wait_all()
 
-    return client.compute_stats(workload, warmup=10)
+    return client.compute_stats(workload, warmup=0)
 
 
 def run_one_case(case, port=20001):

@@ -28,8 +28,8 @@ def debug_case(placement):
             "b", get_model_def("bert-1.3b", is_simulator, prof_database))
 
     def generate_workload(start=0):
-        w1 = Workload.gen_poisson("a", start, 4, 60, slo=0.5, seed=1)
-        w2 = Workload.gen_poisson("b", start, 4, 60, slo=0.5, seed=2)
+        w1 = Workload.gen_poisson("a", start, 35, 5, slo=0.5, seed=1)
+        w2 = Workload.gen_poisson("b", start, 35, 5, slo=0.5, seed=2)
         w = w1 + w2
         return w
 
@@ -67,11 +67,11 @@ def debug_case(placement):
                 "b", group_id, [ParallelConfig(1, 1, 2)])
         elif placement == "manual_4":
             group_id = 0
-            controller.create_mesh_group_manager.remote(group_id, [1, 1])
+            controller.create_mesh_group_manager.remote(group_id, [1, 8])
             controller.create_replica.remote(
-                "a", group_id, [ParallelConfig(1, 1, 1)])
+                "a", group_id, [ParallelConfig(1, 1, 8)])
             controller.create_replica.remote(
-                "b", group_id, [ParallelConfig(1, 1, 1)])
+                "b", group_id, [ParallelConfig(1, 1, 8)])
         else:
             raise ValueError(f"Invalid placement: {placement}")
 
