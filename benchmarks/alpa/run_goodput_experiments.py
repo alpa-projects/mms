@@ -1,16 +1,15 @@
 import argparse
-from alpa_serve.profiling import ProfilingDatabase
+from alpa_serve.profiling import ProfilingDatabase, ProfilingResult, ParallelConfig
 from alpa_serve.util import GB
 from gen_data_goodput import gen_uniform_mmpp_case, gen_gamma_case, run_experiment_slos
 
 
 def run_experiment(experiment_name):
-    prof_database = ProfilingDatabase("profiling_result.pkl")
-
     policies = ["sr", "mp"]
     if experiment_name == "gamma_1":
         slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
         cases = {}
+        prof_database = ProfilingDatabase("profiling_result.pkl")
         for policy in policies:
             for slo in slos:
                 cases[(policy, slo)] = gen_gamma_case(
@@ -20,6 +19,7 @@ def run_experiment(experiment_name):
     elif experiment_name == "gamma_2":
         slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
         cases = {}
+        prof_database = ProfilingDatabase("profiling_result.pkl")
         for policy in policies:
             for slo in slos:
                 cases[(policy, slo)] = gen_gamma_case(
@@ -27,15 +27,47 @@ def run_experiment(experiment_name):
                     num_devices=8, num_models=16, mem_budget=10*GB,
                     average_rate=4, cv=10, duration=100)
     elif experiment_name == "mmpp_1":
+        prof_database = ProfilingDatabase("profiling_result.pkl")
         slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
         cases = {}
         for policy in policies:
             for slo in slos:
                 cases[(policy, slo)] = gen_uniform_mmpp_case(
                     slo, policy, prof_database,
-                    num_devices=8, num_models=16, mem_budget=10*GB,
+                    num_devices=8, num_models=16, mem_budget=10 * GB,
                     state_durations=[1, 3], state_request_rates=[13, 1],
                     num_requests=1000)
+    elif experiment_name == "gamma_2_long_slos":
+        prof_database = ProfilingDatabase("profiling_result.pkl")
+        slos = [1.0, 2.0, 4.0, 8.0, 16.0, 20.0, 24.0, 28.0, 32.0, 64.0, 128.0]
+        cases = {}
+        for policy in policies:
+            for slo in slos:
+                cases[(policy, slo)] = gen_gamma_case(
+                    slo, policy, prof_database,
+                    num_devices=8, num_models=16, mem_budget=10 * GB,
+                    average_rate=4, cv=10, duration=100)
+    elif experiment_name == "gamma_2_long_slos_no_pipeline_overhead":
+        prof_database = ProfilingDatabase(None, new_database=True)
+        result = ProfilingResult("bert-1.3b", {},
+                                 preprocess_cpu=0.0, postprocess_cpu=0.0)
+        single_device_latency = 0.1
+        single_device_weight_mem = 2.64 * GB
+        for pp in [1, 8]:
+            result.add_result(ParallelConfig(1, 1, pp),
+                              batch_size=1,
+                              stage_latency=[single_device_latency / pp],
+                              act_mem=[0.0],
+                              weight_mem=[single_device_weight_mem / pp])
+        prof_database.update(result)
+        slos = [1.0, 2.0, 4.0, 8.0, 16.0, 20.0, 24.0, 28.0, 32.0, 64.0, 128.0]
+        cases = {}
+        for policy in policies:
+            for slo in slos:
+                cases[(policy, slo)] = gen_gamma_case(
+                    slo, policy, prof_database,
+                    num_devices=8, num_models=16, mem_budget=10 * GB,
+                    average_rate=4, cv=10, duration=100)
     else:
         raise ValueError(f"Unknown experiment name: {experiment_name}")
     run_experiment_slos(policies, slos, cases,
