@@ -6,6 +6,7 @@ from alpa import (PipeshardParallel,
                   get_global_virtual_physical_mesh,
                   AutoShardingOption, ManualStageOption,
                   parallelize)
+import asyncio
 import jax
 import jax.numpy as jnp
 from jax.tree_util import tree_flatten, tree_unflatten, tree_leaves, tree_map
@@ -194,7 +195,7 @@ class BertModel:
         global_config.use_dummy_value_for_benchmarking = False
 
         # Final inference function
-        async def infer_func(src, request):
+        def infer_func(src, request, finish):
             inputs = tokenizer(src,
                                max_length=seq_len,
                                padding="max_length",
@@ -211,16 +212,24 @@ class BertModel:
             request.scope["ts"].append(("d", time.time()))
             logits = outputs.logits
             logits.prefetch()
-            return await logits.to_np_async()
+            ret = logits._value
+            request.scope["ts"].append(("e", time.time()))
+            finish.set()
+            return ret
 
         return infer_func
 
     async def handle_request(self, request):
         obj = await request.json()
+        finish = asyncio.Event()
 
         request.scope["ts"].append(("c", time.time()))
-        res = await self.infer_func(obj["input"], request)
-        request.scope["ts"].append(("e", time.time()))
+        res = await asyncio.get_running_loop().run_in_executor(None, self.infer_func, obj["input"], request, finish)
+
+        while not finish.is_set():
+            await asyncio.sleep(0.001)
+
+        #res = self.infer_func(obj["input"], request, finish)
 
         return {
             "rejected": False,
