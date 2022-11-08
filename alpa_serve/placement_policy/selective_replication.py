@@ -32,7 +32,7 @@ class SelectiveReplicationILP(BasePlacementPolicy):
         super().__init__(verbose=verbose)
 
         self.max_bs = 1
-        self.time_limit = 20
+        self.time_limit = 30
         self.sum_k = 1e-4
 
     def solve_placement(self,
@@ -130,8 +130,9 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
         num_models = len(model_datas)
         mem_budget = cluster_env.mem_budget
 
+        parallel_config = ParallelConfig(1, 1, 1)
         weight_mem = [
-            x.profiling_result.para_dict[ParallelConfig(1, 1, 1)].weight_mem[0]
+            max(x.profiling_result.para_dict[parallel_config].weight_mem)
             for x in model_datas]
         single_throughput = [compute_single_throughput(x, self.max_bs) for x in model_datas]
         average_load = [x.average_load for x in model_datas]
@@ -178,7 +179,7 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
         group_configs = []
         group_models = []
         for i in range(num_devices):
-            group_configs.append(ParallelConfig(1, 1, 1))
+            group_configs.append(parallel_config)
             group_models.append(list(model_set[i]))
 
         return group_configs, group_models, {"objective": min(burst_tolerance)}

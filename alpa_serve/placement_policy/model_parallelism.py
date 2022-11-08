@@ -36,7 +36,7 @@ class ModelParallelismILP(BasePlacementPolicy):
     def __init__(self, verbose: bool = False):
         super().__init__(verbose=verbose)
 
-        self.time_limit = 20
+        self.time_limit = 30
         self.sum_k = 1e-4
         self.max_bs = 1
 
@@ -188,7 +188,10 @@ class ModelParallelismILP(BasePlacementPolicy):
 
 
 class ModelParallelismGreedy(BasePlacementPolicy):
-    def __init__(self, group_size: int = 2):
+
+    def __init__(self, group_size: int = 2, verbose: bool = False):
+        super().__init__(verbose=verbose)
+
         self.max_bs = 1
         self.group_size = group_size
 
