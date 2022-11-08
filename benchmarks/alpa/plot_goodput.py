@@ -6,8 +6,13 @@ import numpy as np
 
 
 show_name_dict = {
-    "sr": "SelectiveReplication",
-    "mp": "Model Parallelism (ours)",
+    "sr-greedy":   "SelectiveReplication (greedy)",
+    "sr-ilp":      "SelectiveReplication (ilp)",
+
+    "mp-ilp":      "Model Parallelism (ilp)",
+    "mp-greedy-2": "Model Parallelism (greedy, 2)",
+    "mp-greedy-4": "Model Parallelism (greedy, 4)",
+    "mp-greedy-8": "Model Parallelism (greedy, 8)",
 }
 
 def show_name(name):
@@ -15,16 +20,22 @@ def show_name(name):
 
 
 method2color_dict = {
-    "mp": "C1",
-    "sr": "C0",
 }
 
+ct = 0
 def method2color(name):
+    global ct
+    if name not in method2color_dict:
+        method2color_dict[name] = f"C{ct}"
+        ct += 1
     return method2color_dict[name]
 
 
 method_order_list = [
-    "sr", "mp"
+    "sr-greedy", "sr-ilp",
+
+    "mp-ilp", "mp-greedy-2",
+    "mp-greedy-4", "mp-greedy-8"
 ]
 
 def method2order(name):

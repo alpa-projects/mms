@@ -7,8 +7,9 @@ import ray
 from alpa_serve.simulator.controller import Controller
 from alpa_serve.simulator.workload import Workload
 from alpa_serve.profiling import ParallelConfig, load_test_prof_result, ProfilingDatabase
-from alpa_serve.placement_policy import (SelectiveReplication,
-    ModelParallelismPlacement, ClusterEnv, ModelData)
+from alpa_serve.placement_policy import (ClusterEnv, ModelData,
+    SelectiveReplicationILP, SelectiveReplicationGreedy,
+    ModelParallelismILP, ModelParallelismGreedy)
 from alpa_serve.util import GB, write_tsv
 
 from benchmarks.alpa.util import get_model_def
@@ -79,10 +80,15 @@ def place_models(controller, cluster_env, placement, model_names, model_types,
         model_datas.append(ModelData(model_names[i], slos[i], average_rates[i],
                            prof_database.get(model_types[i])))
 
-    if placement == "sr":
-        policy = SelectiveReplication(verbose=True)
-    elif placement == "mp":
-        policy = ModelParallelismPlacement(verbose=True)
+    if placement == "sr-ilp":
+        policy = SelectiveReplicationILP(verbose=True)
+    elif placement == "sr-greedy":
+        policy = SelectiveReplicationGreedy(verbose=True)
+    elif placement == "mp-ilp":
+        policy = ModelParallelismILP(verbose=True)
+    elif "mp-greedy" in placement:
+        group_size = int(placement.split("-")[2])
+        policy = ModelParallelismGreedy(group_size=group_size, verbose=True)
     else:
         raise ValueError(f"Invalid placement policy: {placement}")
 
@@ -194,7 +200,8 @@ if __name__ == "__main__":
 
     prof_database = ProfilingDatabase("profiling_result.pkl")
 
-    policies = ["sr", "mp"]
+    # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
+    policies = ["sr-ilp", "sr-greedy", "mp-ilp", "mp-greedy-2", "mp-greedy-8"]
     slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
     cases = {}
     for policy in policies:

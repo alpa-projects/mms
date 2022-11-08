@@ -7,7 +7,7 @@ import time
 import requests
 import ray
 
-from alpa_serve import run_controller
+from alpa_serve.controller import run_controller
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.simulator.workload import Workload
 from alpa.util import to_str_round

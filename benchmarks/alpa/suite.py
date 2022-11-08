@@ -3,8 +3,6 @@ from collections import namedtuple
 from alpa_serve.simulator.controller import Controller
 from alpa_serve.simulator.workload import Workload
 from alpa_serve.profiling import ParallelConfig, ProfilingDatabase
-from alpa_serve.placement_policy import (SelectiveReplication,
-    ModelParallelismPlacement)
 
 from benchmarks.alpa.util import get_model_def
 
