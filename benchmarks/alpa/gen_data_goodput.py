@@ -209,7 +209,7 @@ if __name__ == "__main__":
             cases[(policy, slo)] = gen_gamma_case(
                 slo, policy, prof_database,
                 num_devices=8, num_models=16, mem_budget=10*GB,
-                average_rate=6, cv=5, duration=100)
+                average_rate=4, cv=5, duration=100)
 
     run_experiment_slos(policies, slos, cases,
                         exp_name=args.exp_name,
