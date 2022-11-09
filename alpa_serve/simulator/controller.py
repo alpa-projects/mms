@@ -190,8 +190,9 @@ class Controller:
         assert name in self.model_info, (
             f"Model '{name}' is not registered.")
         model_info = self.model_info[name]
-        assert model_info.group_ids, (
-            f"No replica of model '{name}' is created.")
+
+        if not model_info.group_ids:
+            return None
 
         # Dispatch
         group_id = self.select_group_id(model_info.group_ids)
