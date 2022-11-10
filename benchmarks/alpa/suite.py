@@ -7,7 +7,7 @@ from alpa_serve.profiling import ParallelConfig, ProfilingDatabase
 from benchmarks.alpa.util import get_model_def
 
 
-BenchmarkCase = namedtuple("BenchmarkCase",
+ServingCase = namedtuple("ServingCase",
     ("register_models", "generate_workload", "placement_policy"))
 
 
@@ -75,7 +75,7 @@ def debug_case(placement):
 
         controller.sync()
 
-    return BenchmarkCase(register_models, generate_workload, place_models)
+    return ServingCase(register_models, generate_workload, place_models)
 
 
 cases["debug_manual_1"] = debug_case("manual_1")

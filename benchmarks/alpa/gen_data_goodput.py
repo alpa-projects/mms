@@ -13,7 +13,7 @@ from alpa_serve.placement_policy import (ClusterEnv, ModelData,
 from alpa_serve.util import GB, write_tsv
 
 from benchmarks.alpa.util import get_model_def
-from benchmarks.alpa.suite import BenchmarkCase
+from benchmarks.alpa.suite import ServingCase
 from benchmarks.alpa.simulate_one_case import simulate_one_case
 from benchmarks.alpa.run_one_case import run_one_case
 
@@ -119,7 +119,7 @@ def gen_gamma_case(slo, placement, prof_database,
         return place_models(controller, cluster_env, placement, model_names,
                             model_types, average_rates, slos, prof_database)
 
-    return BenchmarkCase(register_models_, generate_workload_, place_models_)
+    return ServingCase(register_models_, generate_workload_, place_models_)
 
 
 def gen_uniform_mmpp_case(slo, placement, prof_database,
@@ -150,7 +150,7 @@ def gen_uniform_mmpp_case(slo, placement, prof_database,
         return place_models(controller, cluster_env, placement, model_names,
                             model_types, average_rates, slos, prof_database)
 
-    return BenchmarkCase(register_models_, generate_workload_, place_models_)
+    return ServingCase(register_models_, generate_workload_, place_models_)
 
 
 def run_experiment_slos(policies, slos, cases, exp_name="default",
@@ -209,7 +209,7 @@ if __name__ == "__main__":
             cases[(policy, slo)] = gen_gamma_case(
                 slo, policy, prof_database,
                 num_devices=8, num_models=16, mem_budget=10*GB,
-                average_rate=6, cv=5, duration=100)
+                average_rate=4, cv=5, duration=100)
 
     run_experiment_slos(policies, slos, cases,
                         exp_name=args.exp_name,
