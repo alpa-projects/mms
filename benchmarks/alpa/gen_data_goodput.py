@@ -19,7 +19,7 @@ from benchmarks.alpa.run_one_case import run_one_case
 
 
 def generate_gamma_workloads(model_names, average_rate, cv, duration,
-                             slo, start=0):
+                             slo, start=0, seed=0):
     """Generate a workload where the requests to each model follows a gamma
     process, where the gap between the requests follows a Gamma distribution.
 
@@ -39,12 +39,12 @@ def generate_gamma_workloads(model_names, average_rate, cv, duration,
     for i, model_name in enumerate(model_names):
         w += Workload.gen_gamma(model_name, start, average_rate,
                                 cv=cv, duration=duration, slo=slo,
-                                seed=i)
+                                seed=seed + i)
     return w
 
 
-def gen_uniform_mmpp_workloads(model_names, num_requests, state_durations,
-                               state_request_rates, slo, start=0):
+def generate_uniform_mmpp_workloads(model_names, num_requests, state_durations,
+                                    state_request_rates, slo, start=0, seed=0):
     """Generate a workload where the requests to each model follows a Markov
     Modulated Poisson Process (MMPP), where the transition probability among
     the states of the Markov chain is uniform across all states.
@@ -59,7 +59,7 @@ def gen_uniform_mmpp_workloads(model_names, num_requests, state_durations,
     for i, model_name in enumerate(model_names):
         w += Workload.gen_uniform_mmpp(model_name, start, num_requests,
                                        state_durations, state_request_rates,
-                                       slo=slo, seed=i)
+                                       slo=slo, seed=seed + i)
     return w
 
 
