@@ -8,12 +8,13 @@ import ray
 from alpa_serve.simulator.controller import Controller
 from alpa_serve.simulator.workload import Workload
 from alpa_serve.profiling import ParallelConfig, load_test_prof_result, ProfilingDatabase
-from alpa_serve.placement_policy import (SelectiveReplication,
-    ModelParallelismPlacement, ClusterEnv, ModelData)
+from alpa_serve.placement_policy import (ClusterEnv, ModelData,
+    SelectiveReplicationILP, SelectiveReplicationGreedy,
+    ModelParallelismILP, ModelParallelismGreedy)
 from alpa_serve.util import GB, write_tsv
 
 from benchmarks.alpa.util import get_model_def
-from benchmarks.alpa.suite import BenchmarkCase
+from benchmarks.alpa.suite import ServingCase
 from benchmarks.alpa.simulate_one_case import simulate_one_case
 from benchmarks.alpa.run_one_case import run_one_case
 
@@ -80,10 +81,15 @@ def place_models(controller, cluster_env, placement, model_names, model_types,
         model_datas.append(ModelData(model_names[i], slos[i], average_rates[i],
                            prof_database.get(model_types[i])))
 
-    if placement == "sr":
-        policy = SelectiveReplication(verbose=True)
-    elif placement == "mp":
-        policy = ModelParallelismPlacement(verbose=True)
+    if placement == "sr-ilp":
+        policy = SelectiveReplicationILP(verbose=True)
+    elif placement == "sr-greedy":
+        policy = SelectiveReplicationGreedy(verbose=True)
+    elif placement == "mp-ilp":
+        policy = ModelParallelismILP(verbose=True)
+    elif "mp-greedy" in placement:
+        group_size = int(placement.split("-")[2])
+        policy = ModelParallelismGreedy(group_size=group_size, verbose=True)
     else:
         raise ValueError(f"Invalid placement policy: {placement}")
 
@@ -114,7 +120,7 @@ def gen_gamma_case(slo, placement, prof_database,
         return place_models(controller, cluster_env, placement, model_names,
                             model_types, average_rates, slos, prof_database)
 
-    return BenchmarkCase(register_models_, generate_workload_, place_models_)
+    return ServingCase(register_models_, generate_workload_, place_models_)
 
 
 def gen_uniform_mmpp_case(slo, placement, prof_database,
@@ -145,7 +151,7 @@ def gen_uniform_mmpp_case(slo, placement, prof_database,
         return place_models(controller, cluster_env, placement, model_names,
                             model_types, average_rates, slos, prof_database)
 
-    return BenchmarkCase(register_models_, generate_workload_, place_models_)
+    return ServingCase(register_models_, generate_workload_, place_models_)
 
 
 def run_experiment_slos(policies, slos, cases, exp_name="default",
@@ -196,15 +202,16 @@ if __name__ == "__main__":
 
     prof_database = ProfilingDatabase("profiling_result.pkl")
 
-    policies = ["sr", "mp"]
-    slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
+    # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
+    policies = ["sr-greedy", "mp-greedy-2", "mp-greedy-4", "mp-greedy-8"]
+    slos = [0.1, 0.15, 0.2, 0.4, 0.8, 1.6, 2.0, 4.0, 8.0]
     cases = {}
     for policy in policies:
         for slo in slos:
             cases[(policy, slo)] = gen_gamma_case(
                 slo, policy, prof_database,
                 num_devices=8, num_models=16, mem_budget=10*GB,
-                average_rate=4, cv=4, duration=100)
+                average_rate=4, cv=5, duration=100)
 
     run_experiment_slos(policies, slos, cases,
                         exp_name=args.exp_name,
