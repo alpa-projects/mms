@@ -90,12 +90,11 @@ if __name__ == "__main__":
     num_models_list = [1, 2, 4, 6, 8]
     policy_names = ["sr-greedy", "mp-greedy-4"]
     goodput = 0.99
-    slo = 1.0
+    slo = 0.9
 
     for num_models in num_models_list:
         for policy_name in policy_names:
             min_num_devices = find_min_num_devices(
                 data, model_type, num_models, slo, policy_name, goodput)
             print(num_models, policy_name, min_num_devices)
-    print("--------------------")
-
+    print("------------------------")

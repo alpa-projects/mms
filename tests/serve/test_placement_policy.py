@@ -24,10 +24,10 @@ class PlacementPolicyTest(unittest.TestCase):
     def test_selective_replication(self):
         cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
         model_datas = [
-            ModelData("m1", 1, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m2", 1, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m3", 1, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m4", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m1", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m2", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m3", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m4", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
         ]
 
         for policy in [SelectiveReplicationGreedy(), SelectiveReplicationILP()]:
@@ -42,10 +42,10 @@ class PlacementPolicyTest(unittest.TestCase):
     def test_model_parallelism(self):
         cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
         model_datas = [
-            ModelData("m1", 1, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m2", 1, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m3", 1, 5, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m4", 1, 5, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m1", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m2", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m3", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m4", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
         ]
 
         for policy in [ModelParallelismILP(), ModelParallelismGreedy(group_size=2)]:
@@ -68,10 +68,10 @@ class PlacementPolicyTest(unittest.TestCase):
 
             cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
             model_datas = [
-                ModelData("m1", 1, 5, load_test_prof_result("test-2GB-100ms")),
-                ModelData("m2", 1, 5, load_test_prof_result("test-2GB-100ms")),
-                ModelData("m3", 1, 5, load_test_prof_result("test-2GB-100ms")),
-                ModelData("m4", 1, 5, load_test_prof_result("test-2GB-100ms")),
+                ModelData("m1", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
+                ModelData("m2", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
+                ModelData("m3", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
+                ModelData("m4", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
             ]
             policy.place_models(controller, model_datas, cluster_env)
 

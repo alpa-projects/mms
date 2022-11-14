@@ -44,7 +44,7 @@ class SelectiveReplicationILP(BasePlacementPolicy):
         N = len(model_datas)
         M = cluster_env.num_devices
         C = cluster_env.mem_budget
-        a = [x.average_load for x in model_datas]
+        a = [x.rate for x in model_datas]
         c = [x.profiling_result.para_dict[ParallelConfig(1, 1, 1)].weight_mem[0]
              for x in model_datas]
         t = [compute_single_throughput(x, self.max_bs) for x in model_datas]
@@ -135,7 +135,7 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
             max(x.profiling_result.para_dict[parallel_config].weight_mem)
             for x in model_datas]
         single_throughput = [compute_single_throughput(x, self.max_bs) for x in model_datas]
-        average_load = [x.average_load for x in model_datas]
+        rate = [x.rate for x in model_datas]
 
         # Status variables
         burst_tolerance = np.zeros(num_models)
@@ -173,7 +173,7 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
 
                 used_mem[d_id] += weight_mem[m_id]
                 model_set[d_id].add(m_id)
-                burst_tolerance[m_id] += single_throughput[m_id] / average_load[m_id]
+                burst_tolerance[m_id] += single_throughput[m_id] / rate[m_id]
 
         # Parse solution
         group_configs = []

@@ -12,7 +12,8 @@ from alpa_serve.profiling import ProfilingResult
 class ModelData:
     name: str
     slo: float
-    average_load: float
+    rate: float
+    cv: float
     profiling_result: ProfilingResult
 
 

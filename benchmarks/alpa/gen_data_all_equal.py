@@ -60,7 +60,7 @@ def get_all_equal_serving_case(case):
         num_models = len(model_names)
         model_datas = []
         for i in range(num_models):
-            model_datas.append(ModelData(model_names[i], slos[i], rates[i],
+            model_datas.append(ModelData(model_names[i], slos[i], rates[i], cvs[i],
                                prof_database.get(model_types[i])))
 
         if policy_name == "sr-ilp":
