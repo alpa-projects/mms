@@ -9,7 +9,7 @@ from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
 
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
-    BasePlacementPolicy, ModelData, ClusterEnv)
+    BasePlacementPolicy, ModelPlacement, ModelData, ClusterEnv)
 
 
 def compute_single_throughput(model_data, max_bs):
@@ -112,7 +112,7 @@ class SelectiveReplicationILP(BasePlacementPolicy):
             group_configs.append(ParallelConfig(1, 1, 1))
             group_models.append(tmp)
 
-        return group_configs, group_models, {"objective": objective}
+        return ModelPlacement(group_configs, group_models), {"objective": objective}
 
 
 class SelectiveReplicationGreedy(BasePlacementPolicy):
@@ -182,4 +182,5 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
             group_configs.append(parallel_config)
             group_models.append(list(model_set[i]))
 
-        return group_configs, group_models, {"objective": min(burst_tolerance)}
+        return (ModelPlacement(group_configs, group_models),
+                {"objective": min(burst_tolerance)})

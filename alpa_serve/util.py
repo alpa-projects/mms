@@ -1,7 +1,8 @@
 """Common utilities."""
 from collections import namedtuple
-from functools import partial
+import functools
 import logging
+import math
 from typing import Sequence, Any
 
 import ray
@@ -36,7 +37,7 @@ def add_sync_method(actor, method_names):
     for name in method_names:
         attr = getattr(actor, name)
         old_remote = attr.remote
-        setattr(attr, "remote", partial(wrapped_remote_call, old_remote, calls))
+        setattr(attr, "remote", functools.partial(wrapped_remote_call, old_remote, calls))
 
 
 def wrapped_remote_call(old_remote, calls, *args, **kwargs):
@@ -62,3 +63,17 @@ def write_tsv(heads: Sequence[str],
         for i in range(len(heads)):
             line += heads[i] + ": " + values[i] + "  "
         print(line)
+
+
+def get_factors(n):
+    step = 2 if n % 2 else 1
+    ret = list(
+        set(
+            functools.reduce(
+                list.__add__,
+                ([i, n // i] for i in range(1, int(math.sqrt(n)) + 1, step) if n % i == 0),
+            )
+        )
+    )
+    ret.sort()
+    return ret

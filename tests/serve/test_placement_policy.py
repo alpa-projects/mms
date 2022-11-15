@@ -6,7 +6,7 @@ import numpy as np
 from alpa_serve.simulator.controller import Controller
 from alpa_serve.placement_policy import (ModelData, ClusterEnv,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
-    ModelParallelismILP, ModelParallelismGreedy)
+    ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ParallelConfig, load_test_prof_result
 from alpa.util import GB
 
@@ -31,13 +31,13 @@ class PlacementPolicyTest(unittest.TestCase):
         ]
 
         for policy in [SelectiveReplicationGreedy(), SelectiveReplicationILP()]:
-            group_configs, group_models, _ = policy.solve_placement(
+            placement, _ = policy.solve_placement(
                 model_datas, cluster_env)
 
             # Check result
-            assert all(g == ParallelConfig(1, 1, 1) for g in group_configs)
+            assert all(g == ParallelConfig(1, 1, 1) for g in placement.group_configs)
             for i in range(4):
-                assert sum(x.count(i) for x in group_models) == 2
+                assert sum(x.count(i) for x in placement.group_models) == 2
 
     def test_model_parallelism(self):
         cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
@@ -49,14 +49,14 @@ class PlacementPolicyTest(unittest.TestCase):
         ]
 
         for policy in [ModelParallelismILP(), ModelParallelismGreedy(group_size=2)]:
-            group_configs, group_models, _ = policy.solve_placement(
+            placement, _ = policy.solve_placement(
                 model_datas, cluster_env)
 
-            assert len(group_configs) == 2
-            assert group_configs[0].pp == 2
-            assert group_configs[1].pp == 2
-            assert group_models[0] == [0, 1, 2, 3]
-            assert group_models[1] == [0, 1, 2, 3]
+            assert len(placement.group_configs) == 2
+            assert placement.group_configs[0].pp == 2
+            assert placement.group_configs[1].pp == 2
+            assert placement.group_models[0] == [0, 1, 2, 3]
+            assert placement.group_models[1] == [0, 1, 2, 3]
 
     def test_placement_api(self):
         for policy in [SelectiveReplicationGreedy(), ModelParallelismILP()]:
@@ -73,7 +73,7 @@ class PlacementPolicyTest(unittest.TestCase):
                 ModelData("m3", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
                 ModelData("m4", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
             ]
-            policy.place_models(controller, model_datas, cluster_env)
+            policy.place_models(controller, cluster_env, model_datas)
 
 
 def suite():
