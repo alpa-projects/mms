@@ -1,10 +1,11 @@
 import argparse
 from collections import defaultdict
 
+import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-import numpy as np
 
+from benchmarks.alpa.all_equal_case import read_all_equal_case_tsv
 
 show_name_dict = {
     "sr-greedy":   "SelectiveReplication (greedy)",
@@ -47,10 +48,9 @@ def read_data(filename):
     # Dict[policy -> Dict[slo -> goodput]]
     data = defaultdict(lambda: defaultdict(dict))
 
-    for line in open(filename):
-        line = line.split("\t")
-        exp_name, policy, slo, goodput = line[:4]
-        data[policy][float(slo)] = float(goodput)
+    for line in read_all_equal_case_tsv(filename):
+        policy, slo, goodput = line["policy_name"], line["slo"], line["goodput"]
+        data[policy][slo] = goodput
 
     return data
 
@@ -96,9 +96,8 @@ def plot_goodput_vs_slo(data, output, show):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, default="res_goodput.tsv")
-    parser.add_argument("--output", type=str, default="goodput.png")
-
+    parser.add_argument("--input", type=str, default="res_goodput_vs_slo.tsv")
+    parser.add_argument("--output", type=str, default="goodput_vs_slo.png")
     parser.add_argument("--show", action="store_true")
     args = parser.parse_args()
 

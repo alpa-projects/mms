@@ -12,7 +12,8 @@ from alpa_serve.profiling import ProfilingResult
 class ModelData:
     name: str
     slo: float
-    average_load: float
+    rate: float
+    cv: float
     profiling_result: ProfilingResult
 
 
@@ -56,20 +57,20 @@ class BasePlacementPolicy:
                                       num_devices_per_node)
 
             controller.create_mesh_group_manager.remote(g_id, virtual_mesh_shape)
+        controller.sync()
 
         # Create model replicas
         for g_id in range(num_groups):
             for m_id in self.group_models[g_id]:
                 name = model_datas[m_id].name
                 controller.create_replica.remote(name, g_id, [self.group_configs[g_id]])
+        controller.sync()
 
         if self.verbose:
             print(f"group configs: {self.group_configs}")
             print(f"group models: {self.group_models}")
             print(f"debug info: {self.debug_info}")
             print(f"solver time: {solver_time:.2f}")
-
-        controller.sync()
 
     def __str__(self):
         group_strs = [f"({config}, {models})" for config, models

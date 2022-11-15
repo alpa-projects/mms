@@ -69,7 +69,7 @@ class ModelParallelismILP(BasePlacementPolicy):
         N = len(model_datas)
         M = cluster_env.num_devices
         C = cluster_env.mem_budget
-        a = [x.average_load for x in model_datas]
+        a = [x.rate for x in model_datas]
         c = [x.profiling_result.para_dict[ParallelConfig(1, 1, 1)].weight_mem[0]
              for x in model_datas]
 
@@ -213,7 +213,7 @@ class ModelParallelismGreedy(BasePlacementPolicy):
         single_throughput = [
             compute_capability(x, parallel_config, self.max_bs)
             for x in model_datas]
-        average_load = [x.average_load for x in model_datas]
+        rate = [x.rate for x in model_datas]
 
         if max(single_throughput) <= 1e-5:
             single_throughput = [1e-5] * len(single_throughput)
@@ -254,7 +254,7 @@ class ModelParallelismGreedy(BasePlacementPolicy):
 
                 used_mem[g_id] += weight_mem[m_id]
                 model_set[g_id].add(m_id)
-                burst_tolerance[m_id] += single_throughput[m_id] / average_load[m_id]
+                burst_tolerance[m_id] += single_throughput[m_id] / rate[m_id]
 
         # Parse solution
         group_configs = []

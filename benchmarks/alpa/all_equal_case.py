@@ -1,24 +1,21 @@
-import argparse
-from collections import namedtuple
-from collections.abc import Iterable
+from collections import namedtuple, defaultdict
 
-import numpy as np
 import ray
 
 from alpa_serve.simulator.controller import Controller
 from alpa_serve.simulator.workload import Workload
-from alpa_serve.profiling import ParallelConfig, load_test_prof_result, ProfilingDatabase
+from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
     ModelParallelismILP, ModelParallelismGreedy)
-from alpa_serve.util import GB, write_tsv
+from alpa_serve.util import GB, write_tsv, ServingCase
 
 from benchmarks.alpa.util import get_model_def
-from benchmarks.alpa.suite import ServingCase
 from benchmarks.alpa.simulate_one_case import simulate_one_case
 from benchmarks.alpa.run_one_case import run_one_case
 
 
+# A case where all models and all request distributions are the same.
 AllEqualCase = namedtuple("AllEqualCase", [
     "num_devices", "mem_budget",
     "model_type", "num_models", "per_model_rate", "per_model_cv",
@@ -60,7 +57,7 @@ def get_all_equal_serving_case(case):
         num_models = len(model_names)
         model_datas = []
         for i in range(num_models):
-            model_datas.append(ModelData(model_names[i], slos[i], rates[i],
+            model_datas.append(ModelData(model_names[i], slos[i], rates[i], cvs[i],
                                prof_database.get(model_types[i])))
 
         if policy_name == "sr-ilp":
@@ -88,19 +85,21 @@ def simulate_one_all_equal_case(case):
 
 
 def run_one_all_equal_case(case):
-    raise NotImplementedError()
+    serving_case = get_all_equal_serving_case(case)
+    stats, policy = run_one_case(serving_case)
+    return stats, None
 
 
 def run_all_equal_cases(cases, exp_name="default", output_file=None,
                         mode="simulate", parallel=False):
     if mode == "simulate":
         if parallel:
-            ray.init(address="auto")
+            ray.init(address="auto", ignore_reinit_error=True)
             run_one_case_ = ray.remote(num_cpus=2)(simulate_one_all_equal_case).remote
         else:
             run_one_case_ = simulate_one_all_equal_case
     else:
-        ray.init(address="auto")
+        ray.init(address="auto", ignore_reinit_error=True)
         run_one_case_ = run_one_all_equal_case
 
     run_results = []
@@ -131,38 +130,60 @@ def run_all_equal_cases(cases, exp_name="default", output_file=None,
 
     return results
 
+
+def read_all_equal_case_tsv(filename):
+    rows = []
+
+    for line in open(filename):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        exp_name, num_devices, mem_budget, model_type, num_models, per_model_rate, per_model_cv, slo, duration, policy_name, placement, goodput, mode = line.split("\t")
+
+        num_devices = int(num_devices)
+        num_models = int(num_models)
+        slo = float(slo)
+        duration = float(duration)
+        goodput = float(goodput)
+
+        values = locals()
+        row = {
+            key: values[key]
+            for key in 
+            ["exp_name", 
+             "num_devices", "mem_budget", "model_type", "num_models",
+             "per_model_rate", "per_model_cv", "slo", "duration", "policy_name",
+             "placement", "goodput", "mode"]
+        }
+        rows.append(row)
+
+    return rows
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--exp-name", type=str, default="default")
-    parser.add_argument("--output", type=str, default="res_all_equal.tsv")
-    parser.add_argument("--parallel", action="store_true")
-    parser.add_argument("--mode", choices=["simulate", "run"],
-                        default="simulate")
-
-    args = parser.parse_args()
-
-    # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-greedy", "mp-greedy-4"]
-    num_devices_list = [4, 8, 12, 16]
+    policy = "sr-greedy"
+    num_devices = 4
     mem_budget = 12 * GB
-    model_type = "bert-2.6b"
-    num_models_list = [1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+    model_type = "bert-1.3b"
+    num_models = 2
     per_model_rate = 2
     per_model_cv = 4
-    slos = [0.2, 0.4, 0.6, 0.8, 1.0, 2.0]
-    duration = 200
+    slo = 0.4
+    duration = 50
 
-    cases = []
-    for num_devices in num_devices_list:
-        for slo in slos:
-            for policy in policies:
-                for num_models in num_models_list:
-                    cases.append(AllEqualCase(
-                        num_devices, mem_budget, model_type, num_models,
-                        per_model_rate, per_model_cv, slo, duration, policy))
+    cases = [
+        AllEqualCase(num_devices, mem_budget, model_type, num_models,
+                     per_model_rate, per_model_cv, slo, duration, policy),]
 
     run_all_equal_cases(cases,
-                        exp_name=args.exp_name,
-                        output_file=args.output,
-                        mode=args.mode,
-                        parallel=args.parallel)
+                        exp_name="tmp",
+                        output_file="tmp.tsv",
+                        mode="run",
+                        parallel=False)
+
+    run_all_equal_cases(cases,
+                        exp_name="tmp",
+                        output_file="tmp.tsv",
+                        mode="simulate",
+                        parallel=True)
