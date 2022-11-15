@@ -1,11 +1,20 @@
 """Common utilities."""
-import logging
+from collections import namedtuple
 from functools import partial
+import logging
 from typing import Sequence, Any
 
 import ray
 
+
+# A general serving case.
+# We can simulate or run such a case.
+ServingCase = namedtuple("ServingCase",
+    ("register_models", "generate_workload", "placement_policy"))
+
+
 GB = 1 << 30
+
 
 def build_logger(name="alpa_serve"):
     logger = logging.getLogger(name)

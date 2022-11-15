@@ -1,36 +1,6 @@
 import argparse
-from collections import defaultdict
 
-import numpy as np
-
-def read_data(filename):
-    rows = []
-
-    for line in open(args.input):
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        exp_name, num_devices, mem_budget, model_type, num_models, per_model_rate, per_model_cv, slo, duration, policy_name, placement, goodput, mode = line.split("\t")
-
-        num_devices = int(num_devices)
-        num_models = int(num_models)
-        slo = float(slo)
-        duration = float(duration)
-        goodput = float(goodput)
-
-        values = locals()
-        row = {
-            key: values[key]
-            for key in 
-            ["exp_name", 
-             "num_devices", "mem_budget", "model_type", "num_models",
-             "per_model_rate", "per_model_cv", "slo", "duration", "policy_name",
-             "placement", "goodput", "mode"]
-        }
-        rows.append(row)
-
-    return rows
+from benchmarks.alpa.all_equal_case import read_all_equal_case_tsv
 
 
 def find_max_num_models(data, num_devices, model_type, slo, policy_name, goodput):
@@ -61,13 +31,13 @@ def find_min_num_devices(data, model_type, num_models, slo, policy_name, goodput
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, default="res_all_equal.tsv")
+    parser.add_argument("--input", type=str, default="res_num_models.tsv")
     parser.add_argument("--output", type=str, default="goodput.png")
     parser.add_argument("--show", action="store_true")
 
     args = parser.parse_args()
 
-    data = read_data(args.input)
+    data = read_all_equal_case_tsv(args.input)
 
     # maximum num models one can serve
     print("----- maximum #models -----")
