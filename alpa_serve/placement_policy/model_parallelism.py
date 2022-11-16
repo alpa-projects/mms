@@ -280,7 +280,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
     def __init__(self,
                  max_bs: int = 1,
                  max_pp: int = 8,
-                 max_op: int = 2,
+                 max_op: int = 4,
                  n_iter: int = 1,
                  simulation_duration: int = 100,
                  verbose: int = 0):
@@ -290,7 +290,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
         self.max_pp = max_pp
         self.max_op = max_op
         self.n_iter = n_iter
-        self.seed = 12345678
+        self.seed = 1234
         self.duration = simulation_duration
 
         self.model_datas = None
@@ -321,6 +321,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
         best_sol = None
 
         it = 0
+        tic = time.time()
         while it < self.n_iter:
             scores = self.get_scores(cur_sols)
             tmp_best_idx = np.argmax(scores)
@@ -329,17 +330,19 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 best_score = scores[tmp_best_idx]
                 best_sol = cur_sols[tmp_best_idx]
 
-
             if self.verbose >= 1:
                 print(f"iter: {it}, best score: {best_score}, "
                       f"iter score: {scores[tmp_best_idx]}, "
+                      f"iter #sol: {len(scores)}, "
+                      f"elapsed: {time.time() - tic:.2f}, "
                       f"best placement: {best_sol}, ")
 
             if self.verbose >= 2:
                 print("\n--- iter sols ---")
                 for i in range(len(cur_sols)):
+                    print(f"idx={i}")
                     print(f"placement={cur_sols[i]}")
-                    print(f"score={scores[i]}\n")
+                    print(f"score={scores[i]:.3f}\n")
                 print("-----------------")
 
             # TODO: mutate solution
@@ -441,22 +444,28 @@ class ModelParallelismSearch(BasePlacementPolicy):
         return ModelPlacement(group_configs, group_models)
 
     def get_scores(self, sols: List[ModelPlacement]):
-        return [self.get_score_one_sol(sol) for sol in sols]
+        return [self.get_score_one_sol(sol, self.model_datas, self.cluster_env,
+                                       self.workload)
+                for sol in sols]
 
-    def get_score_one_sol(self, sol: ModelPlacement):
+    @staticmethod
+    def get_score_one_sol(sol: ModelPlacement,
+                          model_datas: List[ModelData],
+                          cluster_env: ClusterEnv,
+                          workload: Workload):
         def register_models(controller):
-            for i, data in enumerate(self.model_datas):
+            for i, data in enumerate(model_datas):
                 controller.register_model.remote(
                     data.name, partial(Executable, data.profiling_result))
             controller.logger.setLevel(logging.ERROR)
 
         def generate_workload(start=0):
-            return self.workload
+            return workload
 
         def place_models(controller):
             base_policy = BasePlacementPolicy()
-            base_policy.place_models_impl(controller, self.cluster_env,
-                                          self.model_datas, sol)
+            base_policy.place_models_impl(controller, cluster_env,
+                                          model_datas, sol)
 
         serving_case = ServingCase(register_models, generate_workload, place_models)
         stats, _ = simulate_one_case(serving_case)

@@ -8,7 +8,7 @@ from alpa_serve.simulator.workload import Workload, GammaProcess
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
-    ModelParallelismILP, ModelParallelismGreedy)
+    ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.util import GB, write_tsv, ServingCase
 
@@ -68,6 +68,8 @@ def get_all_equal_serving_case(case, prof_database=None):
             policy = SelectiveReplicationGreedy(verbose=1)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
+        elif policy_name == "mp-search":
+            policy = ModelParallelismSearch(verbose=2)
         elif "mp-greedy" in policy_name:
             group_size = int(policy_name.split("-")[2])
             policy = ModelParallelismGreedy(group_size=group_size, verbose=1)
