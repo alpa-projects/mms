@@ -92,7 +92,7 @@ def run_one_all_equal_case(case):
 
 
 _DATA_HEADS = ("exp_name", "num_devices", "mem_budget", "model_type",
-               "num_models", "per_model_rate", "per_model_cv", "slo",
+               "num_models", "arrival_process", "slo",
                "duration", "policy_name", "placement", "goodput", "mode")
 
 
