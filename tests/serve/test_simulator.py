@@ -3,6 +3,8 @@ import asyncio
 from functools import partial
 import unittest
 
+import ray
+
 from alpa_serve.profiling import ParallelConfig, load_test_prof_result
 from alpa_serve.controller import run_controller
 from alpa_serve.simulator.controller import Controller, Client
@@ -40,6 +42,7 @@ class SimulatorTest(unittest.TestCase):
         run_event_loop(self.main_test_query(controller))
 
         # Test the real system
+        ray.init(address="auto")
         controller = run_controller("localhost")
         asyncio.run(self.main_test_query(controller))
 

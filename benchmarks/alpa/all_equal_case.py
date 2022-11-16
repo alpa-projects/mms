@@ -1,3 +1,4 @@
+import os
 from collections import namedtuple, defaultdict
 
 import ray
@@ -96,12 +97,14 @@ def run_all_equal_cases(cases, exp_name="default", output_file=None,
                         mode="simulate", parallel=False):
     if mode == "simulate":
         if parallel:
-            ray.init(address="auto", ignore_reinit_error=True)
+            ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
+                     ignore_reinit_error=True)
             run_one_case_ = ray.remote(num_cpus=2)(simulate_one_all_equal_case).remote
         else:
             run_one_case_ = simulate_one_all_equal_case
     else:
-        ray.init(address="auto", ignore_reinit_error=True)
+        ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
+                 ignore_reinit_error=True)
         run_one_case_ = run_one_all_equal_case
 
     run_results = []
