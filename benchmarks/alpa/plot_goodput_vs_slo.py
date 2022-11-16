@@ -35,7 +35,6 @@ def method2color(name):
 
 method_order_list = [
     "sr-greedy", "sr-ilp",
-
     "mp-ilp", "mp-greedy-2",
     "mp-greedy-4", "mp-greedy-8"
 ]
@@ -82,8 +81,9 @@ def plot_goodput_vs_slo(data, output, show):
     ax.set_xlabel("SLO (second)")
     ax.set_xscale("log")
     xticks = [0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8]
-    ax.set_xticks(ticks=xticks, labels=xticks)
-    ax.set_xticks(ticks=[], minor=True)
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xticks)
+    ax.set_xticks([], minor=True)
     ax.legend(curves, legends)
 
     if show:

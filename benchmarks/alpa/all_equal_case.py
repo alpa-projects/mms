@@ -180,11 +180,11 @@ if __name__ == "__main__":
         AllEqualCase(num_devices, mem_budget, model_type, num_models,
                      arrival_process, slo, duration, policy),]
 
-    run_all_equal_cases(cases,
-                        exp_name="tmp",
-                        output_file="tmp.tsv",
-                        mode="run",
-                        parallel=False)
+    # run_all_equal_cases(cases,
+    #                     exp_name="tmp",
+    #                     output_file="tmp.tsv",
+    #                     mode="run",
+    #                     parallel=False)
 
     run_all_equal_cases(cases,
                         exp_name="tmp",
