@@ -23,8 +23,9 @@ AllEqualCase = namedtuple("AllEqualCase", [
     "slo", "duration", "policy_name"])
 
 
-def get_all_equal_serving_case(case):
-    prof_database = ProfilingDatabase("profiling_result.pkl")
+def get_all_equal_serving_case(case, prof_database=None):
+    if prof_database is None:
+        prof_database = ProfilingDatabase("profiling_result.pkl")
 
     (num_devices, mem_budget, model_type, num_models,
      arrival_process, slo, duration, policy_name) = case
@@ -79,14 +80,14 @@ def get_all_equal_serving_case(case):
     return ServingCase(register_models, generate_workload, place_models)
 
 
-def simulate_one_all_equal_case(case):
-    serving_case = get_all_equal_serving_case(case)
+def simulate_one_all_equal_case(case, prof_database=None):
+    serving_case = get_all_equal_serving_case(case, prof_database)
     stats, policy = simulate_one_case(serving_case)
     return stats, None
 
 
-def run_one_all_equal_case(case):
-    serving_case = get_all_equal_serving_case(case)
+def run_one_all_equal_case(case, prof_database=None):
+    serving_case = get_all_equal_serving_case(case, prof_database)
     stats, policy = run_one_case(serving_case)
     return stats, None
 
