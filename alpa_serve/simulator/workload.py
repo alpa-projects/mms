@@ -57,6 +57,11 @@ class ArrivalProcess(ABC):
         """
         raise NotImplementedError()
 
+    def __str__(self):
+        return (f"{self.__class__.__name__}("
+                f"mean_rate={self.mean_rate()}, "
+                f"cv={self.cv()})")
+
 
 class DeterministicProcess(ArrivalProcess):
     """Deterministic arrival process."""

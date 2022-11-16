@@ -19,7 +19,7 @@ from benchmarks.alpa.run_one_case import run_one_case
 # A case where all models and all request distributions are the same.
 AllEqualCase = namedtuple("AllEqualCase", [
     "num_devices", "mem_budget",
-    "model_type", "num_models", "per_model_rate", "per_model_cv",
+    "model_type", "num_models", "arrival_process",
     "slo", "duration", "policy_name"])
 
 
@@ -27,8 +27,7 @@ def get_all_equal_serving_case(case):
     prof_database = ProfilingDatabase("profiling_result.pkl")
 
     (num_devices, mem_budget, model_type, num_models,
-     per_model_rate, per_model_cv,
-     slo, duration, policy_name) = case
+     arrival_process, slo, duration, policy_name) = case
 
     cluster_env = ClusterEnv(num_devices=num_devices, mem_budget=mem_budget)
     num_models = num_models
@@ -37,9 +36,8 @@ def get_all_equal_serving_case(case):
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
 
-    arrival_processes = [GammaProcess(per_model_rate, per_model_cv)] * num_models
-    rates = [process.mean_rate() for process in arrival_processes]
-    cvs = [process.cv() for process in arrival_processes]
+    rates = [arrival_process.mean_rate()] * num_models
+    cvs = [arrival_process.cv()] * num_models
 
     def register_models(controller):
         is_simulator = isinstance(controller, Controller)
@@ -52,8 +50,8 @@ def get_all_equal_serving_case(case):
     def generate_workload(start=0):
         w = Workload.empty()
         for i, model_name in enumerate(model_names):
-            w += arrival_processes[i].generate_workload(model_name, start, duration,
-                                                        slo=slos[i], seed=i)
+            w += arrival_process.generate_workload(model_name, start, duration,
+                                                   slo=slos[i], seed=i)
         return w
 
     def place_models(controller):
@@ -93,6 +91,11 @@ def run_one_all_equal_case(case):
     return stats, None
 
 
+_DATA_HEADS = ("exp_name", "num_devices", "mem_budget", "model_type",
+               "num_models", "per_model_rate", "per_model_cv", "slo",
+               "duration", "policy_name", "placement", "goodput", "mode")
+
+
 def run_all_equal_cases(cases, exp_name="default", output_file=None,
                         mode="simulate", parallel=False):
     if mode == "simulate":
@@ -111,11 +114,6 @@ def run_all_equal_cases(cases, exp_name="default", output_file=None,
     for case in cases:
         run_results.append(run_one_case_(case))
 
-    heads = ["exp_name",
-             "num_devices", "mem_budget", "model_type", "num_models",
-             "per_model_rate", "per_model_cv", "slo", "duration", "policy_name",
-             "placement", "goodput", "mode"]
-
     results = []
     for case, run_res in zip(cases, run_results):
         if parallel:
@@ -130,7 +128,7 @@ def run_all_equal_cases(cases, exp_name="default", output_file=None,
         values = (exp_name,) + tuple(case) + res
 
         if output_file is not None:
-            write_tsv(heads, values, output_file)
+            write_tsv(_DATA_HEADS, values, output_file)
         results.append(res)
 
     return results
@@ -145,7 +143,7 @@ def read_all_equal_case_tsv(filename):
             continue
 
         (exp_name, num_devices, mem_budget, model_type, num_models,
-         per_model_rate, per_model_cv, slo, duration, policy_name, placement,
+         arrival_process, slo, duration, policy_name, placement,
          goodput, mode) = line.split("\t")
 
         num_devices = int(num_devices)
@@ -157,11 +155,7 @@ def read_all_equal_case_tsv(filename):
         values = locals()
         row = {
             key: values[key]
-            for key in
-            ["exp_name",
-             "num_devices", "mem_budget", "model_type", "num_models",
-             "per_model_rate", "per_model_cv", "slo", "duration", "policy_name",
-             "placement", "goodput", "mode"]
+            for key in _DATA_HEADS
         }
         rows.append(row)
 
@@ -179,9 +173,11 @@ if __name__ == "__main__":
     slo = 0.4
     duration = 50
 
+    arrival_process = GammaProcess(per_model_rate, per_model_cv)
+
     cases = [
         AllEqualCase(num_devices, mem_budget, model_type, num_models,
-                     per_model_rate, per_model_cv, slo, duration, policy),]
+                     arrival_process, slo, duration, policy),]
 
     run_all_equal_cases(cases,
                         exp_name="tmp",
