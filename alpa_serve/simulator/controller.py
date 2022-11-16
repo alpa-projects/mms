@@ -252,18 +252,26 @@ class Client:
         return workload.compute_stats(start, finish, good, warmup)
 
 
-def simulate_one_case(case: ServingCase, debug=False):
+async def run_workload(client, workload, warmup):
+    client.submit_workload(workload)
+
+    await client.wait_all()
+
+    return client.compute_stats(workload, warmup=warmup)
+
+
+def simulate_one_case(case: ServingCase, warmup=10, debug=False):
     register_models, generate_workload, place_models = case
 
     # Launch the controller
     controller = Controller()
     register_models(controller)
-    placement_policy = place_models(controller)
+    placement = place_models(controller)
 
     # Launch the client
     client = Client(controller, debug=debug)
     workload = generate_workload()
 
     # Run workloads
-    stats = run_event_loop(run_workload(client, workload))
-    return stats, placement_policy
+    stats = run_event_loop(run_workload(client, workload, warmup))
+    return stats, placement

@@ -50,6 +50,8 @@ class BasePlacementPolicy:
             print(f"debug info: {debug_info}")
             print(f"solver time: {solver_time:.2f}")
 
+        return placement
+
     def place_models_impl(self, controller,
                           cluster_env: ClusterEnv,
                           model_datas: List[ModelData],
