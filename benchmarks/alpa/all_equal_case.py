@@ -3,7 +3,7 @@ from collections import namedtuple, defaultdict
 import ray
 
 from alpa_serve.simulator.controller import Controller
-from alpa_serve.simulator.workload import Workload
+from alpa_serve.simulator.workload import Workload, GammaProcess
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
@@ -35,8 +35,10 @@ def get_all_equal_serving_case(case):
     slos = [slo] * num_models
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
-    rates = [per_model_rate] * num_models
-    cvs = [per_model_cv] * num_models
+
+    arrival_processes = [GammaProcess(per_model_rate, per_model_cv)] * num_models
+    rates = [process.mean_rate() for process in arrival_processes]
+    cvs = [process.cv() for process in arrival_processes]
 
     def register_models(controller):
         is_simulator = isinstance(controller, Controller)
@@ -49,8 +51,8 @@ def get_all_equal_serving_case(case):
     def generate_workload(start=0):
         w = Workload.empty()
         for i, model_name in enumerate(model_names):
-            w += Workload.gen_gamma(model_name, start, rates[i], cv=cvs[i],
-                    duration=duration, slo=slos[i], seed=i)
+            w += arrival_processes[i].generate_workload(model_name, start, duration,
+                                                        slo=slos[i], seed=i)
         return w
 
     def place_models(controller):
@@ -106,7 +108,7 @@ def run_all_equal_cases(cases, exp_name="default", output_file=None,
     for case in cases:
         run_results.append(run_one_case_(case))
 
-    heads = ["exp_name", 
+    heads = ["exp_name",
              "num_devices", "mem_budget", "model_type", "num_models",
              "per_model_rate", "per_model_cv", "slo", "duration", "policy_name",
              "placement", "goodput", "mode"]
@@ -122,7 +124,7 @@ def run_all_equal_cases(cases, exp_name="default", output_file=None,
         goodput = stats.average_goodput
 
         res = (placement, round(goodput, 3), mode)
-        values = (exp_name,) + tuple(case) + res 
+        values = (exp_name,) + tuple(case) + res
 
         if output_file is not None:
             write_tsv(heads, values, output_file)
@@ -139,7 +141,9 @@ def read_all_equal_case_tsv(filename):
         if not line or line.startswith("#"):
             continue
 
-        exp_name, num_devices, mem_budget, model_type, num_models, per_model_rate, per_model_cv, slo, duration, policy_name, placement, goodput, mode = line.split("\t")
+        (exp_name, num_devices, mem_budget, model_type, num_models,
+         per_model_rate, per_model_cv, slo, duration, policy_name, placement,
+         goodput, mode) = line.split("\t")
 
         num_devices = int(num_devices)
         num_models = int(num_models)
@@ -150,8 +154,8 @@ def read_all_equal_case_tsv(filename):
         values = locals()
         row = {
             key: values[key]
-            for key in 
-            ["exp_name", 
+            for key in
+            ["exp_name",
              "num_devices", "mem_budget", "model_type", "num_models",
              "per_model_rate", "per_model_cv", "slo", "duration", "policy_name",
              "placement", "goodput", "mode"]

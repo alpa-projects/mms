@@ -8,7 +8,7 @@ from alpa_serve.controller import run_controller
 from alpa_serve.simulator.controller import Controller, Client
 from alpa_serve.simulator.event_loop import run_event_loop
 from alpa_serve.simulator.executable import Executable
-from alpa_serve.simulator.workload import Workload, Request
+from alpa_serve.simulator.workload import Workload, Request, PoissonProcess
 
 
 class EchoModel:
@@ -53,7 +53,7 @@ class SimulatorTest(unittest.TestCase):
         controller.create_replica.remote("a", group_id,
                                          [ParallelConfig(1, 1, 2)])
 
-        w = Workload.gen_poisson("a", 0, 10, 60, slo=0.15)
+        w = PoissonProcess(10).generate_workload("a", 0, 60, slo=0.15)
         client = Client(controller)
         client.submit_workload(w)
 
