@@ -3,12 +3,14 @@ import asyncio
 from functools import partial
 import unittest
 
+import ray
+
 from alpa_serve.profiling import ParallelConfig, load_test_prof_result
 from alpa_serve.controller import run_controller
 from alpa_serve.simulator.controller import Controller, Client
 from alpa_serve.simulator.event_loop import run_event_loop
 from alpa_serve.simulator.executable import Executable
-from alpa_serve.simulator.workload import Workload, Request
+from alpa_serve.simulator.workload import Workload, Request, PoissonProcess
 
 
 class EchoModel:
@@ -40,6 +42,7 @@ class SimulatorTest(unittest.TestCase):
         run_event_loop(self.main_test_query(controller))
 
         # Test the real system
+        ray.init(address="auto")
         controller = run_controller("localhost")
         asyncio.run(self.main_test_query(controller))
 
@@ -53,7 +56,7 @@ class SimulatorTest(unittest.TestCase):
         controller.create_replica.remote("a", group_id,
                                          [ParallelConfig(1, 1, 2)])
 
-        w = Workload.gen_poisson("a", 0, 10, 60, slo=0.15)
+        w = PoissonProcess(10).generate_workload("a", 0, 60, slo=0.15)
         client = Client(controller)
         client.submit_workload(w)
 

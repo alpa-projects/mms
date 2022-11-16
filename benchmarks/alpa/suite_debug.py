@@ -1,5 +1,5 @@
 from alpa_serve.simulator.controller import Controller
-from alpa_serve.simulator.workload import Workload
+from alpa_serve.simulator.workload import Workload, PoissonProcess
 from alpa_serve.profiling import ParallelConfig, ProfilingDatabase
 from alpa_serve.util import ServingCase
 
@@ -21,8 +21,9 @@ def debug_case(placement):
             "b", get_model_def("bert-1.3b", is_simulator, prof_database))
 
     def generate_workload(start=0):
-        w1 = Workload.gen_poisson("a", start, 4, 60, slo=0.5, seed=1)
-        w2 = Workload.gen_poisson("b", start, 4, 60, slo=0.5, seed=2)
+        arrival_process = PoissonProcess(4)
+        w1 = arrival_process.generate_workload("a", start, 60, slo=0.5, seed=1)
+        w2 = arrival_process.generate_workload("b", start, 60, slo=0.5, seed=2)
         w = w1 + w2
         return w
 

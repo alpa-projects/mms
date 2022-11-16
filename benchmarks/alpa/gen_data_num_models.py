@@ -1,6 +1,7 @@
 import argparse
 
 from benchmarks.alpa.all_equal_case import AllEqualCase, run_all_equal_cases
+from alpa_serve.simulator.workload import GammaProcess
 from alpa_serve.util import GB
 
 
@@ -22,6 +23,7 @@ if __name__ == "__main__":
     num_models_list = [1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
     per_model_rate = 2
     per_model_cv = 4
+    arrival_process = GammaProcess(per_model_rate, per_model_cv)
     slos = [0.2, 0.4, 0.6, 0.8, 1.0, 2.0]
     duration = 200
 
@@ -32,7 +34,7 @@ if __name__ == "__main__":
                 for num_models in num_models_list:
                     cases.append(AllEqualCase(
                         num_devices, mem_budget, model_type, num_models,
-                        per_model_rate, per_model_cv, slo, duration, policy))
+                        arrival_process, slo, duration, policy))
 
     run_all_equal_cases(cases,
                         exp_name=args.exp_name,

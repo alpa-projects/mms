@@ -1,4 +1,5 @@
 """Workload definition"""
+from abc import ABC, abstractmethod
 from collections import defaultdict, namedtuple
 import dataclasses
 import random
@@ -27,6 +28,166 @@ StatsResult = namedtuple("StatsResult", (
 PerModelStatsResult = namedtuple("PerModelStatsResult",
         ("name", "num_requests", "goodput", "throughput",
          "latency_mean", "latency_std", "latency_p90", "latency_p99"))
+
+
+class ArrivalProcess(ABC):
+    @abstractmethod
+    def mean_rate(self):
+        """Return the mean arrival rate."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def cv(self):
+        """Return the coefficient of variation of the gap between
+        the requests."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def generate_workload(self, model_name: str, start: float,
+                          duration: float, slo: Optional[float] = None,
+                          seed: int = 0):
+        """Generate a workload with the arrival process.
+
+        Args:
+            model_name (str): Name of the model.
+            start (float): The start time of the workload.
+            duration (float): The duration of the workload.
+            slo (Optional[float]): The service level objective of each model.
+            seed (int): The random seed.
+        """
+        raise NotImplementedError()
+
+    def __str__(self):
+        return (f"{self.__class__.__name__}("
+                f"mean_rate={self.mean_rate()}, "
+                f"cv={self.cv()})")
+
+
+class DeterministicProcess(ArrivalProcess):
+    """Deterministic arrival process."""
+    def __init__(self, arrival_rate: float):
+        """Create a deterministic arrival process.
+
+        Args:
+            arrival_rate (float): The arrival rate of the process. The gap
+                between the requests is 1 / arrival_rate seconds.
+        """
+        self.arrival_rate = arrival_rate
+
+    def mean_rate(self):
+        return self.arrival_rate
+
+    def cv(self):
+        return 0
+
+    def generate_workload(self, model_name: str, start: float,
+                          duration: float, slo: Optional[float] = None,
+                          seed: int = 0):
+        n_requests = int(duration * self.arrival_rate)
+        interval = 1 / self.arrival_rate
+        ticks = [start + i * interval for i in range(n_requests)]
+        return Workload(ticks, [
+            Request(model_name, None, slo, i, {}) for i in range(n_requests)])
+
+
+class GammaProcess(ArrivalProcess):
+    """Gamma arrival process."""
+    def __init__(self, arrival_rate: float, cv: float):
+        """Initialize a gamma arrival process.
+
+        Args:
+            arrival_rate: mean arrival rate.
+            cv: coefficient of variation. When cv == 1, the arrival process is
+                Poisson process.
+        """
+        self.rate = arrival_rate
+        self.cv_ = cv
+        self.shape = 1 / (cv * cv)
+        self.scale = cv * cv / arrival_rate
+
+    def mean_rate(self):
+        return self.rate
+
+    def cv(self):
+        return self.cv_
+
+    def generate_workload(self, model_name: str, start: float,
+                          duration: float, slo: Optional[float] = None,
+                          seed: int = 0):
+        np.random.seed(seed)
+
+        ticks = []
+        cur = start
+        end = start + duration
+        while cur < end:
+            cur += np.random.gamma(self.shape, self.scale)
+            ticks.append(cur)
+        return Workload(ticks, [
+            Request(model_name, None, slo, i, {}) for i in range(len(ticks))])
+
+
+class PoissonProcess(GammaProcess):
+    """Poisson arrival process."""
+
+    def __init__(self, arrival_rate: float):
+        """Initialize a Poisson arrival process.
+
+        Args:
+            arrival_rate: The mean arrival rate.
+        """
+        super().__init__(arrival_rate, 1)
+
+
+class UniformMMPP(ArrivalProcess):
+    """Markov Modulated Poisson Process (MMPP), where the transition
+    probability among the states of the Markov chain is uniform
+    across all states.
+
+    MMPP is a generalization of the Poisson process where the request rate
+    changes over time. An m-state MMPP can be viewed as m independent
+    Poisson processes with different request rates. A switch governed by
+    an m-state Markov chain determines which of m request processes is
+    active, i.e., the one in accordance with which requests are generated.
+    The duration staying on each state is exponentially distributed with
+    the provided mean duration of each state. In this simplified unifrom
+    case, we assume the transition probability among the states of the
+    Markov chain is uniform across all states (i.e., each state will
+    transit to another state with equal probability across all other
+    states).
+    """
+    def __init__(self, state_durations: Sequence[float],
+                 state_request_rates: Sequence[float]):
+        """Initialize a uniform MMPP.
+
+        Args:
+            state_durations: The duration of each state.
+            state_request_rates: The request rate of each state.
+        """
+        self.state_durations = np.array(state_durations)
+        self.state_request_rates = np.array(state_request_rates)
+        assert len(self.state_durations) == len(self.state_request_rates)
+        self.mean_arrival_rate = (np.sum(self.state_durations
+                                         * self.state_request_rates)
+                                  / np.sum(self.state_durations))
+
+    def mean_rate(self):
+        return self.mean_arrival_rate
+
+    def cv(self):
+        return None
+
+    def generate_workload(self, model_name: str, start: float,
+                          duration: float, slo: Optional[float] = None,
+                          seed: int = 0):
+        np.random.seed(seed)
+        random.seed(seed)
+        n_requests = int(duration * self.mean_arrival_rate)
+        sampler = MMPPSampler.unifrom_mmpp(self.state_durations,
+                                           self.state_request_rates)
+        ticks, _ = sampler.sample(n_requests)
+        ticks = [start + t for t in ticks[1:]]
+        return Workload(ticks, [
+            Request(model_name, None, slo, i, {}) for i in range(n_requests)])
 
 
 class Workload:
@@ -124,110 +285,12 @@ class Workload:
               f"request rate: {stats.total_request_rate:.2f} q/s")
         print(f"average goodput: {stats.average_goodput*100:.2f} %")
 
-    @staticmethod
-    def gen_uniform(model_name: str, start: float, rate: float,
-                    duration: float, slo: Optional[float] = None, seed: int = 0):
-        number = int(duration * rate)
-        interval = 1 / rate
-        ticks = [start + i * interval for i in range(number)]
-        return Workload(ticks, [
-            Request(model_name, None, slo, i, {}) for i in range(number)])
+    @classmethod
+    def empty(cls):
+        return cls([], [])
 
-    @staticmethod
-    def gen_poisson(model_name: str, start: float, rate: float,
-                    duration: float, slo: Optional[float] = None, seed: int = 0):
-        """
-        Generate a workload with Poisson arrival process.
-
-        Args:
-            model_name: The name of the model.
-            start: The start time of the workload.
-            rate: The average arrival rate.
-            duration: The duration of the workload.
-            slo: The SLO of the workload.
-            seed: The random seed.
-        """
-        return Workload.gen_gamma(model_name, start, rate, 1, duration,
-                                  slo, seed)
-
-    @staticmethod
-    def gen_gamma(model_name: str, start: float, rate: float, cv: float,
-                  duration: float, slo: Optional[float] = None, seed: int = 0):
-        """Generate a workload with a Gamma process, where the gap between the
-        requests follows a Gamma distribution.
-
-        Args:
-            model_name: The name of the model.
-            start: The start time of the workload.
-            rate: The mean rate of the workload.
-            cv: The coefficient of variation of the workload, when cv == 1,
-                the workload is a Poisson process.
-            duration: The duration of the workload.
-            slo: The service level objective of the workload.
-            seed: The seed of the random number generator.
-        """
-        np.random.seed(seed)
-
-        shape = 1 / (cv * cv)
-        scale = cv * cv / rate
-
-        ticks = []
-        cur = start
-        end = start + duration
-        while cur < end:
-            cur += np.random.gamma(shape, scale)
-            ticks.append(cur)
-        return Workload(ticks, [
-            Request(model_name, None, slo, i, {}) for i in range(len(ticks))])
-
-    @staticmethod
-    def gen_uniform_mmpp(model_name: str, start: float, num_requests: int,
-                         state_durations: Sequence[float],
-                         state_request_rates: Sequence[float],
-                         slo: Optional[float] = None, seed: int = 0):
-        """Generate a workload with a Markov Modulated Poisson Process (MMPP),
-        where the transition probability among the states of the Markov chain
-        is uniform across all states.
-
-        MMPP is a generalization of the Poisson process where the request rate
-        changes over time. An m-state MMPP can be viewed as m independent
-        Poisson processes with different request rates. A switch governed by
-        an m-state Markov chain determines which of m request processes is
-        active, i.e., the one in accordance with which requests are generated.
-        The duration staying on each state is exponentially distributed with
-        the provided mean duration of each state. In this simplified unifrom
-        case, we assume the transition probability among the states of the
-        Markov chain is uniform across all states (i.e., each state will
-        transit to another state with equal probability across all other
-        states).
-
-        Args:
-            model_name: The name of the model.
-            start: The start time of the workload.
-            num_requests: The number of requests to generate.
-            state_durations: The mean duration of each state.
-            state_request_rates: The request rate of each state.
-            slo: The service level objective of the requests.
-            seed: The seed for the random number generator.
-        """
-        np.random.seed(seed)
-        random.seed(seed)
-        state_durations = np.array(state_durations)
-        state_request_rates = np.array(state_request_rates)
-        sampler = MMPPSampler.unifrom_mmpp(state_durations,
-                                           state_request_rates)
-        ticks, _ = sampler.sample(num_requests)
-        ticks = [start + t for t in ticks[1:]]
-        return Workload(ticks, [
-            Request(model_name, None, slo, i, {}) for i in range(num_requests)])
-
-
-    @staticmethod
-    def empty():
-        return Workload([], [])
-
-    @staticmethod
-    def merge(*args):
+    @classmethod
+    def merge(cls, *args):
         if len(args) == 1:
             return args[0]
 
@@ -245,7 +308,7 @@ class Workload:
             arrivals[i] = merged_arrivals[j]
             requests[i] = merged_requests[j]
 
-        return Workload(arrivals, requests)
+        return cls(arrivals, requests)
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -270,8 +333,7 @@ class Workload:
 
 
 if __name__ == "__main__":
-    w = Workload.gen_poisson("m", start=0, rate=10, duration=1000, seed=0)
+    w = PoissonProcess(10).generate_workload("m", start=0, duration=1000, seed=0)
     print(w)
-
-    w = Workload.gen_gamma("m", start=0, cv=5, rate=10, duration=1000, seed=0)
+    w = GammaProcess(10, 5).generate_workload("m", start=0, duration=1000, seed=0)
     print(w)
