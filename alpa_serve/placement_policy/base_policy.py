@@ -45,10 +45,9 @@ class BasePlacementPolicy:
         self.place_models_impl(controller, cluster_env, model_datas, placement)
 
         if self.verbose >= 1:
-            print(f"group configs: {placement.group_configs}")
-            print(f"group models: {placement.group_models}")
+            print(f"placement solution: {placement}")
             print(f"debug info: {debug_info}")
-            print(f"solver time: {solver_time:.2f}")
+            print(f"solver time: {solver_time:.2f} s")
 
         return placement
 
@@ -64,7 +63,6 @@ class BasePlacementPolicy:
         for g_id in range(num_groups):
             num_devices = np.prod(group_configs[g_id])
             num_devices_per_node = cluster_env.num_devices_per_node
-            pp_size = group_configs[g_id].pp
 
             if num_devices <= num_devices_per_node:
                 virtual_mesh_shape = (1, num_devices)

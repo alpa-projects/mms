@@ -211,6 +211,9 @@ class ModelParallelismGreedy(BasePlacementPolicy):
         num_models = len(model_datas)
         mem_budget = cluster_env.mem_budget
 
+        if num_devices % self.group_size != 0:
+            return ModelPlacement([], []), None
+
         assert num_devices % self.group_size == 0
         num_groups = num_devices // self.group_size
 
@@ -353,8 +356,12 @@ class ModelParallelismSearch(BasePlacementPolicy):
     def enumerate_group_configs(self):
         sols = []
         num_devices = self.cluster_env.num_devices
+        num_devices_per_node = self.cluster_env.num_devices_per_node
 
         for group_size in get_factors(num_devices):
+            if group_size > num_devices_per_node and group_size % num_devices_per_node != 0:
+                continue
+
             for pp in get_factors(group_size):
                 op = group_size // pp
                 num_groups = num_devices // group_size
