@@ -33,7 +33,7 @@ class ClusterEnv:
 class BasePlacementPolicy:
     """The baseclass of placement policy"""
 
-    def __init__(self, verbose=False):
+    def __init__(self, verbose: int = 0):
         self.verbose = verbose
 
     def place_models(self, controller, cluster_env: ClusterEnv,
@@ -44,7 +44,7 @@ class BasePlacementPolicy:
 
         self.place_models_impl(controller, cluster_env, model_datas, placement)
 
-        if self.verbose:
+        if self.verbose >= 1:
             print(f"group configs: {placement.group_configs}")
             print(f"group models: {placement.group_models}")
             print(f"debug info: {debug_info}")

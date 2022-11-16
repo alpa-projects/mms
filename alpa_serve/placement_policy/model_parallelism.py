@@ -1,6 +1,7 @@
 """Selective replication with model parallelism."""
 from collections import namedtuple
 from functools import partial
+import logging
 import multiprocessing
 import time
 from typing import List
@@ -16,7 +17,7 @@ from alpa_serve.placement_policy.base_policy import (
 from alpa_serve.simulator.controller import simulate_one_case
 from alpa_serve.simulator.executable import Executable
 from alpa_serve.simulator.workload import Workload
-from alpa_serve.util import get_factors
+from alpa_serve.util import get_factors, ServingCase
 
 
 def compute_capability(model_data, parallel_config, max_bs):
@@ -40,7 +41,7 @@ def compute_capability(model_data, parallel_config, max_bs):
 
 
 class ModelParallelismILP(BasePlacementPolicy):
-    def __init__(self, verbose: bool = False):
+    def __init__(self, verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.time_limit = 30
@@ -155,7 +156,7 @@ class ModelParallelismILP(BasePlacementPolicy):
         status = prob.status
         objective = pulp.value(prob.objective)
         objective = float(objective) if objective is not None else -1.0
-        if self.verbose:
+        if self.verbose >= 2:
             print(f"ILP Status: {LpStatus[status]}\tObjective: {objective}\t"
                   f"Time: {time.time() - tic}")
 
@@ -196,7 +197,7 @@ class ModelParallelismILP(BasePlacementPolicy):
 
 class ModelParallelismGreedy(BasePlacementPolicy):
 
-    def __init__(self, group_size: int = 2, verbose: bool = False):
+    def __init__(self, group_size: int = 2, verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.max_bs = 1
@@ -276,15 +277,21 @@ class ModelParallelismGreedy(BasePlacementPolicy):
 
 class ModelParallelismSearch(BasePlacementPolicy):
 
-    def __init__(self, verbose: bool = False):
+    def __init__(self,
+                 max_bs: int = 1,
+                 max_pp: int = 8,
+                 max_op: int = 2,
+                 n_iter: int = 1,
+                 simulation_duration: int = 100,
+                 verbose: int = 0):
         super().__init__(verbose=verbose)
 
-        self.max_bs = 1
-        self.max_pp = 8
-        self.max_op = 2
-        self.n_iter = 1
+        self.max_bs = max_bs
+        self.max_pp = max_pp
+        self.max_op = max_op
+        self.n_iter = n_iter
         self.seed = 12345678
-        self.duration = 100
+        self.duration = simulation_duration
 
         self.model_datas = None
         self.cluster_env = None
@@ -322,10 +329,23 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 best_score = scores[tmp_best_idx]
                 best_sol = cur_sols[tmp_best_idx]
 
+
+            if self.verbose >= 1:
+                print(f"iter: {it}, best score: {best_score}, "
+                      f"iter score: {scores[tmp_best_idx]}, "
+                      f"best placement: {best_sol}, ")
+
+            if self.verbose >= 2:
+                print("\n--- iter sols ---")
+                for i in range(len(cur_sols)):
+                    print(f"placement={cur_sols[i]}")
+                    print(f"score={scores[i]}\n")
+                print("-----------------")
+
             # TODO: mutate solution
             it += 1
 
-        return best_sol.group_configs, best_sol.group_models, {}
+        return best_sol, {}
 
     def enumerate_group_configs(self):
         sols = []
@@ -346,7 +366,9 @@ class ModelParallelismSearch(BasePlacementPolicy):
     def greedy_placement(self, sol: ModelPlacement):
         num_models = len(self.model_datas)
         mem_budget = self.cluster_env.mem_budget
+        model_datas = self.model_datas
         group_configs = sol.group_configs
+        inf = 1e20
 
         num_groups = len(group_configs)
 
@@ -354,18 +376,21 @@ class ModelParallelismSearch(BasePlacementPolicy):
         for parallel_config in sol.group_configs:
             weight_mem[parallel_config] = [
                 max(x.profiling_result.para_dict[parallel_config].weight_mem)
-                for x in self.model_datas]
+                if parallel_config in x.profiling_result.para_dict
+                else inf
+                for x in model_datas]
 
         single_throughput = {}  # Dict[parallel_config -> [model_idx -> weight_mem]]
         for parallel_config in sol.group_configs:
-            single_throughput[parallel_config] = [
+            tmp_throughput = [
                 compute_capability(x, parallel_config, self.max_bs)
                 for x in model_datas]
+            if max(tmp_throughput) <= 1e-5:
+                single_throughput[parallel_config] = [1e-5] * len(tmp_throughput)
+            else:
+                single_throughput[parallel_config] = tmp_throughput
 
         rate = [x.rate for x in model_datas]
-
-        if max(single_throughput) <= 1e-5:
-            single_throughput = [1e-5] * len(single_throughput)
 
         # Status variables
         burst_tolerance = np.zeros(num_models)
@@ -415,21 +440,23 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
         return ModelPlacement(group_configs, group_models)
 
-    def get_scores(solf, sols: List[ModelPlacement]):
+    def get_scores(self, sols: List[ModelPlacement]):
         return [self.get_score_one_sol(sol) for sol in sols]
 
     def get_score_one_sol(self, sol: ModelPlacement):
         def register_models(controller):
             for i, data in enumerate(self.model_datas):
                 controller.register_model.remote(
-                    model_name, partial(Executable, data.profiling_result))
+                    data.name, partial(Executable, data.profiling_result))
+            controller.logger.setLevel(logging.ERROR)
 
-        def generate_workload(start):
+        def generate_workload(start=0):
             return self.workload
 
         def place_models(controller):
             base_policy = BasePlacementPolicy()
-            base_policy.place_models_impl(controller, sol)
+            base_policy.place_models_impl(controller, self.cluster_env,
+                                          self.model_datas, sol)
 
         serving_case = ServingCase(register_models, generate_workload, place_models)
         stats, _ = simulate_one_case(serving_case)

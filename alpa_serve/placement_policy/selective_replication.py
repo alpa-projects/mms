@@ -28,7 +28,7 @@ def compute_single_throughput(model_data, max_bs):
 
 class SelectiveReplicationILP(BasePlacementPolicy):
 
-    def __init__(self, verbose=False):
+    def __init__(self, verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.max_bs = 1
@@ -86,7 +86,7 @@ class SelectiveReplicationILP(BasePlacementPolicy):
         status = prob.status
         objective = pulp.value(prob.objective)
         objective = float(objective) if objective is not None else -1.0
-        if self.verbose:
+        if self.verbose >= 2:
             print(f"ILP Status: {LpStatus[status]}\tObjective: {objective}\t"
                   f"Time: {time.time() - tic}")
 
@@ -117,7 +117,7 @@ class SelectiveReplicationILP(BasePlacementPolicy):
 
 class SelectiveReplicationGreedy(BasePlacementPolicy):
 
-    def __init__(self, verbose=False):
+    def __init__(self, verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.max_bs = 1

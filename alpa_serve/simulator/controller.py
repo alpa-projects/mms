@@ -39,7 +39,7 @@ class GroupManager:
 
         self.stage_clock = [0] * np.prod(virtual_mesh_shape)
 
-        self.logger = build_logger()
+        self.logger = build_logger("group_manager")
 
         # Constants
         self.fixed_overhead = 0.004
@@ -108,7 +108,7 @@ class Controller:
         # Dict[int -> GroupInfo]
         self.group_info = {}
 
-        self.logger = build_logger()
+        self.logger = build_logger("controller")
 
         # Simulator specific code
         np.random.seed(1)

@@ -24,10 +24,10 @@ class PlacementPolicyTest(unittest.TestCase):
     def test_selective_replication(self):
         cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
         model_datas = [
+            ModelData("m0", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
             ModelData("m1", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
             ModelData("m2", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
             ModelData("m3", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m4", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
         ]
 
         for policy in [SelectiveReplicationGreedy(), SelectiveReplicationILP()]:
@@ -42,10 +42,10 @@ class PlacementPolicyTest(unittest.TestCase):
     def test_model_parallelism(self):
         cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
         model_datas = [
+            ModelData("m0", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
             ModelData("m1", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
             ModelData("m2", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
             ModelData("m3", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
-            ModelData("m4", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
         ]
 
         for policy in [ModelParallelismILP(), ModelParallelismGreedy(group_size=2)]:
@@ -58,20 +58,37 @@ class PlacementPolicyTest(unittest.TestCase):
             assert placement.group_models[0] == [0, 1, 2, 3]
             assert placement.group_models[1] == [0, 1, 2, 3]
 
+    def test_model_parallelism_search(self):
+        cluster_env = ClusterEnv(num_devices=4, mem_budget=2.5*GB)
+        model_datas = [
+            ModelData("m0", 0.4, 4, 8, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m1", 0.4, 4, 8, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m2", 0.4, 4, 8, load_test_prof_result("test-2GB-100ms")),
+            ModelData("m3", 0.4, 4, 8, load_test_prof_result("test-2GB-100ms")),
+        ]
+
+        for policy in [ModelParallelismSearch(verbose=2)]:
+            placement, _ = policy.solve_placement(
+                model_datas, cluster_env)
+
+            assert len(placement.group_configs) == 1
+            assert placement.group_configs[0].pp == 4
+            assert placement.group_models[0] == [0, 1, 2, 3]
+
     def test_placement_api(self):
         for policy in [SelectiveReplicationGreedy(), ModelParallelismILP()]:
             controller = Controller()
+            controller.register_model.remote("m0", EchoModel)
             controller.register_model.remote("m1", EchoModel)
             controller.register_model.remote("m2", EchoModel)
             controller.register_model.remote("m3", EchoModel)
-            controller.register_model.remote("m4", EchoModel)
 
             cluster_env = ClusterEnv(num_devices=4, mem_budget=4.5*GB)
             model_datas = [
+                ModelData("m0", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
                 ModelData("m1", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
                 ModelData("m2", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
                 ModelData("m3", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
-                ModelData("m4", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
             ]
             policy.place_models(controller, cluster_env, model_datas)
 
@@ -80,6 +97,7 @@ def suite():
     suite = unittest.TestSuite()
     suite.addTest(PlacementPolicyTest("test_selective_replication"))
     suite.addTest(PlacementPolicyTest("test_model_parallelism"))
+    suite.addTest(PlacementPolicyTest("test_model_parallelism_search"))
     suite.addTest(PlacementPolicyTest("test_placement_api"))
     return suite
 
