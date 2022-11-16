@@ -10,9 +10,10 @@ import ray
 from alpa_serve.controller import run_controller
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.simulator.workload import Workload
+from alpa_serve.util import ServingCase
 from alpa.util import to_str_round
 
-from benchmarks.alpa.suite import cases
+from benchmarks.alpa.suite_debug import suite_debug
 
 
 class Client:
@@ -77,7 +78,7 @@ async def run_workload(client, workload):
     return client.compute_stats(workload, warmup=10)
 
 
-def run_one_case(case, port=20001):
+def run_one_case(case: ServingCase, port=20001):
     register_models, generate_workload, place_models = case
 
     # Launch the controller
@@ -92,7 +93,7 @@ def run_one_case(case, port=20001):
     # Run workloads
     stats = asyncio.run(run_workload(client, workload))
     ray.get(controller.shutdown.remote())
-    del controller
+    del controller, client
     return stats, placement_policy
 
 
@@ -103,5 +104,5 @@ if __name__ == "__main__":
 
     ray.init(address="auto")
 
-    stats, _ = run_one_case(cases[args.case])
+    stats, _ = run_one_case(suite_debug[args.case])
     Workload.print_stats(stats)

@@ -1,17 +1,12 @@
-from collections import namedtuple
-
 from alpa_serve.simulator.controller import Controller
 from alpa_serve.simulator.workload import Workload
 from alpa_serve.profiling import ParallelConfig, ProfilingDatabase
+from alpa_serve.util import ServingCase
 
 from benchmarks.alpa.util import get_model_def
 
 
-ServingCase = namedtuple("ServingCase",
-    ("register_models", "generate_workload", "placement_policy"))
-
-
-cases = {
+suite_debug = {
 }
 
 prof_database = ProfilingDatabase("profiling_result.pkl", False)
@@ -78,7 +73,7 @@ def debug_case(placement):
     return ServingCase(register_models, generate_workload, place_models)
 
 
-cases["debug_manual_1"] = debug_case("manual_1")
-cases["debug_manual_2"] = debug_case("manual_2")
-cases["debug_manual_3"] = debug_case("manual_3")
-cases["debug_manual_4"] = debug_case("manual_4")
+suite_debug["debug_manual_1"] = debug_case("manual_1")
+suite_debug["debug_manual_2"] = debug_case("manual_2")
+suite_debug["debug_manual_3"] = debug_case("manual_3")
+suite_debug["debug_manual_4"] = debug_case("manual_4")

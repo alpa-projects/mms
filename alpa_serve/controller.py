@@ -14,6 +14,7 @@ from typing import Callable, List, Dict, Optional, Tuple, Any, Union
 import numpy as np
 import ray
 from ray.actor import ActorHandle
+from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
 from starlette.datastructures import QueryParams
 from starlette.middleware.cors import CORSMiddleware
 import uvicorn
@@ -395,13 +396,18 @@ def run_controller(host,
                    ssl_keyfile: Optional[str] = None,
                    ssl_certfile: Optional[Union[str, os.PathLike]] = None):
     """Launch a controller"""
-    controller = Controller.options(name=name).remote(
-        host=host,
-        port=port or new_port(),
-        root_path=root_path,
-        ssl_keyfile=ssl_keyfile,
-        ssl_certfile=ssl_certfile,
-    )
+    controller = Controller.options(
+        name=name,
+        scheduling_strategy=NodeAffinitySchedulingStrategy(
+            node_id=ray.get_runtime_context().node_id,
+            soft=False,
+        )).remote(
+            host=host,
+            port=port or new_port(),
+            root_path=root_path,
+            ssl_keyfile=ssl_keyfile,
+            ssl_certfile=ssl_certfile,
+        )
     ray.get(controller.ready.remote())
 
     add_sync_method(controller, ["create_replica", "create_mesh_group_manager"])
