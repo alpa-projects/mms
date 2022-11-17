@@ -16,7 +16,7 @@ from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelData, ClusterEnv, ModelPlacement)
 from alpa_serve.simulator.controller import simulate_one_case
 from alpa_serve.simulator.executable import Executable
-from alpa_serve.simulator.workload import Workload
+from alpa_serve.simulator.workload import Workload, GammaProcess
 from alpa_serve.util import get_factors, ServingCase
 
 
@@ -309,8 +309,9 @@ class ModelParallelismSearch(BasePlacementPolicy):
         # Generate workloads
         w = Workload.empty()
         for i, data in enumerate(model_datas):
-            w += Workload.gen_gamma(data.name, 0, data.rate, cv=data.cv,
-                    duration=self.duration, slo=data.slo, seed=self.seed + i)
+            w += GammaProcess(data.rate, data.cv).generate_workload(
+                data.name, 0, duration=self.duration,
+                slo=data.slo, seed=self.seed + i)
         self.workload = w
 
         # Get initial solutions

@@ -36,14 +36,9 @@ def method2color(name):
 
 method_order_list = [
     "sr-greedy", "sr-ilp",
-<<<<<<< HEAD
-    "mp-ilp", "mp-greedy-2",
-    "mp-greedy-4", "mp-greedy-8"
-=======
 
     "mp-ilp", "mp-search",
     "mp-greedy-2", "mp-greedy-4", "mp-greedy-8",
->>>>>>> update
 ]
 
 def method2order(name):
@@ -57,14 +52,19 @@ def read_data(filename):
     rate = cv = None
 
     for line in read_all_equal_case_tsv(filename):
-        policy, slo, goodput, cv, rate = (
+        policy, slo, goodput, arrival = (
             line["policy_name"], line["slo"], line["goodput"],
-            line["per_model_rate"], line["per_model_cv"])
-        if rate is None:
-            rate = rate
-            cv = cv
-        else:
-            assert rate == rate and cv == cv
+            line["arrival_process"])
+
+        if arrival.startswith("GammaProcess"):
+            strs = arrival.split("=")
+            rate_str = strs[1].split(',')[0]
+            cv_str = strs[2].split(')')[0]
+            if rate is None:
+                rate = int(rate_str)
+                cv = int(cv_str)
+            else:
+                assert rate == int(rate_str) and cv == int(cv_str)
         data[policy][slo] = goodput
 
     return data, {"per_model_rate": rate, "per_model_cv": cv}

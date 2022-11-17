@@ -37,7 +37,7 @@ def get_all_equal_serving_case(case, prof_database=None):
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
 
-    rates = [arrival_process.mean_rate()] * num_models
+    rates = [arrival_process.rate()] * num_models
     cvs = [arrival_process.cv()] * num_models
 
     def register_models(controller):
@@ -90,7 +90,7 @@ def simulate_one_all_equal_case(case, prof_database=None):
 
 def run_one_all_equal_case(case, prof_database=None):
     serving_case = get_all_equal_serving_case(case, prof_database)
-    stats, policy = run_one_case(serving_case)
+    stats, placement = run_one_case(serving_case)
     return stats, placement
 
 
@@ -182,11 +182,11 @@ if __name__ == "__main__":
         AllEqualCase(num_devices, mem_budget, model_type, num_models,
                      arrival_process, slo, duration, policy),]
 
-    # run_all_equal_cases(cases,
-    #                     exp_name="tmp",
-    #                     output_file="tmp.tsv",
-    #                     mode="run",
-    #                     parallel=False)
+    run_all_equal_cases(cases,
+                        exp_name="tmp",
+                        output_file="tmp.tsv",
+                        mode="run",
+                        parallel=False)
 
     run_all_equal_cases(cases,
                         exp_name="tmp",
