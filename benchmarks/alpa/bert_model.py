@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 import logging
 import time
 
@@ -34,6 +34,7 @@ bert_specs = {
 class BertModel:
     def __init__(self, model_config, profiling_result, parallel_config):
         self.latency_mem = profiling_result.para_dict[parallel_config]
+        self.batch_size_config = [1, 2, 4, 8]
         self.logger = logging.getLogger("bert_model")
         self.logger.setLevel(logging.INFO)
         tic = time.time()
@@ -111,13 +112,6 @@ class BertModel:
         add_manual_layer_marker = True
         num_manual_pipeline_stages = pp
 
-        batch = {
-            "input_ids": np.ones((batch_size, seq_len), np.int32),
-            "attention_mask": np.ones((batch_size, seq_len), np.int32),
-            "token_type_ids": np.ones((batch_size, seq_len), np.int32),
-            "position_ids": np.ones((batch_size, seq_len), np.int32),
-        }
-
         bert_config = BertConfig(
             num_labels=5,
             vocab_size=vocab_size,
@@ -166,20 +160,39 @@ class BertModel:
         def forward_func(params, batch):
             return module.apply(params, head_mask=None, **batch)
 
-        use_dummy_weights = True
-        if use_dummy_weights:
-            params = jax.eval_shape(module.init, jax.random.PRNGKey(0), **batch)
-            params = tree_map(
-                lambda x: jax.core.ShapedArray(x.shape, dtype=params_dtype),
-                params)
-        else:
-            params = module.init(jax.random.PRNGKey(0), **batch)
-            params = tree_map(lambda x: jax.asarray(x, dtype=params_dtype),
-                params)
+        executables = {}
+        for bs in self.batch_size_config:
+            batch = {
+                "input_ids": np.ones((batch_size, seq_len), np.int32),
+                "attention_mask": np.ones((batch_size, seq_len), np.int32),
+                "token_type_ids": np.ones((batch_size, seq_len), np.int32),
+                "position_ids": np.ones((batch_size, seq_len), np.int32),
+            }
 
-        executable = forward_func.get_executable(params, batch)
-        executable.dump_debug_info("tmp")
-        self.executable = executable
+            use_dummy_weights = True
+            if use_dummy_weights:
+                params = jax.eval_shape(module.init, jax.random.PRNGKey(0), **batch)
+                params = tree_map(
+                    lambda x: jax.core.ShapedArray(x.shape, dtype=params_dtype),
+                    params)
+            else:
+                params = module.init(jax.random.PRNGKey(0), **batch)
+                params = tree_map(lambda x: jax.asarray(x, dtype=params_dtype),
+                    params)
+
+            executable = forward_func.get_executable(params, batch)
+            executable.dump_debug_info("tmp")
+            executables[bs] = executable
+
+        # check all the executables share the same sharding spec
+        shared_input_shard_specs = None
+        for executable in executables.values():
+            stage_input_shard_specs = executable.stage_input_shard_specs
+            if shared_input_shard_specs is not None:
+                assert shared_input_shard_specs == stage_input_shard_specs, \
+                    "All executables must have the same input sharding specs."
+            else:
+                shared_input_shard_specs = stage_input_shard_specs
 
         # Preshard params
         if use_dummy_weights:
@@ -194,7 +207,7 @@ class BertModel:
         global_config.use_dummy_value_for_benchmarking = False
 
         # Final inference function
-        async def infer_func(src, request):
+        async def infer_func(src):
             inputs = tokenizer(src,
                                max_length=seq_len,
                                padding="max_length",
@@ -207,19 +220,21 @@ class BertModel:
                 "position_ids": np.broadcast_to(np.arange(
                     np.atleast_2d(input_ids).shape[-1]), input_ids.shape),
             }
-            outputs = executable(params, batch)
-            request.scope["ts"].append(("d", time.time()))
+            bs = input_ids.shape[0]
+            outputs = executables[bs](params, batch)
             logits = outputs.logits
             logits.prefetch()
-            return await logits.to_np_async()
+            logits = await logits.to_np_async()
+            print(bs, logits)
+            return logits
 
         return infer_func
 
     async def handle_request(self, request):
         obj = await request.json()
 
-        request.scope["ts"].append(("c", time.time()))
-        res = await self.infer_func(obj["input"], request)
+        request.scope["ts"].append(("d", time.time()))
+        res = await self.infer_func(obj["input"])
         request.scope["ts"].append(("e", time.time()))
 
         return {
