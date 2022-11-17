@@ -61,6 +61,7 @@ class ModelInfo:
 class GroupInfo:
     manager: ActorHandle
     queue_size: int
+    is_idle: bool
 
 
 @ray.remote(num_cpus=1)

@@ -28,8 +28,9 @@ class Executable:
         return self.latency_mem.latency
 
     @timed_coroutine
-    async def handle_request(self, request):
-        request.time_stamp["d"] = clock()
+    async def handle_request(self, requests):
+        for request in requests:
+            request.time_stamp["d"] = clock()
         batch_size = 1
 
         stage_latency = self.latency_mem.latency[batch_size]
@@ -42,5 +43,5 @@ class Executable:
             streams = [g.stream_name for g in mesh.gpus]
             durations = [latency] * len(streams)
             await wait_multi_stream(streams, durations)
-        request.time_stamp["e"] = clock()
-        return True
+        for request in requests:
+            request.time_stamp["e"] = clock()

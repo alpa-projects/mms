@@ -17,7 +17,7 @@ from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
     main_loop, sleep, run_event_loop)
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import Workload
-from alpa_serve.util import ServingCase
+from alpa_serve.util import ServingCase, enable_batching
 from alpa.util import to_str_round
 
 
@@ -48,7 +48,11 @@ class GroupManager:
 
         # Simulator specific code
         install_remote_methods(self)
-
+    
+    def get_latency_dict(self, name):
+        assert name in self.latency_dict
+        return self.latency_dict[name]
+    
     async def create_replica(self, name: str, create_info: CreateInfo):
         assert name not in self.replicas
 
@@ -65,10 +69,11 @@ class GroupManager:
             self.latency_dict[name] = defaultdict(lambda: [0])
 
     @timed_coroutine
-    async def handle_request(self, name: str, request):
-        request.time_stamp["b"] = clock()
+    async def handle_request(self, name: str, requests: List):
+        for request in requests:
+            request.time_stamp["b"] = clock()
 
-        if request.slo is not None:
+        if not enable_batching and requests[0].slo is not None:
             # SLO awareness
             stage_latency = self.latency_dict[name][1]
 
@@ -81,16 +86,15 @@ class GroupManager:
             ret_time = req_stage_clock[-1]
 
             # Drop this request if it will exceed deadline
-            if ret_time + self.fixed_overhead > request.submit_time + request.slo:
-                return None
+            if ret_time + self.fixed_overhead > requests[0].submit_time + requests[0].slo:
+                requests[0].rejected = True
+                return
 
             # Accept this request
             for i in range(len(stage_latency)):
                 self.stage_clock[i] = req_stage_clock[i]
 
-        ret = await self.replicas[name].handle_request(request, delay=self.alpa_overhead())
-        return ret
-
+        await self.replicas[name].handle_request(requests, delay=self.alpa_overhead())
 
 class Controller:
     """
@@ -107,12 +111,19 @@ class Controller:
         self.model_info = {}
         # Dict[int -> GroupInfo]
         self.group_info = {}
+        # Dict[str -> List]
+        self.requests_queue = {}
+        # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
+        self.latency_dict = defaultdict(dict)
 
         self.logger = build_logger("controller")
 
         # Simulator specific code
         np.random.seed(1)
         self.dispatch_overhead = partial(np.random.normal, loc=0.002, scale=0.0015)
+
+        # TODO (Yinmin): get this per-model results from profiling results
+        self.batch_configs = [1, 2]
 
         install_remote_methods(self)
 
@@ -134,7 +145,7 @@ class Controller:
         manager = (self.group_manager_class.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
-        self.group_info[group_id] = GroupInfo(manager=manager, queue_size=0)
+        self.group_info[group_id] = GroupInfo(manager=manager, queue_size=0, is_idle=True)
 
     @async_to_sync
     async def register_model(self,
@@ -154,6 +165,7 @@ class Controller:
 
             self.model_info[name] = ModelInfo(
                 CreateInfo(model_def, init_args, init_kwargs), [])
+            self.requests_queue[name] = []
 
     @async_to_sync
     async def create_replica(self,
@@ -173,16 +185,31 @@ class Controller:
             self.logger.info(f"Create replica of {name} on group {group_id}")
             model_info.group_ids.append(group_id)
         await manager.create_replica.remote(name, create_info)
+        self.latency_dict[name] = manager.get_latency_dict.remote(name)
+
+    def get_max_batch_under_slo(self, requests_queue, stage_latency):
+        # Drop requests which will exceed deadline even run immediately alone
+        batch_requests = requests_queue.copy()
+        requests_queue.clear()
+        return batch_requests
 
     def select_group_id(self, group_ids):
-        min_id = -1
-        min_size = math.inf
-        for group_id in group_ids:
-            if self.group_info[group_id].queue_size < min_size:
-                min_size = self.group_info[group_id].queue_size
-                min_id = group_id
-        assert min_id != -1
-        return min_id
+        if enable_batching:
+            # batching enabled, choose idle meshgroup if exists
+            for group_id in group_ids:
+                if self.group_info[group_id].is_idle:
+                    return group_id
+            return -1
+        else:
+            # no batching, choose meshgroup with shorsted queue length
+            min_id = -1
+            min_size = math.inf
+            for group_id in group_ids:
+                if self.group_info[group_id].queue_size < min_size:
+                    min_size = self.group_info[group_id].queue_size
+                    min_id = group_id
+            assert min_id != -1
+            return min_id
 
     @timed_coroutine
     async def handle_request(self, request):
@@ -196,16 +223,35 @@ class Controller:
         if not model_info.group_ids:
             return None
 
-        # Dispatch
         group_id = self.select_group_id(model_info.group_ids)
-        manager = self.group_info[group_id].manager
 
-        self.group_info[group_id].queue_size += 1
-        response = await manager.handle_request.remote(name, request,
-            delay=abs(self.dispatch_overhead()))
-        self.group_info[group_id].queue_size -= 1
+        if enable_batching:
+            self.requests_queue[name].append(request)
+            if group_id != -1:
+                manager = self.group_info[group_id].manager
+                batch_requests = self.get_max_batch_under_slo(self.requests_queue[name], self.latency_dict[name])
+                if not batch_requests:
+                    # all requests in queue violate SLO
+                    return
 
-        return response
+                self.group_info[group_id].is_idle = False
+                await manager.handle_request.remote(name, batch_requests, 
+                                                    delay=abs(self.dispatch_overhead()))
+                self.group_info[group_id].is_idle = True
+                for rq in batch_requests:
+                    rq.finish = True
+            else:
+                while True:
+                    await sleep(0.01)
+                    if request.finish:
+                        break
+        else:
+            manager = self.group_info[group_id].manager
+
+            self.group_info[group_id].queue_size += 1
+            await manager.handle_request.remote(name, [request],
+                delay=abs(self.dispatch_overhead()))
+            self.group_info[group_id].queue_size -= 1
 
     def sync(self):
         pass
@@ -224,10 +270,10 @@ class Client:
         t = clock()
         start[idx] = t
         request.submit_time = t
-        res = await self.controller.handle_request(request, delay=self.http_overhead())
+        await self.controller.handle_request(request, delay=self.http_overhead())
         t = clock()
         finish[idx] = t
-        good[idx] = (res is not None and
+        good[idx] = (not request.rejected and
                      t <= request.submit_time + request.slo)
 
         if self.debug:

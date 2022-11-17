@@ -5,6 +5,7 @@ import dataclasses
 import random
 from typing import Any, List, Sequence, Dict, Optional
 
+from asyncio import Event
 import numpy as np
 
 from alpa_serve.simulator.util import MMPPSampler
@@ -20,6 +21,9 @@ class Request:
     idx: int
     time_stamp: Dict            # debug only
     submit_time: float = None   # This will be filled later
+    rejected: bool = False
+    finish: bool = False
+    
 
 
 StatsResult = namedtuple("StatsResult", (
