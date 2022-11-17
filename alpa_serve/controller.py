@@ -107,44 +107,45 @@ class GroupManager:
         assert name in self.latency_dict
         return self.latency_dict[name]
 
-    async def handle_request(self, name: str, request_wrapper: bytes):
-        if isinstance(request_wrapper, bytes):
+    async def handle_request(self, name: str, requests_wrapper_bytes: bytes):
+        if isinstance(requests_wrapper_bytes, bytes):
             # The normal path
             enter_time = time.time()
-            request_wrapper = pickle.loads(request_wrapper)
-            request = build_starlette_request(request_wrapper)
-            request.scope["ts"].append(("b", enter_time))
+            requests_wrapper = pickle.loads(requests_wrapper_bytes)
+            requests = [build_starlette_request(rw) for rw in requests_wrapper]
+            for request in requests:
+                request.scope["ts"].append(("b", enter_time))
 
-            obj = await request.json()
+            if not enable_batching:
+                assert len(requests) == 1, "batching not enabled, but receive batched requests"
+                obj = await requests[0].json()
 
-            if "slo" in obj:
-                # SLO awareness
-                stage_latency = self.latency_dict[name][1]
+                if "slo" in obj:
+                    # SLO awareness
+                    stage_latency = self.latency_dict[name][1]
 
-                # Simulate clock
-                req_stage_clock = []
-                t = time.time()
-                for i in range(len(stage_latency)):
-                    t = max(self.stage_clock[i], t) + stage_latency[i]
-                    req_stage_clock.append(t)
-                ret_time = req_stage_clock[-1]
+                    # Simulate clock
+                    req_stage_clock = []
+                    t = time.time()
+                    for i in range(len(stage_latency)):
+                        t = max(self.stage_clock[i], t) + stage_latency[i]
+                        req_stage_clock.append(t)
+                    ret_time = req_stage_clock[-1]
 
-                # Drop this request if it will exceed deadline
-                if ret_time  > obj["submit_time"] + obj["slo"]:
-                    return {
-                        "rejected": True,
-                        "ts": request.scope["ts"],
-                    }
+                    # Drop this request if it will exceed deadline
+                    if ret_time  > obj["submit_time"] + obj["slo"]:
+                        requests[0].scope["rejected"] = True
+                        return
 
-                # Accept this request
-                for i in range(len(stage_latency)):
-                    self.stage_clock[i] = req_stage_clock[i]
+                    # Accept this request
+                    for i in range(len(stage_latency)):
+                        self.stage_clock[i] = req_stage_clock[i]
         else:
             # A debug path for the API compatbility with simulator
-            request = request_wrapper
+            requests = requests_wrapper_bytes
 
         try:
-            return await self.replicas[name].handle_request(request)
+            return await self.replicas[name].handle_request(requests)
         except Exception as e:  # pylint: disable=broad-except
             return RelayException(e)
 
@@ -271,13 +272,13 @@ class Controller:
         return response
 
     async def handle_asgi(self, scope, receive, send):
+        scope["rejected"] = False
         scope["ts"] = [("a", time.time())]
         assert scope["type"] == "http"
 
         # Receive request
         http_body_bytes = await receive_http_body(scope, receive, send)
         request_wrapper = HTTPRequestWrapper(scope, http_body_bytes)
-        request_wrapper_bytes = pickle.dumps(request_wrapper)
 
         query_params = QueryParams(scope["query_string"])
 
@@ -304,17 +305,21 @@ class Controller:
             if enable_batching:
                 pass
             else:
+                requests_wrapper_bytes = pickle.dumps([request_wrapper])
                 manager = self.group_info[group_id].manager
 
                 self.group_info[group_id].queue_size += 1
                 response = await manager.handle_request.remote(
-                    name, request_wrapper_bytes)
+                    name, requests_wrapper_bytes)
                 self.group_info[group_id].queue_size -= 1
-
                 if isinstance(response, RelayException):
                     response = make_error_response(response)
                     status_code = 400
                 else:
+                    response = {
+                        "rejected": scope["rejected"],
+                        "ts": scope["ts"],
+                    }
                     status_code = 200
         except Exception as e:  # pylint: disable=broad-except
             response = make_error_response(e)

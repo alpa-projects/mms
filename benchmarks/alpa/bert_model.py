@@ -34,7 +34,7 @@ bert_specs = {
 class BertModel:
     def __init__(self, model_config, profiling_result, parallel_config):
         self.latency_mem = profiling_result.para_dict[parallel_config]
-        self.batch_size_config = [1, 2, 4, 8]
+        self.batch_size_config = [1]
         self.logger = logging.getLogger("bert_model")
         self.logger.setLevel(logging.INFO)
         tic = time.time()
@@ -230,19 +230,16 @@ class BertModel:
 
         return infer_func
 
-    async def handle_request(self, request):
-        obj = await request.json()
+    async def handle_request(self, requests):
+        objs = [await request.json() for request in requests]
+        inputs = [obj["input"] for obj in objs]
 
-        request.scope["ts"].append(("d", time.time()))
-        res = await self.infer_func(obj["input"])
-        request.scope["ts"].append(("e", time.time()))
+        for request in requests:
+            request.scope["ts"].append(("d", time.time()))
+        res = await self.infer_func(inputs)
+        for request in requests:
+            request.scope["ts"].append(("e", time.time()))
 
-        return {
-            "rejected": False,
-            "logits": res.tolist(),
-            "ts": request.scope["ts"],
-        }
-    
     def get_latency_dict(self):
         return self.latency_mem.latency
 
