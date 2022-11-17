@@ -34,7 +34,7 @@ bert_specs = {
 class BertModel:
     def __init__(self, model_config, profiling_result, parallel_config):
         self.latency_mem = profiling_result.para_dict[parallel_config]
-        self.batch_size_config = [1]
+        self.batch_size_config = [1, 2, 4, 8, 16]
         self.logger = logging.getLogger("bert_model")
         self.logger.setLevel(logging.INFO)
         tic = time.time()

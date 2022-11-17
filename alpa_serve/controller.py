@@ -64,6 +64,15 @@ class GroupInfo:
     is_idle: bool
 
 
+@dataclasses.dataclass
+class RequestInfo:
+    finish: bool
+    submit_time: float
+    slo: float
+    request_wrapper: HTTPRequestWrapper
+    response: dict
+
+
 @ray.remote(num_cpus=1)
 class GroupManager:
 
@@ -245,7 +254,7 @@ class Controller:
             self.logger.info(f"Create replica of {name} on group {group_id}")
             model_info.group_ids.append(group_id)
         await manager.create_replica.remote(name, create_info)
-        self.latency_dict[name] = manager.get_latency_dict.remote(name)
+        self.latency_dict[name] = await manager.get_latency_dict.remote(name)
 
     def select_group_id(self, group_ids):
         if enable_batching:
@@ -269,14 +278,14 @@ class Controller:
         # Drop requests which will exceed deadline even run immediately alone
         while len(requests_queue):
             request = requests_queue.popleft()
-            if clock() + sum(stage_latency[1]) + self.fixed_overhead > request.submit_time + request.slo:
+            if time.time() + sum(stage_latency[1]) > request.submit_time + request.slo:
                 request.finish = True
-                request.rejected = True
+                request.response = {"rejected": True, "ts": {}}
             else:
                 break
 
         # All the requests in queue are rejected
-        if request.rejected:
+        if request.finish:
             return []
         
         # Batch as much as we can
@@ -286,7 +295,7 @@ class Controller:
             if bs - 1 > len(requests_queue):
                 break
             # violate slo
-            if clock() + sum(stage_latency[bs]) + self.fixed_overhead > request.submit_time + request.slo:
+            if time.time() + sum(stage_latency[bs]) > request.submit_time + request.slo:
                 break
             choosed_bs = bs
 
@@ -299,17 +308,24 @@ class Controller:
     async def send_batched_requests_to_manager(self, name: str, group_id: int):
         manager = self.group_info[group_id].manager
         batch_requests = self.get_max_batch_under_slo(self.requests_queue[name], self.latency_dict[name])
+
         if not batch_requests:
             # all requests in queue violate SLO
             return
 
+        requests_wrapper_bytes = pickle.dumps([rq.request_wrapper for rq in batch_requests])
         self.group_info[group_id].is_idle = False
-        await manager.handle_request.remote(name, batch_requests, 
-                                            delay=abs(self.dispatch_overhead()))
+        response = await manager.handle_request.remote(name, requests_wrapper_bytes)
         self.group_info[group_id].is_idle = True
 
-        for rq in batch_requests:
-            rq.finish = True
+        if isinstance(response, RelayException):
+            for rq in batch_requests:
+                rq.finish = True
+                rq.response = response
+        else:
+            for rq, res in zip(batch_requests, response):
+                rq.finish = True
+                rq.response = res
 
     async def handle_request(self, request):
         name = request.model_name
@@ -331,7 +347,6 @@ class Controller:
         return response
 
     async def handle_asgi(self, scope, receive, send):
-        scope["rejected"] = False
         scope["ts"] = [("a", time.time())]
         assert scope["type"] == "http"
 
@@ -343,14 +358,11 @@ class Controller:
 
         # Route
         try:
-            if "model" in query_params:
-                name = query_params["model"]
-            else:
-                request = build_starlette_request(request_wrapper)
-                obj = await request.json()
+            request = build_starlette_request(request_wrapper)
+            obj = await request.json()
 
-                assert "model" in obj, "Model name is not specified in the request."
-                name = obj["model"]
+            assert "model" in obj, "Model name is not specified in the request."
+            name = obj["model"]
 
             assert name in self.model_info, (
                 f"Model '{name}' is not registered.")
@@ -362,26 +374,33 @@ class Controller:
             group_id = self.select_group_id(model_info.group_ids)
             
             if enable_batching:
-                self.requests_queue[name].append({"finish": False, 
-                                                  "rw": request_wrapper,
-                                                  "res": None})
+                rq_info = RequestInfo(False, obj["submit_time"], obj["slo"], request_wrapper, None)
+                self.requests_queue[name].append(rq_info)
                 if group_id != -1:
                     await self.send_batched_requests_to_manager(name, group_id)                
 
                 while True:
-                    if request.finish:
+                    if rq_info.finish:
                         break
 
                     # If the request queue is only consumed when new request comes,
                     # the system may starve. To avoid this, the request in the
                     # queue also serve as consumer who is responsible to batch requests
                     # when idle meshgroup is available. This code is crucial for performance.
-                    if len(self.requests_queue[name]) and request in self.requests_queue[name]:
+                    if len(self.requests_queue[name]) and rq_info in self.requests_queue[name]:
                         group_id = self.select_group_id(model_info.group_ids)
                         if group_id != -1:
                             await self.send_batched_requests_to_manager(name, group_id)
 
                     await asyncio.sleep(0.01)
+                
+                assert rq_info.response is not None
+                response = rq_info.response
+                if isinstance(response, RelayException):
+                    response = make_error_response(response)
+                    status_code = 400
+                else:
+                    status_code = 200
             else:
                 requests_wrapper_bytes = pickle.dumps([request_wrapper])
                 manager = self.group_info[group_id].manager
@@ -390,6 +409,7 @@ class Controller:
                 response = await manager.handle_request.remote(
                     name, requests_wrapper_bytes)
                 self.group_info[group_id].queue_size -= 1
+
                 if isinstance(response, RelayException):
                     response = make_error_response(response)
                     status_code = 400
