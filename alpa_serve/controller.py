@@ -1,7 +1,7 @@
 #pylint: disable=missing-class-docstring, raise-missing-from
 """Central controller"""
 import asyncio
-from collections import defaultdict
+from collections import defaultdict, deque
 import dataclasses
 import logging
 import math
@@ -24,7 +24,7 @@ from alpa_serve.http_util import (HTTPRequestWrapper, receive_http_body,
                                   Response, set_socket_reuse_port, ASGIHandler,
                                   build_starlette_request, new_port,
                                   RelayException, make_error_response)
-from alpa_serve.util import build_logger, add_sync_method
+from alpa_serve.util import build_logger, add_sync_method, enable_batching
 
 logger = logging.getLogger(__file__)
 
@@ -103,6 +103,10 @@ class GroupManager:
         assert name in self.replicas
         del self.replicas[name]
 
+    def get_latency_dict(self, name):
+        assert name in self.latency_dict
+        return self.latency_dict[name]
+
     async def handle_request(self, name: str, request_wrapper: bytes):
         if isinstance(request_wrapper, bytes):
             # The normal path
@@ -171,6 +175,10 @@ class Controller:
         self.model_info = {}
         # Dict[int -> GroupInfo]
         self.group_info = {}
+        # Dict[str -> List]
+        self.requests_queue = {}
+        # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
+        self.latency_dict = defaultdict(dict)
 
         self.logger = build_logger()
 
@@ -193,7 +201,7 @@ class Controller:
         manager = (self.group_manager_class.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
-        self.group_info[group_id] = GroupInfo(manager=manager, queue_size=0)
+        self.group_info[group_id] = GroupInfo(manager=manager, queue_size=0, is_idle=True)
 
     async def register_model(self,
                              name: str,
@@ -212,6 +220,7 @@ class Controller:
 
             self.model_info[name] = ModelInfo(
                 CreateInfo(model_def, init_args, init_kwargs), [])
+            self.requests_queue[name] = deque()
 
     async def create_replica(self,
                              name: str,
@@ -230,6 +239,7 @@ class Controller:
             self.logger.info(f"Create replica of {name} on group {group_id}")
             model_info.group_ids.append(group_id)
         await manager.create_replica.remote(name, create_info)
+        self.latency_dict[name] = manager.get_latency_dict.remote(name)
 
     def select_group_id(self, group_ids):
         min_id = -1
@@ -290,18 +300,22 @@ class Controller:
 
             # Dispatch
             group_id = self.select_group_id(model_info.group_ids)
-            manager = self.group_info[group_id].manager
-
-            self.group_info[group_id].queue_size += 1
-            response = await manager.handle_request.remote(
-                name, request_wrapper_bytes)
-            self.group_info[group_id].queue_size -= 1
-
-            if isinstance(response, RelayException):
-                response = make_error_response(response)
-                status_code = 400
+            
+            if enable_batching:
+                pass
             else:
-                status_code = 200
+                manager = self.group_info[group_id].manager
+
+                self.group_info[group_id].queue_size += 1
+                response = await manager.handle_request.remote(
+                    name, request_wrapper_bytes)
+                self.group_info[group_id].queue_size -= 1
+
+                if isinstance(response, RelayException):
+                    response = make_error_response(response)
+                    status_code = 400
+                else:
+                    status_code = 200
         except Exception as e:  # pylint: disable=broad-except
             response = make_error_response(e)
             status_code = 400
