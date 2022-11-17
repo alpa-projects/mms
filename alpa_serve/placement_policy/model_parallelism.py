@@ -17,7 +17,7 @@ from alpa_serve.placement_policy.base_policy import (
 from alpa_serve.simulator.controller import simulate_one_case
 from alpa_serve.simulator.executable import Executable
 from alpa_serve.simulator.workload import Workload, GammaProcess
-from alpa_serve.util import get_factors, ServingCase
+from alpa_serve.util import get_factors, ServingCase, eps
 
 
 def compute_capability(model_data, parallel_config, max_bs):
@@ -250,7 +250,7 @@ class ModelParallelismGreedy(BasePlacementPolicy):
                         weight_mem[m_id] + used_mem[g_id] <= mem_budget):
                         modified = True
                         if len(candidates):
-                            if used_mem[g_id] == used_mem[candidates[0]]:
+                            if abs(used_mem[g_id] - used_mem[candidates[0]]) < eps:
                                 candidates.append(g_id)
                         else:
                             candidates.append(g_id)
@@ -391,7 +391,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 else inf
                 for x in model_datas]
 
-        single_throughput = {}  # Dict[parallel_config -> [model_idx -> weight_mem]]
+        single_throughput = {}  # Dict[parallel_config -> [model_idx -> capability]]
         for parallel_config in sol.group_configs:
             tmp_throughput = [
                 compute_capability(x, parallel_config, self.max_bs)
@@ -425,7 +425,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
                         weight_mem[parallel_config][m_id] + used_mem[g_id] <= mem_budget):
                         modified = True
                         if len(candidates):
-                            if used_mem[g_id] == used_mem[candidates[0]]:
+                            if abs(used_mem[g_id] - used_mem[candidates[0]]) < eps:
                                 candidates.append(g_id)
                         else:
                             candidates.append(g_id)

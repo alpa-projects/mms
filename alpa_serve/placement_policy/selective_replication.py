@@ -10,6 +10,7 @@ from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelPlacement, ModelData, ClusterEnv)
+from alpa_serve.util import eps
 
 
 def compute_single_throughput(model_data, max_bs):
@@ -158,7 +159,7 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
                         weight_mem[m_id] + used_mem[d_id] <= mem_budget):
                         modified = True
                         if len(candidates):
-                            if used_mem[d_id] == used_mem[candidates[0]]:
+                            if abs(used_mem[d_id] - used_mem[candidates[0]]) < eps:
                                 candidates.append(d_id)
                         else:
                             candidates.append(d_id)
