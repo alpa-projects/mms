@@ -116,6 +116,8 @@ class Controller:
         # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
         self.latency_dict = defaultdict(dict)
 
+        self.batch_configs = [2, 4, 8, 16]
+
         self.logger = build_logger("controller")
 
         # Simulator specific code
@@ -124,8 +126,6 @@ class Controller:
         # Constants
         self.fixed_overhead = 0.004
 
-        # TODO (Yinmin): get this per-model results from profiling results
-        self.batch_configs = [2, 4, 8, 16]
 
         install_remote_methods(self)
 

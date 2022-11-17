@@ -225,7 +225,6 @@ class BertModel:
             logits = outputs.logits
             logits.prefetch()
             logits = await logits.to_np_async()
-            print(bs, logits)
             return logits
 
         return infer_func
@@ -239,6 +238,8 @@ class BertModel:
         res = await self.infer_func(inputs)
         for request in requests:
             request.scope["ts"].append(("e", time.time()))
+        
+        return [{"rejected": False, "ts": request.scope["ts"]} for request in requests]
 
     def get_latency_dict(self):
         return self.latency_mem.latency

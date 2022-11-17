@@ -118,7 +118,8 @@ class GroupManager:
 
             if not enable_batching:
                 assert len(requests) == 1, "batching not enabled, but receive batched requests"
-                obj = await requests[0].json()
+                request = requests[0]
+                obj = await request.json()
 
                 if "slo" in obj:
                     # SLO awareness
@@ -134,8 +135,10 @@ class GroupManager:
 
                     # Drop this request if it will exceed deadline
                     if ret_time  > obj["submit_time"] + obj["slo"]:
-                        requests[0].scope["rejected"] = True
-                        return
+                        return [{
+                            "rejected": True,
+                            "ts": request.scope["ts"],
+                        }]
 
                     # Accept this request
                     for i in range(len(stage_latency)):
@@ -180,6 +183,8 @@ class Controller:
         self.requests_queue = {}
         # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
         self.latency_dict = defaultdict(dict)
+
+        self.batch_configs = [2, 4, 8, 16]
 
         self.logger = build_logger()
 
@@ -243,14 +248,68 @@ class Controller:
         self.latency_dict[name] = manager.get_latency_dict.remote(name)
 
     def select_group_id(self, group_ids):
-        min_id = -1
-        min_size = math.inf
-        for group_id in group_ids:
-            if self.group_info[group_id].queue_size < min_size:
-                min_size = self.group_info[group_id].queue_size
-                min_id = group_id
-        assert min_id != -1
-        return min_id
+        if enable_batching:
+            # batching enabled, choose idle meshgroup if exists
+            for group_id in group_ids:
+                if self.group_info[group_id].is_idle:
+                    return group_id
+            return -1
+        else:
+            # no batching, choose meshgroup with shorsted queue length
+            min_id = -1
+            min_size = math.inf
+            for group_id in group_ids:
+                if self.group_info[group_id].queue_size < min_size:
+                    min_size = self.group_info[group_id].queue_size
+                    min_id = group_id
+            assert min_id != -1
+            return min_id
+
+    def get_max_batch_under_slo(self, requests_queue, stage_latency):
+        # Drop requests which will exceed deadline even run immediately alone
+        while len(requests_queue):
+            request = requests_queue.popleft()
+            if clock() + sum(stage_latency[1]) + self.fixed_overhead > request.submit_time + request.slo:
+                request.finish = True
+                request.rejected = True
+            else:
+                break
+
+        # All the requests in queue are rejected
+        if request.rejected:
+            return []
+        
+        # Batch as much as we can
+        choosed_bs = 1
+        for bs in self.batch_configs:
+            # remaining requests is not enough (no padding)
+            if bs - 1 > len(requests_queue):
+                break
+            # violate slo
+            if clock() + sum(stage_latency[bs]) + self.fixed_overhead > request.submit_time + request.slo:
+                break
+            choosed_bs = bs
+
+        batch_requests = [request]
+        for _ in range(choosed_bs - 1):
+            batch_requests.append(requests_queue.popleft())
+
+        return batch_requests
+
+    async def send_batched_requests_to_manager(self, name: str, group_id: int):
+        manager = self.group_info[group_id].manager
+        batch_requests = self.get_max_batch_under_slo(self.requests_queue[name], self.latency_dict[name])
+        if not batch_requests:
+            # all requests in queue violate SLO
+            return
+
+        self.group_info[group_id].is_idle = False
+        await manager.handle_request.remote(name, batch_requests, 
+                                            delay=abs(self.dispatch_overhead()))
+        self.group_info[group_id].is_idle = True
+
+        for rq in batch_requests:
+            rq.finish = True
 
     async def handle_request(self, request):
         name = request.model_name
@@ -303,7 +362,26 @@ class Controller:
             group_id = self.select_group_id(model_info.group_ids)
             
             if enable_batching:
-                pass
+                self.requests_queue[name].append({"finish": False, 
+                                                  "rw": request_wrapper,
+                                                  "res": None})
+                if group_id != -1:
+                    await self.send_batched_requests_to_manager(name, group_id)                
+
+                while True:
+                    if request.finish:
+                        break
+
+                    # If the request queue is only consumed when new request comes,
+                    # the system may starve. To avoid this, the request in the
+                    # queue also serve as consumer who is responsible to batch requests
+                    # when idle meshgroup is available. This code is crucial for performance.
+                    if len(self.requests_queue[name]) and request in self.requests_queue[name]:
+                        group_id = self.select_group_id(model_info.group_ids)
+                        if group_id != -1:
+                            await self.send_batched_requests_to_manager(name, group_id)
+
+                    await asyncio.sleep(0.01)
             else:
                 requests_wrapper_bytes = pickle.dumps([request_wrapper])
                 manager = self.group_info[group_id].manager
@@ -316,10 +394,7 @@ class Controller:
                     response = make_error_response(response)
                     status_code = 400
                 else:
-                    response = {
-                        "rejected": scope["rejected"],
-                        "ts": scope["ts"],
-                    }
+                    response = response[0]
                     status_code = 200
         except Exception as e:  # pylint: disable=broad-except
             response = make_error_response(e)
