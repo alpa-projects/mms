@@ -31,9 +31,8 @@ class Executable:
     async def handle_request(self, requests):
         for request in requests:
             request.time_stamp["d"] = clock()
-        batch_size = 1
 
-        stage_latency = self.latency_mem.latency[batch_size]
+        stage_latency = self.latency_mem.latency[len(requests)]
         for mesh, latency in zip(self.mesh_group.meshes, stage_latency):
             # SPMD version
             #stream = mesh.gpus[0].stream_name

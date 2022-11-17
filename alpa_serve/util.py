@@ -8,7 +8,7 @@ from typing import Sequence, Any
 import ray
 
 # global config
-enable_batching = False
+enable_batching = True
 
 # A general serving case.
 # We can simulate or run such a case.

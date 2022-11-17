@@ -21,7 +21,7 @@ def debug_case(placement):
             "b", get_model_def("bert-1.3b", is_simulator, prof_database))
 
     def generate_workload(start=0):
-        arrival_process = PoissonProcess(4)
+        arrival_process = PoissonProcess(5)
         w1 = arrival_process.generate_workload("a", start, 60, slo=0.5, seed=1)
         w2 = arrival_process.generate_workload("b", start, 60, slo=0.5, seed=2)
         w = w1 + w2
