@@ -278,13 +278,13 @@ class Controller:
                     break
 
                 # If the request queue is only consumed when new request comes,
-                # the system may starve. To avoid this, the head request in the
-                # queue is responsible to batch requests when idle meshgroup is available
-                if len(self.requests_queue[name]) and request == self.requests_queue[name][0]:
+                # the system may starve. To avoid this, the request in the
+                # queue also serve as consumer who is responsible to batch requests
+                # when idle meshgroup is available. This code is crucial for performance.
+                if len(self.requests_queue[name]) and request in self.requests_queue[name]:
                     group_id = self.select_group_id(model_info.group_ids)
                     if group_id != -1:
                         await self.send_batched_requests_to_manager(name, group_id)
-                    break
 
                 await sleep(0.01)
         else:
