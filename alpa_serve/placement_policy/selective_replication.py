@@ -9,7 +9,8 @@ from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
 
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
-    BasePlacementPolicy, ModelData, ClusterEnv)
+    BasePlacementPolicy, ModelPlacement, ModelData, ClusterEnv)
+from alpa_serve.util import eps
 
 
 def compute_single_throughput(model_data, max_bs):
@@ -28,7 +29,7 @@ def compute_single_throughput(model_data, max_bs):
 
 class SelectiveReplicationILP(BasePlacementPolicy):
 
-    def __init__(self, verbose=False):
+    def __init__(self, verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.max_bs = 1
@@ -86,7 +87,7 @@ class SelectiveReplicationILP(BasePlacementPolicy):
         status = prob.status
         objective = pulp.value(prob.objective)
         objective = float(objective) if objective is not None else -1.0
-        if self.verbose:
+        if self.verbose >= 2:
             print(f"ILP Status: {LpStatus[status]}\tObjective: {objective}\t"
                   f"Time: {time.time() - tic}")
 
@@ -112,12 +113,12 @@ class SelectiveReplicationILP(BasePlacementPolicy):
             group_configs.append(ParallelConfig(1, 1, 1))
             group_models.append(tmp)
 
-        return group_configs, group_models, {"objective": objective}
+        return ModelPlacement(group_configs, group_models), {"objective": objective}
 
 
 class SelectiveReplicationGreedy(BasePlacementPolicy):
 
-    def __init__(self, verbose=False):
+    def __init__(self, verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.max_bs = 1
@@ -158,7 +159,7 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
                         weight_mem[m_id] + used_mem[d_id] <= mem_budget):
                         modified = True
                         if len(candidates):
-                            if used_mem[d_id] == used_mem[candidates[0]]:
+                            if abs(used_mem[d_id] - used_mem[candidates[0]]) < eps:
                                 candidates.append(d_id)
                         else:
                             candidates.append(d_id)
@@ -182,4 +183,5 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
             group_configs.append(parallel_config)
             group_models.append(list(model_set[i]))
 
-        return group_configs, group_models, {"objective": min(burst_tolerance)}
+        return (ModelPlacement(group_configs, group_models),
+                {"objective": min(burst_tolerance)})

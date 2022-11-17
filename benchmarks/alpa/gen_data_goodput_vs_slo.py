@@ -16,7 +16,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-greedy", "mp-greedy-4", "mp-greedy-8"]
+    policies = ["sr-greedy", "mp-greedy-8", "mp-search"]
     num_devices = 8
     mem_budget = 10 * GB
     model_type = "bert-1.3b"
@@ -24,7 +24,7 @@ if __name__ == "__main__":
     per_model_rate = 4
     per_model_cv = 4
     arrival_process = GammaProcess(per_model_rate, per_model_cv)
-    slos = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0, 4.0, 8.0]
+    slos = [0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0, 4.0, 8.0]
     duration = 200
 
     cases = []

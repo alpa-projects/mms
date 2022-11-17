@@ -40,31 +40,32 @@ if __name__ == "__main__":
     data = read_all_equal_case_tsv(args.input)
 
     # maximum num models one can serve
-    print("----- maximum #models -----")
     num_devices = 8
     model_type = "bert-2.6b"
-    slos = [0.6, 0.8, 1.0, 2.0]
-    policy_names = ["sr-greedy", "mp-greedy-4"]
+    slos = [0.2, 0.4, 0.6, 0.8, 1.0, 2.0]
+    policy_names = ["sr-greedy", "mp-greedy-4", "mp-search"]
     goodput = 0.99
 
+    print("- maximum #models")
     for slo in slos:
+        print(f"-- slo = {slo}")
         for policy_name in policy_names:
             max_num_models = find_max_num_models(
                 data, num_devices, model_type, slo, policy_name, goodput)
-            print(slo, policy_name, max_num_models)
-    print("---------------------------")
+            print(f"    {policy_name:12} = {max_num_models}")
+    print()
 
     # num devices required
-    print("----- min #devices -----")
     model_type = "bert-2.6b"
     num_models_list = [1, 2, 4, 6, 8]
-    policy_names = ["sr-greedy", "mp-greedy-4"]
+    policy_names = ["sr-greedy", "mp-greedy-4", "mp-search"]
     goodput = 0.99
     slo = 0.9
 
+    print("- min #devices")
     for num_models in num_models_list:
+        print(f"-- #models = {num_models}")
         for policy_name in policy_names:
             min_num_devices = find_min_num_devices(
                 data, model_type, num_models, slo, policy_name, goodput)
-            print(num_models, policy_name, min_num_devices)
-    print("------------------------")
+            print(f"    {policy_name:12} = {min_num_devices}")

@@ -5,7 +5,13 @@ from typing import List
 
 import numpy as np
 
-from alpa_serve.profiling import ProfilingResult
+from alpa_serve.profiling import ProfilingResult, ParallelConfig
+
+
+@dataclasses.dataclass
+class ModelPlacement:
+    group_configs: List[ParallelConfig]
+    group_models: List[List[int]]
 
 
 @dataclasses.dataclass
@@ -27,27 +33,36 @@ class ClusterEnv:
 class BasePlacementPolicy:
     """The baseclass of placement policy"""
 
-    def __init__(self, verbose=False):
+    def __init__(self, verbose: int = 0):
         self.verbose = verbose
-        self.group_configs = None
-        self.group_models = None
-        self.debug_info = None
 
-    def place_models(self, controller,
-                     model_datas: List[ModelData], cluster_env: ClusterEnv):
+    def place_models(self, controller, cluster_env: ClusterEnv,
+                     model_datas: List[ModelData]):
         tic = time.time()
-        (self.group_configs, self.group_models, self.debug_info
-         ) = self.solve_placement(model_datas, cluster_env)
+        (placement, debug_info) = self.solve_placement(model_datas, cluster_env)
         solver_time = time.time() - tic
 
-        assert len(self.group_configs) == len(self.group_models)
-        num_groups = len(self.group_configs)
+        self.place_models_impl(controller, cluster_env, model_datas, placement)
+
+        if self.verbose >= 1:
+            print(f"placement solution: {placement}")
+            print(f"debug info: {debug_info}")
+            print(f"solver time: {solver_time:.2f} s")
+
+        return placement
+
+    def place_models_impl(self, controller,
+                          cluster_env: ClusterEnv,
+                          model_datas: List[ModelData],
+                          placement: ModelPlacement):
+        group_configs, group_models = placement.group_configs, placement.group_models
+        assert len(group_configs) == len(group_models)
+        num_groups = len(group_configs)
 
         # Create mesh group manager
         for g_id in range(num_groups):
-            num_devices = np.prod(self.group_configs[g_id])
+            num_devices = np.prod(group_configs[g_id])
             num_devices_per_node = cluster_env.num_devices_per_node
-            pp_size = self.group_configs[g_id].pp
 
             if num_devices <= num_devices_per_node:
                 virtual_mesh_shape = (1, num_devices)
@@ -61,18 +76,7 @@ class BasePlacementPolicy:
 
         # Create model replicas
         for g_id in range(num_groups):
-            for m_id in self.group_models[g_id]:
+            for m_id in group_models[g_id]:
                 name = model_datas[m_id].name
-                controller.create_replica.remote(name, g_id, [self.group_configs[g_id]])
+                controller.create_replica.remote(name, g_id, [group_configs[g_id]])
         controller.sync()
-
-        if self.verbose:
-            print(f"group configs: {self.group_configs}")
-            print(f"group models: {self.group_models}")
-            print(f"debug info: {self.debug_info}")
-            print(f"solver time: {solver_time:.2f}")
-
-    def __str__(self):
-        group_strs = [f"({config}, {models})" for config, models
-                      in zip(self.group_configs, self.group_models)]
-        return f"{self.__class__.__name__}([" + ", ".join(group_strs) + "])"

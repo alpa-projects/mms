@@ -32,7 +32,7 @@ PerModelStatsResult = namedtuple("PerModelStatsResult",
 
 class ArrivalProcess(ABC):
     @abstractmethod
-    def mean_rate(self):
+    def rate(self):
         """Return the mean arrival rate."""
         raise NotImplementedError()
 
@@ -59,7 +59,7 @@ class ArrivalProcess(ABC):
 
     def __str__(self):
         return (f"{self.__class__.__name__}("
-                f"mean_rate={self.mean_rate()}, "
+                f"rate={self.rate()}, "
                 f"cv={self.cv()})")
 
 
@@ -72,10 +72,10 @@ class DeterministicProcess(ArrivalProcess):
             arrival_rate (float): The arrival rate of the process. The gap
                 between the requests is 1 / arrival_rate seconds.
         """
-        self.arrival_rate = arrival_rate
+        self.rate_ = arrival_rate
 
-    def mean_rate(self):
-        return self.arrival_rate
+    def rate(self):
+        return self.rate_
 
     def cv(self):
         return 0
@@ -83,8 +83,8 @@ class DeterministicProcess(ArrivalProcess):
     def generate_workload(self, model_name: str, start: float,
                           duration: float, slo: Optional[float] = None,
                           seed: int = 0):
-        n_requests = int(duration * self.arrival_rate)
-        interval = 1 / self.arrival_rate
+        n_requests = int(duration * self.rate_)
+        interval = 1 / self.rate_
         ticks = [start + i * interval for i in range(n_requests)]
         return Workload(ticks, [
             Request(model_name, None, slo, i, {}) for i in range(n_requests)])
@@ -100,13 +100,13 @@ class GammaProcess(ArrivalProcess):
             cv: coefficient of variation. When cv == 1, the arrival process is
                 Poisson process.
         """
-        self.rate = arrival_rate
+        self.rate_ = arrival_rate
         self.cv_ = cv
         self.shape = 1 / (cv * cv)
         self.scale = cv * cv / arrival_rate
 
-    def mean_rate(self):
-        return self.rate
+    def rate(self):
+        return self.rate_
 
     def cv(self):
         return self.cv_
@@ -170,7 +170,7 @@ class UniformMMPP(ArrivalProcess):
                                          * self.state_request_rates)
                                   / np.sum(self.state_durations))
 
-    def mean_rate(self):
+    def rate(self):
         return self.mean_arrival_rate
 
     def cv(self):

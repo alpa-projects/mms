@@ -10,6 +10,7 @@ import ray
 from alpa_serve.controller import run_controller
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.simulator.workload import Workload
+from alpa_serve.simulator.controller import run_workload
 from alpa_serve.util import ServingCase
 from alpa.util import to_str_round
 
@@ -70,31 +71,23 @@ class Client:
         return workload.compute_stats(start, finish, good, warmup)
 
 
-async def run_workload(client, workload):
-    client.submit_workload(workload)
-
-    await client.wait_all()
-
-    return client.compute_stats(workload, warmup=10)
-
-
-def run_one_case(case: ServingCase, port=20001):
+def run_one_case(case: ServingCase, warmup=10, port=20001):
     register_models, generate_workload, place_models = case
 
     # Launch the controller
     controller = run_controller("localhost", port=port, name=None)
     register_models(controller)
-    placement_policy = place_models(controller)
+    placement = place_models(controller)
 
     # Launch the client
     client = Client(f"http://localhost:{port}")
     workload = generate_workload(start=time.time() + 2)
 
     # Run workloads
-    stats = asyncio.run(run_workload(client, workload))
+    stats = asyncio.run(run_workload(client, workload, warmup))
     ray.get(controller.shutdown.remote())
     del controller, client
-    return stats, placement_policy
+    return stats, placement
 
 
 if __name__ == "__main__":
@@ -104,5 +97,5 @@ if __name__ == "__main__":
 
     ray.init(address="auto")
 
-    stats, _ = run_one_case(suite_debug[args.case])
+    stats, placement = run_one_case(suite_debug[args.case])
     Workload.print_stats(stats)

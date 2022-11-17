@@ -3,16 +3,16 @@ from collections import namedtuple, defaultdict
 
 import ray
 
-from alpa_serve.simulator.controller import Controller
+from alpa_serve.simulator.controller import Controller, simulate_one_case
 from alpa_serve.simulator.workload import Workload, GammaProcess
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
-    ModelParallelismILP, ModelParallelismGreedy)
+    ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
+from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.util import GB, write_tsv, ServingCase
 
 from benchmarks.alpa.util import get_model_def
-from benchmarks.alpa.simulate_one_case import simulate_one_case
 from benchmarks.alpa.run_one_case import run_one_case
 
 
@@ -37,7 +37,7 @@ def get_all_equal_serving_case(case, prof_database=None):
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
 
-    rates = [arrival_process.mean_rate()] * num_models
+    rates = [arrival_process.rate()] * num_models
     cvs = [arrival_process.cv()] * num_models
 
     def register_models(controller):
@@ -63,33 +63,35 @@ def get_all_equal_serving_case(case, prof_database=None):
                                prof_database.get(model_types[i])))
 
         if policy_name == "sr-ilp":
-            policy = SelectiveReplicationILP(verbose=True)
+            policy = SelectiveReplicationILP(verbose=1)
         elif policy_name == "sr-greedy":
-            policy = SelectiveReplicationGreedy(verbose=True)
+            policy = SelectiveReplicationGreedy(verbose=1)
         elif policy_name == "mp-ilp":
-            policy = ModelParallelismILP(verbose=True)
+            policy = ModelParallelismILP(verbose=1)
+        elif policy_name == "mp-search":
+            policy = ModelParallelismSearch(verbose=2)
         elif "mp-greedy" in policy_name:
             group_size = int(policy_name.split("-")[2])
-            policy = ModelParallelismGreedy(group_size=group_size, verbose=True)
+            policy = ModelParallelismGreedy(group_size=group_size, verbose=1)
         else:
             raise ValueError(f"Invalid placement policy: {policy_name}")
 
-        policy.place_models(controller, model_datas, cluster_env)
-        return policy
+        placement = policy.place_models(controller, cluster_env, model_datas)
+        return placement
 
     return ServingCase(register_models, generate_workload, place_models)
 
 
 def simulate_one_all_equal_case(case, prof_database=None):
     serving_case = get_all_equal_serving_case(case, prof_database)
-    stats, policy = simulate_one_case(serving_case)
-    return stats, None
+    stats, placement = simulate_one_case(serving_case)
+    return stats, placement
 
 
 def run_one_all_equal_case(case, prof_database=None):
     serving_case = get_all_equal_serving_case(case, prof_database)
-    stats, policy = run_one_case(serving_case)
-    return stats, None
+    stats, placement = run_one_case(serving_case)
+    return stats, placement
 
 
 _DATA_HEADS = ("exp_name", "num_devices", "mem_budget", "model_type",
@@ -180,11 +182,11 @@ if __name__ == "__main__":
         AllEqualCase(num_devices, mem_budget, model_type, num_models,
                      arrival_process, slo, duration, policy),]
 
-    # run_all_equal_cases(cases,
-    #                     exp_name="tmp",
-    #                     output_file="tmp.tsv",
-    #                     mode="run",
-    #                     parallel=False)
+    run_all_equal_cases(cases,
+                        exp_name="tmp",
+                        output_file="tmp.tsv",
+                        mode="run",
+                        parallel=False)
 
     run_all_equal_cases(cases,
                         exp_name="tmp",

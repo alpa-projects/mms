@@ -13,9 +13,11 @@ import numpy as np
 
 from alpa_serve.controller import CreateInfo, ModelInfo, GroupInfo, build_logger
 from alpa_serve.simulator.cluster import VirtualMesh
-from alpa_serve.simulator.event_loop import timed_coroutine, clock, main_loop, sleep
+from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
+    main_loop, sleep, run_event_loop)
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import Workload
+from alpa_serve.util import ServingCase
 from alpa.util import to_str_round
 
 
@@ -37,7 +39,7 @@ class GroupManager:
 
         self.stage_clock = [0] * np.prod(virtual_mesh_shape)
 
-        self.logger = build_logger()
+        self.logger = build_logger("group_manager")
 
         # Constants
         self.fixed_overhead = 0.004
@@ -106,7 +108,7 @@ class Controller:
         # Dict[int -> GroupInfo]
         self.group_info = {}
 
-        self.logger = build_logger()
+        self.logger = build_logger("controller")
 
         # Simulator specific code
         np.random.seed(1)
@@ -248,3 +250,28 @@ class Client:
     def compute_stats(self, workload: Workload, warmup: float):
         start, finish, good = self.res_dict[workload]
         return workload.compute_stats(start, finish, good, warmup)
+
+
+async def run_workload(client, workload, warmup):
+    client.submit_workload(workload)
+
+    await client.wait_all()
+
+    return client.compute_stats(workload, warmup=warmup)
+
+
+def simulate_one_case(case: ServingCase, warmup=10, debug=False):
+    register_models, generate_workload, place_models = case
+
+    # Launch the controller
+    controller = Controller()
+    register_models(controller)
+    placement = place_models(controller)
+
+    # Launch the client
+    client = Client(controller, debug=debug)
+    workload = generate_workload()
+
+    # Run workloads
+    stats = run_event_loop(run_workload(client, workload, warmup))
+    return stats, placement
