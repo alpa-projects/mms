@@ -159,11 +159,12 @@ class GroupManager:
         actual_runtime = time.time() - start_time
         predicted_runtime = ret_time - start_time
         ratio = actual_runtime / predicted_runtime
-        lr = 0.5 if ratio > self.target_ratio else 0.05
-        self.latency_scale += lr * (ratio - self.target_ratio)
 
         if ratio > 3 or ratio < 0.3:
             self.logger.warning("The error of latency estimation is too high.")
+
+        lr = 0.2 if ratio > self.target_ratio else 0.1
+        self.latency_scale += lr * (ratio - self.target_ratio)
 
         # Recompute all clock estimations
         delta = time.time() - self.request_clocks[clock_idx][i]
