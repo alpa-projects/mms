@@ -11,6 +11,8 @@ import jax.numpy as jnp
 from jax.tree_util import tree_flatten, tree_unflatten, tree_leaves, tree_map
 import numpy as np
 
+from alpa_serve.util import enable_batching
+
 
 BertModelConfig = namedtuple(
     "BertModelConfig",
@@ -34,7 +36,7 @@ bert_specs = {
 class BertModel:
     def __init__(self, model_config, profiling_result, parallel_config):
         self.latency_mem = profiling_result.para_dict[parallel_config]
-        self.batch_size_config = [1, 2, 4, 8, 16]
+        self.batch_size_config = [1, 2, 4, 8, 16] if enable_batching else [1]
         self.logger = logging.getLogger("bert_model")
         self.logger.setLevel(logging.INFO)
         tic = time.time()
@@ -207,7 +209,7 @@ class BertModel:
         global_config.use_dummy_value_for_benchmarking = False
 
         # Final inference function
-        async def infer_func(src):
+        async def infer_func(src, requests):
             inputs = tokenizer(src,
                                max_length=seq_len,
                                padding="max_length",
@@ -224,7 +226,11 @@ class BertModel:
             outputs = executables[bs](params, batch)
             logits = outputs.logits
             logits.prefetch()
+            for request in requests:
+                request.scope["ts"].append(("d", time.time()))
             logits = await logits.to_np_async()
+            for request in requests:
+                request.scope["ts"].append(("e", time.time()))
             return logits
 
         return infer_func
@@ -234,11 +240,9 @@ class BertModel:
         inputs = [obj["input"] for obj in objs]
 
         for request in requests:
-            request.scope["ts"].append(("d", time.time()))
-        res = await self.infer_func(inputs)
-        for request in requests:
-            request.scope["ts"].append(("e", time.time()))
-        
+            request.scope["ts"].append(("c", time.time()))
+        res = await self.infer_func(inputs, requests)
+       
         return [{"rejected": False, "ts": request.scope["ts"]} for request in requests]
 
     def get_latency_dict(self):

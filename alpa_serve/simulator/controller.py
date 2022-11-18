@@ -42,7 +42,7 @@ class GroupManager:
         self.logger = build_logger("group_manager")
 
         # Constants
-        self.fixed_overhead = 0.004
+        self.fixed_overhead = 0.004 # ray overhead
 
         self.alpa_overhead = partial(np.random.normal, loc=0.004, scale=0.001)
 
@@ -111,7 +111,7 @@ class Controller:
         self.model_info = {}
         # Dict[int -> GroupInfo]
         self.group_info = {}
-        # Dict[str -> List]
+        # Dict[str -> Deque]
         self.requests_queue = {}
         # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
         self.latency_dict = defaultdict(dict)
@@ -123,9 +123,9 @@ class Controller:
         # Simulator specific code
         np.random.seed(1)
         self.dispatch_overhead = partial(np.random.normal, loc=0.002, scale=0.0015)
-        # Constants
-        self.fixed_overhead = 0.004
 
+        # Constants
+        self.fixed_overhead = 0.002 + 0.004 # dispatch + ray overhead
 
         install_remote_methods(self)
 

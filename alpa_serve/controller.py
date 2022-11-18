@@ -92,6 +92,9 @@ class GroupManager:
 
         self.stage_clock = [0] * np.prod(virtual_mesh_shape)
 
+        # Constants
+        self.fixed_overhead = 0.004 # ray overhead
+
         self.logger = build_logger()
 
     def create_replica(self, name: str, create_info: CreateInfo):
@@ -136,7 +139,7 @@ class GroupManager:
 
                     # Simulate clock
                     req_stage_clock = []
-                    t = time.time()
+                    t = time.time() + self.fixed_overhead
                     for i in range(len(stage_latency)):
                         t = max(self.stage_clock[i], t) + stage_latency[i]
                         req_stage_clock.append(t)
@@ -188,12 +191,15 @@ class Controller:
         self.model_info = {}
         # Dict[int -> GroupInfo]
         self.group_info = {}
-        # Dict[str -> List]
+        # Dict[str -> Deque]
         self.requests_queue = {}
         # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
         self.latency_dict = defaultdict(dict)
 
         self.batch_configs = [2, 4, 8, 16]
+
+        # Constants
+        self.fixed_overhead = 0.002 + 0.004 # dispatch + ray overhead
 
         self.logger = build_logger()
 
@@ -278,7 +284,7 @@ class Controller:
         # Drop requests which will exceed deadline even run immediately alone
         while len(requests_queue):
             request = requests_queue.popleft()
-            if time.time() + sum(stage_latency[1]) > request.submit_time + request.slo:
+            if time.time() + sum(stage_latency[1]) + self.fixed_overhead > request.submit_time + request.slo:
                 request.finish = True
                 request.response = {"rejected": True, "ts": {}}
             else:
@@ -295,7 +301,7 @@ class Controller:
             if bs - 1 > len(requests_queue):
                 break
             # violate slo
-            if time.time() + sum(stage_latency[bs]) > request.submit_time + request.slo:
+            if time.time() + sum(stage_latency[bs]) + self.fixed_overhead > request.submit_time + request.slo:
                 break
             choosed_bs = bs
 
