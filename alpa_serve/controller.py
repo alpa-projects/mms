@@ -61,7 +61,7 @@ class ModelInfo:
 class GroupInfo:
     manager: ActorHandle
     queue_size: int
-    is_idle: bool
+    stage_clock: List[float]
 
 
 @dataclasses.dataclass

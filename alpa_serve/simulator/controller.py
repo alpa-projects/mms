@@ -46,6 +46,8 @@ class GroupManager:
         self.latency_dict = defaultdict(dict)
 
         self.stage_clock = [0] * np.prod(virtual_mesh_shape)
+    
+        self.is_idle_ = True
 
         self.logger = build_logger("group_manager")
 
@@ -60,6 +62,9 @@ class GroupManager:
     def get_latency_dict(self, name):
         assert name in self.latency_dict
         return self.latency_dict[name]
+    
+    def is_idle(self):
+        return self.is_idle_
     
     async def create_replica(self, name: str, create_info: CreateInfo):
         assert name not in self.replicas
@@ -101,7 +106,7 @@ class GroupManager:
             for i in range(len(stage_latency)):
                 self.stage_clock[i] = req_stage_clock[i]
 
-        ret = await self.replicas[name].handle_request(requests, delay=self.alpa_overhead())
+        ret = await self.replicas[name].handle_request(requests, self, delay=self.alpa_overhead())
         return ret
 
 class Controller:
@@ -155,7 +160,7 @@ class Controller:
         manager = (self.group_manager_class.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
-        self.group_info[group_id] = GroupInfo(manager=manager, queue_size=0, is_idle=True)
+        self.group_info[group_id] = GroupInfo(manager=manager, queue_size=0, stage_clock=[0] * np.prod(virtual_mesh_shape))
 
     @async_to_sync
     async def register_model(self,
@@ -201,7 +206,7 @@ class Controller:
         if enable_batching:
             # batching enabled, choose idle meshgroup if exists
             for group_id in group_ids:
-                if self.group_info[group_id].is_idle:
+                if self.group_info[group_id].manager.is_idle.remote():
                     return group_id
             return -1
         else:
@@ -215,14 +220,31 @@ class Controller:
             assert min_id != -1
             return min_id
 
-    def get_max_batch_under_slo(self, requests_queue, stage_latency):
+    def check_slo(self, group_id, stage_latency, deadline):
+        # Simulate clock
+        req_stage_clock = []
+        stage_clock = self.group_info[group_id].stage_clock
+        t = clock()
+        for i in range(len(stage_latency)):
+            t = max(stage_clock[i], t) + stage_latency[i]
+            req_stage_clock.append(t)
+        ret_time = req_stage_clock[-1]
+
+        if ret_time + self.fixed_overhead > deadline:
+            return None
+        else:
+            return req_stage_clock
+
+    def get_max_batch_under_slo(self, requests_queue, stage_latency, group_id):
         # Drop requests which will exceed deadline even run immediately alone
         while len(requests_queue):
             rq_info = requests_queue.popleft()
-            if clock() + sum(stage_latency[1]) + self.fixed_overhead > rq_info.request.submit_time + rq_info.request.slo:
+            ret = self.check_slo(group_id, stage_latency[1], rq_info.request.submit_time + rq_info.request.slo)
+            if ret is None:
                 rq_info.finish = True
                 rq_info.response = False
             else:
+                req_stage_clock = ret
                 break
 
         # All the requests in queue are rejected
@@ -235,10 +257,16 @@ class Controller:
             # remaining requests is not enough (no padding)
             if bs - 1 > len(requests_queue):
                 break
-            # violate slo
-            if clock() + sum(stage_latency[bs]) + self.fixed_overhead > rq_info.request.submit_time + rq_info.request.slo:
+            # check if violate slo
+            ret = self.check_slo(group_id, stage_latency[bs], rq_info.request.submit_time + rq_info.request.slo)
+            if ret is None:
                 break
             choosed_bs = bs
+            req_stage_clock = ret
+
+        # Accept this request
+        for i in range(len(stage_latency[choosed_bs])):
+            self.group_info[group_id].stage_clock[i] = req_stage_clock[i]
 
         batch_rq_info = [rq_info]
         for _ in range(choosed_bs - 1):
@@ -249,16 +277,14 @@ class Controller:
     @timed_coroutine
     async def send_batched_requests_to_manager(self, name: str, group_id: int):
         manager = self.group_info[group_id].manager
-        batch_rq_info = self.get_max_batch_under_slo(self.requests_queue[name], self.latency_dict[name])
+        batch_rq_info = self.get_max_batch_under_slo(self.requests_queue[name], self.latency_dict[name], group_id)
         if not batch_rq_info:
             # all requests in queue violate SLO
             return
 
         batch_requests = [rq_info.request for rq_info in batch_rq_info]
-        self.group_info[group_id].is_idle = False
         res = await manager.handle_request.remote(name, batch_requests, 
                                                   delay=abs(self.dispatch_overhead()))
-        self.group_info[group_id].is_idle = True
 
         for rq_info in batch_rq_info:
             rq_info.finish = True

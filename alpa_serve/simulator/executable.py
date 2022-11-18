@@ -28,12 +28,13 @@ class Executable:
         return self.latency_mem.latency
 
     @timed_coroutine
-    async def handle_request(self, requests):
+    async def handle_request(self, requests, manager):
         for request in requests:
             request.time_stamp["d"] = clock()
 
         stage_latency = self.latency_mem.latency[len(requests)]
-        for mesh, latency in zip(self.mesh_group.meshes, stage_latency):
+        manager.is_idle_ = False
+        for i, (mesh, latency) in enumerate(zip(self.mesh_group.meshes, stage_latency)):
             # SPMD version
             #stream = mesh.gpus[0].stream_name
             #await wait_stream(stream, latency)
@@ -42,6 +43,10 @@ class Executable:
             streams = [g.stream_name for g in mesh.gpus]
             durations = [latency] * len(streams)
             await wait_multi_stream(streams, durations)
+
+            # The GroupManager can receive requests when the first stage is idle
+            if i == 0:
+                manager.is_idle_ = True
         for request in requests:
             request.time_stamp["e"] = clock()
         return True
