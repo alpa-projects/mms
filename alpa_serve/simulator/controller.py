@@ -92,14 +92,14 @@ class GroupManager:
 
             # Simulate clock
             req_stage_clock = []
-            t = clock()
+            t = clock() + self.fixed_overhead
             for i in range(len(stage_latency)):
                 t = max(self.stage_clock[i], t) + stage_latency[i]
                 req_stage_clock.append(t)
             ret_time = req_stage_clock[-1]
 
             # Drop this request if it will exceed deadline
-            if ret_time + self.fixed_overhead > requests[0].submit_time + requests[0].slo:
+            if ret_time > requests[0].submit_time + requests[0].slo:
                 return False
 
             # Accept this request
@@ -224,13 +224,13 @@ class Controller:
         # Simulate clock
         req_stage_clock = []
         stage_clock = self.group_info[group_id].stage_clock
-        t = clock()
+        t = clock() + self.fixed_overhead
         for i in range(len(stage_latency)):
             t = max(stage_clock[i], t) + stage_latency[i]
             req_stage_clock.append(t)
         ret_time = req_stage_clock[-1]
 
-        if ret_time + self.fixed_overhead > deadline:
+        if ret_time > deadline:
             return None
         else:
             return req_stage_clock
