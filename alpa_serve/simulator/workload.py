@@ -12,19 +12,19 @@ from alpa_serve.simulator.util import MMPPSampler
 from alpa.util import to_str_round
 
 
+
 @dataclasses.dataclass
 class Request:
-    """A single request."""
+    """A single request.
+       Do not save stateful information in this class, since
+       a single workload may be used many times in random search.
+    """
     model_name: str
     data: Any
     slo: Optional[float]
     idx: int
     time_stamp: Dict            # debug only
     submit_time: float = None   # This will be filled later
-    rejected: bool = False
-    finish: bool = False
-    
-
 
 StatsResult = namedtuple("StatsResult", (
     "per_model_stats", "average_goodput", "total_num_requests", "total_request_rate"))

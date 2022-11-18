@@ -4,9 +4,10 @@ The serving controller.
 This file simulates `alpa_serve/controler.py`.
 """
 import asyncio
-import math
 from collections import defaultdict, deque
+import dataclasses
 from functools import partial
+import math
 from typing import Callable, List, Dict, Optional, Tuple
 
 import numpy as np
@@ -16,9 +17,16 @@ from alpa_serve.simulator.cluster import VirtualMesh
 from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
     main_loop, sleep, run_event_loop)
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
-from alpa_serve.simulator.workload import Workload
+from alpa_serve.simulator.workload import Request, Workload
 from alpa_serve.util import ServingCase, enable_batching
 from alpa.util import to_str_round
+
+
+@dataclasses.dataclass
+class RequestInfo:
+    finish: bool
+    request: Request
+    response: dict
 
 
 class GroupManager:
@@ -87,7 +95,7 @@ class GroupManager:
 
             # Drop this request if it will exceed deadline
             if ret_time + self.fixed_overhead > requests[0].submit_time + requests[0].slo:
-                return None
+                return False
 
             # Accept this request
             for i in range(len(stage_latency)):
@@ -210,15 +218,15 @@ class Controller:
     def get_max_batch_under_slo(self, requests_queue, stage_latency):
         # Drop requests which will exceed deadline even run immediately alone
         while len(requests_queue):
-            request = requests_queue.popleft()
-            if clock() + sum(stage_latency[1]) + self.fixed_overhead > request.submit_time + request.slo:
-                request.finish = True
-                request.rejected = True
+            rq_info = requests_queue.popleft()
+            if clock() + sum(stage_latency[1]) + self.fixed_overhead > rq_info.request.submit_time + rq_info.request.slo:
+                rq_info.finish = True
+                rq_info.response = False
             else:
                 break
 
         # All the requests in queue are rejected
-        if request.rejected:
+        if rq_info.finish:
             return []
         
         # Batch as much as we can
@@ -228,31 +236,33 @@ class Controller:
             if bs - 1 > len(requests_queue):
                 break
             # violate slo
-            if clock() + sum(stage_latency[bs]) + self.fixed_overhead > request.submit_time + request.slo:
+            if clock() + sum(stage_latency[bs]) + self.fixed_overhead > rq_info.request.submit_time + rq_info.request.slo:
                 break
             choosed_bs = bs
 
-        batch_requests = [request]
+        batch_rq_info = [rq_info]
         for _ in range(choosed_bs - 1):
-            batch_requests.append(requests_queue.popleft())
+            batch_rq_info.append(requests_queue.popleft())
 
-        return batch_requests
+        return batch_rq_info
 
     @timed_coroutine
     async def send_batched_requests_to_manager(self, name: str, group_id: int):
         manager = self.group_info[group_id].manager
-        batch_requests = self.get_max_batch_under_slo(self.requests_queue[name], self.latency_dict[name])
-        if not batch_requests:
+        batch_rq_info = self.get_max_batch_under_slo(self.requests_queue[name], self.latency_dict[name])
+        if not batch_rq_info:
             # all requests in queue violate SLO
             return
 
+        batch_requests = [rq_info.request for rq_info in batch_rq_info]
         self.group_info[group_id].is_idle = False
-        await manager.handle_request.remote(name, batch_requests, 
-                                            delay=abs(self.dispatch_overhead()))
+        res = await manager.handle_request.remote(name, batch_requests, 
+                                                  delay=abs(self.dispatch_overhead()))
         self.group_info[group_id].is_idle = True
 
-        for rq in batch_requests:
-            rq.finish = True
+        for rq_info in batch_rq_info:
+            rq_info.finish = True
+            rq_info.response = res
 
     @timed_coroutine
     async def handle_request(self, request):
@@ -269,26 +279,28 @@ class Controller:
         group_id = self.select_group_id(model_info.group_ids)
 
         if enable_batching:
-            self.requests_queue[name].append(request)
+            rq_info = RequestInfo(False, request, None)
+            self.requests_queue[name].append(rq_info)
             if group_id != -1:
                 await self.send_batched_requests_to_manager(name, group_id)                
 
             while True:
-                if request.finish:
+                if rq_info.finish:
                     break
 
                 # If the request queue is only consumed when new request comes,
                 # the system may starve. To avoid this, the request in the
                 # queue also serve as consumer who is responsible to batch requests
                 # when idle meshgroup is available. This code is crucial for performance.
-                if len(self.requests_queue[name]) and request in self.requests_queue[name]:
+                if len(self.requests_queue[name]) and rq_info in self.requests_queue[name]:
                     group_id = self.select_group_id(model_info.group_ids)
                     if group_id != -1:
                         await self.send_batched_requests_to_manager(name, group_id)
 
                 await sleep(0.01)
-
-            return None if request.rejected else True
+            
+            assert rq_info.response is not None
+            return rq_info.response
         else:
             manager = self.group_info[group_id].manager
             self.group_info[group_id].queue_size += 1
@@ -317,8 +329,7 @@ class Client:
         res = await self.controller.handle_request(request, delay=self.http_overhead())
         t = clock()
         finish[idx] = t
-        good[idx] = (res is not None and
-                     t <= request.submit_time + request.slo)
+        good[idx] = (res and t <= request.submit_time + request.slo)
 
         if self.debug:
             e2e_latency = finish[idx] - start[idx]
