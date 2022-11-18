@@ -87,14 +87,14 @@ class GroupManager:
 
             # Drop this request if it will exceed deadline
             if ret_time + self.fixed_overhead > requests[0].submit_time + requests[0].slo:
-                requests[0].rejected = True
-                return
+                return None
 
             # Accept this request
             for i in range(len(stage_latency)):
                 self.stage_clock[i] = req_stage_clock[i]
 
-        await self.replicas[name].handle_request(requests, delay=self.alpa_overhead())
+        ret = await self.replicas[name].handle_request(requests, delay=self.alpa_overhead())
+        return ret
 
 class Controller:
     """
@@ -287,12 +287,15 @@ class Controller:
                         await self.send_batched_requests_to_manager(name, group_id)
 
                 await sleep(0.01)
+
+            return None if request.rejected else True
         else:
             manager = self.group_info[group_id].manager
             self.group_info[group_id].queue_size += 1
-            await manager.handle_request.remote(name, [request],
+            response = await manager.handle_request.remote(name, [request],
                 delay=abs(self.dispatch_overhead()))
             self.group_info[group_id].queue_size -= 1
+            return response
 
     def sync(self):
         pass
@@ -311,10 +314,10 @@ class Client:
         t = clock()
         start[idx] = t
         request.submit_time = t
-        await self.controller.handle_request(request, delay=self.http_overhead())
+        res = await self.controller.handle_request(request, delay=self.http_overhead())
         t = clock()
         finish[idx] = t
-        good[idx] = (not request.rejected and
+        good[idx] = (res is not None and
                      t <= request.submit_time + request.slo)
 
         if self.debug:

@@ -44,3 +44,4 @@ class Executable:
             await wait_multi_stream(streams, durations)
         for request in requests:
             request.time_stamp["e"] = clock()
+        return True
