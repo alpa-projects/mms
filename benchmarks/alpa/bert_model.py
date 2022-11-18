@@ -109,7 +109,6 @@ class BertModel:
         # Create model
         seq_len, hidden_size, num_layers, num_heads, vocab_size = model_config
         dp, op, pp = parallel_config
-        batch_size = 1
         dtype = params_dtype = jnp.float16
         add_manual_layer_marker = True
         num_manual_pipeline_stages = pp
@@ -165,10 +164,10 @@ class BertModel:
         executables = {}
         for bs in self.batch_size_config:
             batch = {
-                "input_ids": np.ones((batch_size, seq_len), np.int32),
-                "attention_mask": np.ones((batch_size, seq_len), np.int32),
-                "token_type_ids": np.ones((batch_size, seq_len), np.int32),
-                "position_ids": np.ones((batch_size, seq_len), np.int32),
+                "input_ids": np.ones((bs, seq_len), np.int32),
+                "attention_mask": np.ones((bs, seq_len), np.int32),
+                "token_type_ids": np.ones((bs, seq_len), np.int32),
+                "position_ids": np.ones((bs, seq_len), np.int32),
             }
 
             use_dummy_weights = True
@@ -231,6 +230,7 @@ class BertModel:
             logits = await logits.to_np_async()
             for request in requests:
                 request.scope["ts"].append(("e", time.time()))
+            assert logits.shape[0] == bs
             return logits
 
         return infer_func
@@ -242,8 +242,9 @@ class BertModel:
         for request in requests:
             request.scope["ts"].append(("c", time.time()))
         res = await self.infer_func(inputs, requests)
+        res = res.tolist()
        
-        return [{"rejected": False, "ts": request.scope["ts"]} for request in requests]
+        return [{"rejected": False, "logits": res[i], "ts": request.scope["ts"]} for i, request in enumerate(requests)]
 
     def get_latency_dict(self):
         return self.latency_mem.latency
