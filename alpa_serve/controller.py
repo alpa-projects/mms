@@ -155,7 +155,6 @@ class GroupManager:
         except Exception as e:  # pylint: disable=broad-except
             ret = RelayException(e)
 
-
         # Adjust the clock estimation
         actual_runtime = time.time() - start_time
         predicted_runtime = ret_time - start_time
