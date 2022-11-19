@@ -18,7 +18,7 @@ from benchmarks.alpa.suite_debug import suite_debug
 
 
 class Client:
-    def __init__(self, url, debug=False, max_workers=20):
+    def __init__(self, url, debug=False, max_workers=30):
         self.url = url
         self.debug = debug
         self.executor = concurrent.futures.ProcessPoolExecutor(max_workers=max_workers)
