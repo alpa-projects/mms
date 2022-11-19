@@ -166,15 +166,15 @@ def read_all_equal_case_tsv(filename):
 
 
 if __name__ == "__main__":
-    policy = "sr-greedy"
+    policy = "mp-greedy-2"
     num_devices = 4
     mem_budget = 12 * GB
     model_type = "bert-1.3b"
-    num_models = 2
-    per_model_rate = 2
+    num_models = 4
+    per_model_rate = 8
     per_model_cv = 4
-    slo = 0.4
-    duration = 50
+    slo = 0.5
+    duration = 60
 
     arrival_process = GammaProcess(per_model_rate, per_model_cv)
 

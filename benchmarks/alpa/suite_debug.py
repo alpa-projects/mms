@@ -11,7 +11,7 @@ suite_debug = {
 
 prof_database = ProfilingDatabase("profiling_result.pkl", False)
 
-def debug_case(placement):
+def debug_case(per_model_rate, duration, placement):
     def register_models(controller):
         is_simulator = isinstance(controller, Controller)
 
@@ -21,14 +21,14 @@ def debug_case(placement):
             "b", get_model_def("bert-1.3b", is_simulator, prof_database))
 
     def generate_workload(start=0):
-        arrival_process = PoissonProcess(4)
-        w1 = arrival_process.generate_workload("a", start, 60, slo=0.5, seed=1)
-        w2 = arrival_process.generate_workload("b", start, 60, slo=0.5, seed=2)
+        arrival_process = PoissonProcess(per_model_rate)
+        w1 = arrival_process.generate_workload("a", start, duration, slo=0.5, seed=1)
+        w2 = arrival_process.generate_workload("b", start, duration, slo=0.5, seed=2)
         w = w1 + w2
         return w
 
     def place_models(controller):
-        if placement == "manual_1":
+        if placement == "replicate":
             group_id = 0
             controller.create_mesh_group_manager.remote(group_id, [1, 1])
             controller.create_replica.remote(
@@ -38,7 +38,7 @@ def debug_case(placement):
             controller.create_mesh_group_manager.remote(group_id, [1, 1])
             controller.create_replica.remote(
                 "b", group_id, [ParallelConfig(1, 1, 1)])
-        elif placement == "manual_2":
+        elif placement == "replicate_2x":
             group_id = 0
             controller.create_mesh_group_manager.remote(group_id, [1, 1])
             controller.create_replica.remote(
@@ -52,20 +52,20 @@ def debug_case(placement):
                 "a", group_id, [ParallelConfig(1, 1, 1)])
             controller.create_replica.remote(
                 "b", group_id, [ParallelConfig(1, 1, 1)])
-        elif placement == "manual_3":
+        elif placement == "pipeline_2x":
             group_id = 0
             controller.create_mesh_group_manager.remote(group_id, [1, 2])
             controller.create_replica.remote(
                 "a", group_id, [ParallelConfig(1, 1, 2)])
             controller.create_replica.remote(
                 "b", group_id, [ParallelConfig(1, 1, 2)])
-        elif placement == "manual_4":
+        elif placement == "pipeline_8x":
             group_id = 0
-            controller.create_mesh_group_manager.remote(group_id, [1, 1])
+            controller.create_mesh_group_manager.remote(group_id, [1, 8])
             controller.create_replica.remote(
-                "a", group_id, [ParallelConfig(1, 1, 1)])
+                "a", group_id, [ParallelConfig(1, 1, 8)])
             controller.create_replica.remote(
-                "b", group_id, [ParallelConfig(1, 1, 1)])
+                "b", group_id, [ParallelConfig(1, 1, 8)])
         else:
             raise ValueError(f"Invalid placement: {placement}")
 
@@ -74,7 +74,8 @@ def debug_case(placement):
     return ServingCase(register_models, generate_workload, place_models)
 
 
-suite_debug["debug_manual_1"] = debug_case("manual_1")
-suite_debug["debug_manual_2"] = debug_case("manual_2")
-suite_debug["debug_manual_3"] = debug_case("manual_3")
-suite_debug["debug_manual_4"] = debug_case("manual_4")
+suite_debug["debug_replicate"] = debug_case(4, 60, "replicate")
+suite_debug["debug_replicate_2x"] = debug_case(4, 60, "replicate_2x")
+suite_debug["debug_pipeline"] = debug_case(4, 60, "pipeline_2x")
+suite_debug["debug_replicate_overloaded"] = debug_case(30, 30, "replicate")
+suite_debug["debug_pipeline_overloaded"] = debug_case(30, 30, "pipeline_2x")

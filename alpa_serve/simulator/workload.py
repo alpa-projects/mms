@@ -282,7 +282,7 @@ class Workload:
                   f"p90: {stat.latency_p90*1e3:.2f} ms")
         print("--- overall ---")
         print(f"total #req: {stats.total_num_requests}, "
-              f"request rate: {stats.total_request_rate:.2f} q/s")
+              f"rate: {stats.total_request_rate:.2f} q/s")
         print(f"average goodput: {stats.average_goodput*100:.2f} %")
 
     @classmethod
@@ -307,6 +307,7 @@ class Workload:
         for i, j in enumerate(sorted_indices):
             arrivals[i] = merged_arrivals[j]
             requests[i] = merged_requests[j]
+            requests[i].idx = i
 
         return cls(arrivals, requests)
 

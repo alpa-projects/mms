@@ -29,8 +29,9 @@ from alpa_serve.util import build_logger, add_sync_method
 logger = logging.getLogger(__file__)
 
 CONTROLLER_NAME = "controller"
-SOCKET_REUSE_PORT_ENABLED = (os.environ.get("SERVE_SOCKET_REUSE_PORT_ENABLED",
-                                            "1") == "1")
+#SOCKET_REUSE_PORT_ENABLED = (os.environ.get("SERVE_SOCKET_REUSE_PORT_ENABLED",
+#                                            "1") == "1")
+SOCKET_REUSE_PORT_ENABLED = False
 
 
 @dataclasses.dataclass
@@ -80,9 +81,17 @@ class GroupManager:
         # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
         self.latency_dict = defaultdict(dict)
 
-        self.stage_clock = [0] * np.prod(virtual_mesh_shape)
+        # Latency prediction
+        self.request_clocks = [[0] * np.prod(virtual_mesh_shape)]
+        self.request_starts = [0]
+        self.request_stage_latency = [None]
+        self.latency_scale = 1.0
+        self.target_ratio = 0.98
 
         self.logger = build_logger()
+
+        # Constants
+        self.fixed_overhead = 0.004
 
     def create_replica(self, name: str, create_info: CreateInfo):
         assert name not in self.replicas
@@ -117,31 +126,61 @@ class GroupManager:
                 stage_latency = self.latency_dict[name][1]
 
                 # Simulate clock
+                start_time = t = time.time()
                 req_stage_clock = []
-                t = time.time()
                 for i in range(len(stage_latency)):
-                    t = max(self.stage_clock[i], t) + stage_latency[i]
+                    t = max(self.request_clocks[-1][i], t) + stage_latency[i] * self.latency_scale
                     req_stage_clock.append(t)
                 ret_time = req_stage_clock[-1]
 
                 # Drop this request if it will exceed deadline
-                if ret_time  > obj["submit_time"] + obj["slo"]:
+                if ret_time + self.fixed_overhead > obj["submit_time"] + obj["slo"]:
                     return {
                         "rejected": True,
                         "ts": request.scope["ts"],
                     }
 
                 # Accept this request
-                for i in range(len(stage_latency)):
-                    self.stage_clock[i] = req_stage_clock[i]
+                clock_idx = len(self.request_clocks)
+                self.request_clocks.append(req_stage_clock)
+                self.request_starts.append(start_time)
+                self.request_stage_latency.append(stage_latency)
         else:
             # A debug path for the API compatbility with simulator
             request = request_wrapper
+            ret_time = None
 
         try:
-            return await self.replicas[name].handle_request(request)
+            ret = await self.replicas[name].handle_request(request)
         except Exception as e:  # pylint: disable=broad-except
-            return RelayException(e)
+            ret = RelayException(e)
+
+        # Adjust the clock estimation
+        actual_runtime = time.time() - start_time
+        predicted_runtime = ret_time - start_time
+        ratio = actual_runtime / predicted_runtime
+
+        if ratio > 3 or ratio < 0.3:
+            self.logger.warning("The error of latency estimation is too high.")
+
+        lr = 0.2 if ratio > self.target_ratio else 0.1
+        self.latency_scale += lr * (ratio - self.target_ratio)
+
+        # Recompute all clock estimations
+        delta = time.time() - self.request_clocks[clock_idx][i]
+        for i in range(len(stage_latency)):
+            self.request_clocks[clock_idx][i] += delta
+        clock_idx += 1
+        while clock_idx < len(self.request_clocks):
+            t = self.request_starts[clock_idx]
+            stage_latency = self.request_stage_latency[clock_idx]
+            for i in range(len(stage_latency)):
+                t = (max(self.request_clocks[clock_idx-1][i], t) +
+                     stage_latency[i] * self.latency_scale)
+                self.request_clocks[clock_idx][i] = t
+            clock_idx += 1
+
+        return ret
 
     def shutdown(self):
         del self.replicas
