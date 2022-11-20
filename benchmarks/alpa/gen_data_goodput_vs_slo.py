@@ -22,7 +22,8 @@ if __name__ == "__main__":
     num_models = 16
     total_rate = 64
     rate_distribution = "power_law"
-    per_model_cv = 4
+    arrival_process = "gamma"
+    arrival_process_kwargs = {"cv": 4}
     slos = [0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0, 4.0, 8.0]
     duration = 200
 
@@ -32,7 +33,7 @@ if __name__ == "__main__":
             cases.append(EqualModelCase(
                 num_devices, mem_budget, model_type, num_models,
                 total_rate, rate_distribution,
-                "gamma", {"cv": per_model_cv},
+                arrival_process, arrival_process_kwargs,
                 slo, duration, policy_name))
 
     run_equal_model_cases(cases,

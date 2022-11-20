@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 
-from benchmarks.alpa.equal_model_case import read_equal_model_case
+from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
 
 show_name_dict = {
     "sr-greedy":   "Selective Replication (greedy)",
@@ -51,7 +51,7 @@ def read_data(filename):
 
     rate = cv = None
 
-    for line in read_equal_model_case(filename):
+    for line in read_equal_model_case_tsv(filename):
         policy, slo, goodput, total_rate, kwargs = (
             line["policy_name"], line["slo"], line["goodput"],
             line["total_rate"], line["arrival_process_kwargs"])

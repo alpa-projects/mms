@@ -160,7 +160,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
     return results
 
 
-def read_equal_model_case(filename):
+def read_equal_model_case_tsv(filename):
     rows = []  # List[dict]
 
     for line in open(filename):
