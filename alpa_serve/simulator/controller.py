@@ -14,7 +14,7 @@ from typing import Callable, List, Dict, Optional, Tuple
 
 import numpy as np
 
-from alpa_serve.controller import CreateInfo, ModelInfo, GroupInfo, build_logger
+from alpa_serve.controller import CreateInfo, ModelInfo, GroupInfo, RequestStatus, build_logger
 from alpa_serve.simulator.cluster import VirtualMesh
 from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
     main_loop, sleep, run_event_loop)
@@ -26,7 +26,7 @@ from alpa.util import to_str_round
 
 @dataclasses.dataclass
 class RequestInfo:
-    finish: bool
+    status: RequestStatus
     request: Request
     response: bool
 
@@ -101,14 +101,14 @@ class GroupManager:
             rq_info = requests_queue.popleft()
             ret = self.check_slo(stage_latency[1], rq_info.request.submit_time + rq_info.request.slo)
             if ret is None:
-                rq_info.finish = True
+                rq_info.status = RequestStatus.DONE
                 rq_info.response = False
             else:
                 req_stage_clock = ret
                 break
 
         # All the requests in queue are rejected
-        if rq_info.finish:
+        if rq_info.status == RequestStatus.DONE:
             return []
         
         # Batch as much as we can
@@ -146,6 +146,9 @@ class GroupManager:
             # all requests in queue violate SLO
             return
 
+        for request in batch_rq_info:
+            request.status = RequestStatus.EXEC
+
         batch_requests = [rq_info.request for rq_info in batch_rq_info]
         # GroupManager becomes idle after it finishes the first pipeline stage
         thd = threading.Thread(target=self.acquire_manager, args=(self.latency_dict[name][len(batch_requests)][0],))
@@ -154,7 +157,7 @@ class GroupManager:
         thd.join()
 
         for rq_info in batch_rq_info:
-            rq_info.finish = True
+            rq_info.status = RequestStatus.DONE
             rq_info.response = res
 
     @timed_coroutine
@@ -163,25 +166,25 @@ class GroupManager:
         request.time_stamp["b"] = clock()
 
         if enable_batching:
-            rq_info = RequestInfo(False, request, None)
+            rq_info = RequestInfo(RequestStatus.WAIT, request, None)
             self.requests_queue[name].append(rq_info)
             if self.is_idle:
                 await self.handle_batched_requests(name)
 
             while True:
-                if rq_info.finish:
+                # The performance is also sensitive to this sleep interval
+                await sleep(0.001)
+ 
+                if rq_info.status == RequestStatus.DONE:
                     break
 
                 # If the request queue is only consumed when new request comes,
                 # the system may starve. To avoid this, all the requests in the
                 # queue should serve as consumer that is responsible to batch requests
                 # when current meshgroup becomes idle. This code is crucial for performance.
-                if self.is_idle and rq_info in self.requests_queue[name]:
+                if self.is_idle and rq_info.status == RequestStatus.WAIT:
                     await self.handle_batched_requests(name)
-
-                # The performance is also sensitive to this sleep interval
-                await sleep(0.001)
-            
+           
             assert rq_info.response is not None
             return rq_info.response
         else:
