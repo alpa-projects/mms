@@ -168,7 +168,8 @@ class GroupManager:
                 if self.is_idle and rq_info in self.requests_queue[name]:
                     await self.handle_batched_requests(name)
 
-                await sleep(0.01)
+                # The performance is also sensitive to this sleep interval
+                await sleep(0.001)
             
             assert rq_info.response is not None
             return rq_info.response
