@@ -8,6 +8,8 @@ from collections import defaultdict, deque
 import dataclasses
 from functools import partial
 import math
+import threading
+import time
 from typing import Callable, List, Dict, Optional, Tuple
 
 import numpy as np
@@ -132,6 +134,11 @@ class GroupManager:
 
         return batch_rq_info
 
+    def acquire_manager(self, interval):
+        self.is_idle = False
+        time.sleep(interval)
+        self.is_idle = True
+
     @timed_coroutine
     async def handle_batched_requests(self, name: str):
         batch_rq_info = self.get_max_batch_under_slo(self.requests_queue[name], self.latency_dict[name])
@@ -140,7 +147,11 @@ class GroupManager:
             return
 
         batch_requests = [rq_info.request for rq_info in batch_rq_info]
-        res = await self.replicas[name].handle_request(batch_requests, self, delay=self.alpa_overhead())
+        # GroupManager becomes idle after it finishes the first pipeline stage
+        thd = threading.Thread(target=self.acquire_manager, args=(self.latency_dict[name][len(batch_requests)][0],))
+        thd.start()
+        res = await self.replicas[name].handle_request(batch_requests, delay=self.alpa_overhead())
+        thd.join()
 
         for rq_info in batch_rq_info:
             rq_info.finish = True
@@ -162,8 +173,8 @@ class GroupManager:
                     break
 
                 # If the request queue is only consumed when new request comes,
-                # the system may starve. To avoid this, the request in the
-                # queue also serve as consumer who is responsible to batch requests
+                # the system may starve. To avoid this, all the requests in the
+                # queue should serve as consumer that is responsible to batch requests
                 # when current meshgroup becomes idle. This code is crucial for performance.
                 if self.is_idle and rq_info in self.requests_queue[name]:
                     await self.handle_batched_requests(name)
@@ -186,7 +197,7 @@ class GroupManager:
             for i in range(len(stage_latency)):
                 self.stage_clock[i] = req_stage_clock[i]
 
-            ret = await self.replicas[name].handle_request([request], self, delay=self.alpa_overhead())
+            ret = await self.replicas[name].handle_request([request], delay=self.alpa_overhead())
             return ret
 
 class Controller:
