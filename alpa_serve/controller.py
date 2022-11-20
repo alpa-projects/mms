@@ -273,8 +273,6 @@ class GroupManager:
                 self.request_clocks.append(req_stage_clock)
                 self.request_starts.append(start_time)
                 self.request_stage_latency.append(stage_latency)
-            else:
-                ret_time = None
         else:
             # A debug path for the API compatbility with simulator
             request = request_wrapper_bytes
