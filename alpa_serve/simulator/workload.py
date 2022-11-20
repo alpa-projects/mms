@@ -199,7 +199,7 @@ class Workload:
         self.arrivals = arrivals
         self.requests = requests
 
-        if len(self.arrivals) > 0:
+        if len(self.arrivals) > 1:
             tmp_array = np.array(self.arrivals)
             intervals = tmp_array[1:] - tmp_array[:-1]
             self.rate = 1 / np.mean(intervals)
