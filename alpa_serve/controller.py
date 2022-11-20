@@ -3,11 +3,13 @@
 import asyncio
 from collections import defaultdict, deque
 import dataclasses
+from enum import Enum, auto
 import logging
 import math
 import os
 import pickle
 import socket
+import threading
 import time
 from typing import Callable, List, Dict, Optional, Tuple, Any, Union
 
@@ -17,6 +19,7 @@ from ray.actor import ActorHandle
 from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
 from starlette.datastructures import QueryParams
 from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
 import uvicorn
 
 from alpa.api import init as alpa_init, shutdown as alpa_shutdown
@@ -63,12 +66,18 @@ class GroupInfo:
     queue_size: int
 
 
+class RequestStatus(Enum):
+    WAIT = auto()
+    EXEC = auto()
+    DONE = auto()
+
+
 @dataclasses.dataclass
 class RequestInfo:
-    finish: bool
+    status: RequestStatus
     submit_time: float
     slo: float
-    request_wrapper: HTTPRequestWrapper
+    request: Request
     response: dict
 
 
@@ -91,6 +100,13 @@ class GroupManager:
 
         self.stage_clock = [0] * np.prod(virtual_mesh_shape)
 
+        # Dict[str -> Deque]
+        self.requests_queue = {}
+
+        self.batch_configs = [2, 4, 8, 16]
+
+        self.is_idle = True
+
         # Constants
         self.fixed_overhead = 0.004 # ray overhead
 
@@ -104,6 +120,7 @@ class GroupManager:
         args = args or []
         kwargs = kwargs or {}
         self.replicas[name] = model_def(*args, **kwargs)
+        self.requests_queue[name] = deque()
 
         if hasattr(self.replicas[name], "get_latency_dict"):
             self.latency_dict[name] = self.replicas[name].get_latency_dict()
@@ -114,52 +131,149 @@ class GroupManager:
         assert name in self.replicas
         del self.replicas[name]
 
-    def get_latency_dict(self, name):
-        assert name in self.latency_dict
-        return self.latency_dict[name]
+    def check_slo(self, stage_latency, deadline):
+        # Simulate clock
+        req_stage_clock = []
+        t = time.time() + self.fixed_overhead
+        for i in range(len(stage_latency)):
+            t = max(self.stage_clock[i], t) + stage_latency[i]
+            req_stage_clock.append(t)
+        ret_time = req_stage_clock[-1]
 
-    async def handle_request(self, name: str, requests_wrapper_bytes: bytes):
-        if isinstance(requests_wrapper_bytes, bytes):
+        if ret_time > deadline:
+            return None
+        else:
+            return req_stage_clock
+
+    def get_max_batch_under_slo(self, requests_queue, stage_latency):
+        # Drop requests which will exceed deadline even run immediately alone
+        while len(requests_queue):
+            rq_info = requests_queue.popleft()
+            ret = self.check_slo(stage_latency[1], rq_info.submit_time + rq_info.slo)
+            if ret is None:
+                rq_info.status = RequestStatus.DONE
+                rq_info.response = {"rejected": True, "ts": {}}
+            else:
+                req_stage_clock = ret
+                break
+
+        # All the requests in queue are rejected
+        if rq_info.status == RequestStatus.DONE:
+            return []
+        
+        # Batch as much as we can
+        choosed_bs = 1
+        for bs in self.batch_configs:
+            # remaining requests is not enough (no padding)
+            if bs - 1 > len(requests_queue):
+                break
+            # check if violate slo
+            ret = self.check_slo(stage_latency[bs], rq_info.submit_time + rq_info.slo)
+            if ret is None:
+                break
+            choosed_bs = bs
+            req_stage_clock = ret
+
+        # Accept this request
+        for i in range(len(stage_latency[choosed_bs])):
+            self.stage_clock[i] = req_stage_clock[i]
+
+        batch_rq_info = [rq_info]
+        for _ in range(choosed_bs - 1):
+            batch_rq_info.append(requests_queue.popleft())
+
+        return batch_rq_info
+
+    def acquire_manager(self, interval):
+        self.is_idle = False
+        time.sleep(interval)
+        self.is_idle = True
+
+    async def handle_batched_requests(self, name: str):
+        batch_rq_info = self.get_max_batch_under_slo(self.requests_queue[name], self.latency_dict[name])
+
+        if not batch_rq_info:
+            # all requests in queue violate SLO
+            return
+
+        for rq_info in batch_rq_info:
+            rq_info.status = RequestStatus.EXEC
+
+        batch_requests = [rq_info.request for rq_info in batch_rq_info]
+        # thd = threading.Thread(target=self.acquire_manager, args=(self.latency_dict[name][len(batch_requests)][0],))
+        # thd.start()
+        self.is_idle = False
+        try:
+            response = await self.replicas[name].handle_request(batch_requests)
+            for rq_info, res in zip(batch_rq_info, response):
+                rq_info.status = RequestStatus.DONE
+                rq_info.response = res
+        except Exception as e:  # pylint: disable=broad-except
+            for rq_info in batch_rq_info:
+                rq_info.status = RequestStatus.DONE
+                rq_info.response = RelayException(e)
+        self.is_idle = True
+        # thd.join()
+
+    async def handle_request(self, name: str, request_wrapper_bytes: bytes):
+        if isinstance(request_wrapper_bytes, bytes):
             # The normal path
             enter_time = time.time()
-            requests_wrapper = pickle.loads(requests_wrapper_bytes)
-            requests = [build_starlette_request(rw) for rw in requests_wrapper]
-            for request in requests:
-                request.scope["ts"].append(("b", enter_time))
+            request_wrapper = pickle.loads(request_wrapper_bytes)
+            request = build_starlette_request(request_wrapper)
+            request.scope["ts"].append(("b", enter_time))
+            obj = await request.json()
+            assert "slo" in obj, "client must provide SLO"
 
-            if not enable_batching:
-                assert len(requests) == 1, "batching not enabled, but receive batched requests"
-                request = requests[0]
-                obj = await request.json()
+            if enable_batching:
+                rq_info = RequestInfo(RequestStatus.WAIT, obj["submit_time"], obj["slo"], request, None)
+                self.requests_queue[name].append(rq_info)
+                if self.is_idle:
+                    await self.handle_batched_requests(name)
+                    if rq_info.status == RequestStatus.DONE:
+                        return rq_info.response
 
-                if "slo" in obj:
-                    # SLO awareness
-                    stage_latency = self.latency_dict[name][1]
+                sleep_time = 0
+                while True:
+                    # The performance is sensitive to this sleep interval
+                    await asyncio.sleep(0.001)
+                    sleep_time += 0.001
+                    if sleep_time >= 5:
+                        print("sleep too long")
+                    if rq_info.status == RequestStatus.DONE:
+                        return rq_info.response
 
-                    # Simulate clock
-                    req_stage_clock = []
-                    t = time.time() + self.fixed_overhead
-                    for i in range(len(stage_latency)):
-                        t = max(self.stage_clock[i], t) + stage_latency[i]
-                        req_stage_clock.append(t)
-                    ret_time = req_stage_clock[-1]
+                    # If the request queue is only consumed when new request comes,
+                    # the system may starve. To avoid this, the request in the
+                    # queue also serve as consumer who is responsible to batch requests
+                    # when idle meshgroup is available. This code is crucial for performance.
+                    if self.is_idle and rq_info.status == RequestStatus.WAIT:
+                        await self.handle_batched_requests(name)
+                        if rq_info.status == RequestStatus.DONE:
+                            return rq_info.response
+            else:
+                # check if violate slo
+                stage_latency = self.latency_dict[name][1]
+                req_stage_clock = self.check_slo(stage_latency, obj["submit_time"] + obj["slo"])
 
-                    # Drop this request if it will exceed deadline
-                    if ret_time  > obj["submit_time"] + obj["slo"]:
-                        return [{
-                            "rejected": True,
-                            "ts": request.scope["ts"],
-                        }]
+                # Drop this request if it will exceed deadline
+                if req_stage_clock is None:
+                    return {
+                        "rejected": True,
+                        "ts": request.scope["ts"],
+                    }
 
-                    # Accept this request
-                    for i in range(len(stage_latency)):
-                        self.stage_clock[i] = req_stage_clock[i]
+                # Accept this request
+                for i in range(len(stage_latency)):
+                    self.stage_clock[i] = req_stage_clock[i]
         else:
             # A debug path for the API compatbility with simulator
-            requests = requests_wrapper_bytes
+            request = request_wrapper_bytes
 
+        # Only for no-batching and debug path, i.e. batching case should never achieve here
         try:
-            return await self.replicas[name].handle_request(requests)
+            rets = await self.replicas[name].handle_request([request])
+            return rets[0]
         except Exception as e:  # pylint: disable=broad-except
             return RelayException(e)
 
@@ -190,15 +304,6 @@ class Controller:
         self.model_info = {}
         # Dict[int -> GroupInfo]
         self.group_info = {}
-        # Dict[str -> Deque]
-        self.requests_queue = {}
-        # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
-        self.latency_dict = defaultdict(dict)
-
-        self.batch_configs = [2, 4, 8, 16]
-
-        # Constants
-        self.fixed_overhead = 0.002 + 0.004 # dispatch + ray overhead
 
         self.logger = build_logger()
 
@@ -221,7 +326,7 @@ class Controller:
         manager = (self.group_manager_class.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
-        self.group_info[group_id] = GroupInfo(manager=manager, queue_size=0, is_idle=True)
+        self.group_info[group_id] = GroupInfo(manager=manager, queue_size=0)
 
     async def register_model(self,
                              name: str,
@@ -240,7 +345,6 @@ class Controller:
 
             self.model_info[name] = ModelInfo(
                 CreateInfo(model_def, init_args, init_kwargs), [])
-            self.requests_queue[name] = deque()
 
     async def create_replica(self,
                              name: str,
@@ -259,78 +363,17 @@ class Controller:
             self.logger.info(f"Create replica of {name} on group {group_id}")
             model_info.group_ids.append(group_id)
         await manager.create_replica.remote(name, create_info)
-        self.latency_dict[name] = await manager.get_latency_dict.remote(name)
 
     def select_group_id(self, group_ids):
-        if enable_batching:
-            # batching enabled, choose idle meshgroup if exists
-            for group_id in group_ids:
-                if self.group_info[group_id].is_idle:
-                    return group_id
-            return -1
-        else:
-            # no batching, choose meshgroup with shorsted queue length
-            min_id = -1
-            min_size = math.inf
-            for group_id in group_ids:
-                if self.group_info[group_id].queue_size < min_size:
-                    min_size = self.group_info[group_id].queue_size
-                    min_id = group_id
-            assert min_id != -1
-            return min_id
-
-    def get_max_batch_under_slo(self, requests_queue, stage_latency):
-        # Drop requests which will exceed deadline even run immediately alone
-        while len(requests_queue):
-            request = requests_queue.popleft()
-            if time.time() + sum(stage_latency[1]) + self.fixed_overhead > request.submit_time + request.slo:
-                request.finish = True
-                request.response = {"rejected": True, "ts": {}}
-            else:
-                break
-
-        # All the requests in queue are rejected
-        if request.finish:
-            return []
-        
-        # Batch as much as we can
-        choosed_bs = 1
-        for bs in self.batch_configs:
-            # remaining requests is not enough (no padding)
-            if bs - 1 > len(requests_queue):
-                break
-            # violate slo
-            if time.time() + sum(stage_latency[bs]) + self.fixed_overhead > request.submit_time + request.slo:
-                break
-            choosed_bs = bs
-
-        batch_requests = [request]
-        for _ in range(choosed_bs - 1):
-            batch_requests.append(requests_queue.popleft())
-
-        return batch_requests
-
-    async def send_batched_requests_to_manager(self, name: str, group_id: int):
-        manager = self.group_info[group_id].manager
-        batch_requests = self.get_max_batch_under_slo(self.requests_queue[name], self.latency_dict[name])
-
-        if not batch_requests:
-            # all requests in queue violate SLO
-            return
-
-        requests_wrapper_bytes = pickle.dumps([rq.request_wrapper for rq in batch_requests])
-        self.group_info[group_id].is_idle = False
-        response = await manager.handle_request.remote(name, requests_wrapper_bytes)
-        self.group_info[group_id].is_idle = True
-
-        if isinstance(response, RelayException):
-            for rq in batch_requests:
-                rq.finish = True
-                rq.response = response
-        else:
-            for rq, res in zip(batch_requests, response):
-                rq.finish = True
-                rq.response = res
+        # choose meshgroup with shorsted queue length
+        min_id = -1
+        min_size = math.inf
+        for group_id in group_ids:
+            if self.group_info[group_id].queue_size < min_size:
+                min_size = self.group_info[group_id].queue_size
+                min_id = group_id
+        assert min_id != -1
+        return min_id
 
     async def handle_request(self, request):
         name = request.model_name
@@ -359,8 +402,6 @@ class Controller:
         http_body_bytes = await receive_http_body(scope, receive, send)
         request_wrapper = HTTPRequestWrapper(scope, http_body_bytes)
 
-        query_params = QueryParams(scope["query_string"])
-
         # Route
         try:
             request = build_starlette_request(request_wrapper)
@@ -378,49 +419,19 @@ class Controller:
             # Dispatch
             group_id = self.select_group_id(model_info.group_ids)
             
-            if enable_batching:
-                rq_info = RequestInfo(False, obj["submit_time"], obj["slo"], request_wrapper, None)
-                self.requests_queue[name].append(rq_info)
-                if group_id != -1:
-                    await self.send_batched_requests_to_manager(name, group_id)                
+            requests_wrapper_bytes = pickle.dumps(request_wrapper)
+            manager = self.group_info[group_id].manager
 
-                while True:
-                    if rq_info.finish:
-                        break
+            self.group_info[group_id].queue_size += 1
+            response = await manager.handle_request.remote(
+                name, requests_wrapper_bytes)
+            self.group_info[group_id].queue_size -= 1
 
-                    # If the request queue is only consumed when new request comes,
-                    # the system may starve. To avoid this, the request in the
-                    # queue also serve as consumer who is responsible to batch requests
-                    # when idle meshgroup is available. This code is crucial for performance.
-                    if len(self.requests_queue[name]) and rq_info in self.requests_queue[name]:
-                        group_id = self.select_group_id(model_info.group_ids)
-                        if group_id != -1:
-                            await self.send_batched_requests_to_manager(name, group_id)
-
-                    await asyncio.sleep(0.01)
-                
-                assert rq_info.response is not None
-                response = rq_info.response
-                if isinstance(response, RelayException):
-                    response = make_error_response(response)
-                    status_code = 400
-                else:
-                    status_code = 200
+            if isinstance(response, RelayException):
+                response = make_error_response(response)
+                status_code = 400
             else:
-                requests_wrapper_bytes = pickle.dumps([request_wrapper])
-                manager = self.group_info[group_id].manager
-
-                self.group_info[group_id].queue_size += 1
-                response = await manager.handle_request.remote(
-                    name, requests_wrapper_bytes)
-                self.group_info[group_id].queue_size -= 1
-
-                if isinstance(response, RelayException):
-                    response = make_error_response(response)
-                    status_code = 400
-                else:
-                    response = response[0]
-                    status_code = 200
+                status_code = 200
         except Exception as e:  # pylint: disable=broad-except
             response = make_error_response(e)
             status_code = 400
