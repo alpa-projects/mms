@@ -1,8 +1,8 @@
 import argparse
+
 from alpa_serve.profiling import ProfilingDatabase, ProfilingResult, ParallelConfig
 from alpa_serve.util import GB
-from alpa_serve.simulator.workload import GammaProcess, UniformMMPP
-from benchmarks.alpa.all_equal_case import AllEqualCase, run_all_equal_cases
+from benchmarks.alpa.equal_model_case import EqualModelCase, run_equal_model_cases
 
 
 def run_experiment(experiment_name):
@@ -11,73 +11,76 @@ def run_experiment(experiment_name):
         slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
         cases = []
         prof_database = ProfilingDatabase("profiling_result.pkl")
-        arrival_process = GammaProcess(4, 4)
         for policy in policies:
             for slo in slos:
-                cases.append(AllEqualCase(
+                cases.append(EqualModelCase(
                     num_devices=8, mem_budget=10 * GB, model_type="bert-1.3b",
-                    num_models=16, arrival_process=arrival_process, slo=slo,
-                    duration=100, policy_name=policy))
+                    num_models=16, total_rate=4*16, rate_distribution="uniform",
+                    arrival_process="gamma", arrival_process_kwargs={"cv": 4},
+                    slo=slo, duration=100, policy_name=policy))
     elif experiment_name == "gamma_2":
         slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
         cases = []
         prof_database = ProfilingDatabase("profiling_result.pkl")
-        arrival_process = GammaProcess(4, 10)
         for policy in policies:
             for slo in slos:
-                cases.append(AllEqualCase(
+                cases.append(EqualModelCase(
                     num_devices=8, mem_budget=10 * GB, model_type="bert-1.3b",
-                    num_models=16, arrival_process=arrival_process, slo=slo,
-                    duration=100, policy_name=policy))
+                    num_models=16, total_rate=4*16, rate_distribution="uniform",
+                    arrival_process="gamma", arrival_process_kwargs={"cv": 10},
+                    slo=slo, duration=100, policy_name=policy))
     elif experiment_name == "mmpp_1":
         prof_database = ProfilingDatabase("profiling_result.pkl")
         slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
         cases = []
-        arrival_process = UniformMMPP(state_durations=[1, 3],
-                                      state_request_rates=[13, 1])
         for policy in policies:
             for slo in slos:
-                cases.append(AllEqualCase(
+                cases.append(EqualModelCase(
                     num_devices=8, mem_budget=10 * GB, model_type="bert-1.3b",
-                    num_models=16, arrival_process=arrival_process, slo=slo,
-                    duration=400, policy_name=policy))
+                    num_models=16, total_rate=None, rate_distribution=None,
+                    arrival_process="uniform_mmpp", arrival_process_kwargs={
+                        "state_durations": [1, 3],
+                        "state_request_rates": [13, 1],
+                    },
+                    slo=slo, duration=400, policy_name=policy))
     elif experiment_name == "gamma_2_long_slos":
         prof_database = ProfilingDatabase("profiling_result.pkl")
         slos = [1.0, 2.0, 4.0, 8.0, 16.0, 20.0, 24.0, 28.0, 32.0, 64.0, 128.0]
         cases = []
-        arrival_process = GammaProcess(4, 10)
         for policy in policies:
             for slo in slos:
-                cases.append(AllEqualCase(
+                cases.append(EqualModelCase(
                     num_devices=8, mem_budget=10 * GB, model_type="bert-1.3b",
-                    num_models=16, arrival_process=arrival_process, slo=slo,
-                    duration=400, policy_name=policy))
+                    num_models=16, total_rate=4*16, rate_distribution="uniform",
+                    arrival_process="gamma", arrival_process_kwargs={"cv": 10},
+                    slo=slo, duration=400, policy_name=policy))
     elif experiment_name == "gamma_2_short_slos_no_ilp":
         prof_database = ProfilingDatabase("profiling_result.pkl")
         for pp in [2, 4]:
             del prof_database.results["bert-1.3b"].para_dict[ParallelConfig(1, 1, pp)]
         slos = [0.1, 0.2, 0.4, 0.8, 1.0, 2.0, 4.0, 8.0]
         cases = []
-        arrival_process = GammaProcess(4, 10)
         for policy in policies:
             for slo in slos:
-                cases.append(AllEqualCase(
+                cases.append(EqualModelCase(
                     num_devices=8, mem_budget=10 * GB, model_type="bert-1.3b",
-                    num_models=16, arrival_process=arrival_process, slo=slo,
-                    duration=400, policy_name=policy))
+                    num_models=16, total_rate=4*16, rate_distribution="uniform",
+                    arrival_process="gamma", arrival_process_kwargs={"cv": 10},
+                    slo=slo, duration=400, policy_name=policy))
     elif experiment_name == "gamma_2_long_slos_no_ilp":
         prof_database = ProfilingDatabase("profiling_result.pkl")
         for pp in [2, 4]:
             del prof_database.results["bert-1.3b"].para_dict[ParallelConfig(1, 1, pp)]
         slos = [1.0, 2.0, 4.0, 8.0, 16.0, 20.0, 24.0, 28.0, 32.0, 64.0, 128.0]
         cases = []
-        arrival_process = GammaProcess(4, 10)
         for policy in policies:
             for slo in slos:
-                cases.append(AllEqualCase(
+                cases.append(EqualModelCase(
                     num_devices=8, mem_budget=10 * GB, model_type="bert-1.3b",
-                    num_models=16, arrival_process=arrival_process, slo=slo,
-                    duration=400, policy_name=policy))
+                    num_models=16, total_rate=4*16, rate_distribution="uniform",
+                    arrival_process="gamma", arrival_process_kwargs={"cv": 10},
+                    slo=slo, duration=400, policy_name=policy))
+
     elif experiment_name.startswith("gamma_2_long_slos_no_ilp_pipeline_overhead_"):
         pipeline_overhead = float(experiment_name.split("_")[-1])
         prof_database = ProfilingDatabase(None, new_database=True)
@@ -98,13 +101,13 @@ def run_experiment(experiment_name):
         prof_database.update(result)
         slos = [1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0, 40.0, 44.0, 48.0, 52.0, 56.0, 60.0, 64.0]
         cases = []
-        arrival_process = GammaProcess(4, 10)
         for policy in policies:
             for slo in slos:
-                cases.append(AllEqualCase(
+                cases.append(EqualModelCase(
                     num_devices=8, mem_budget=10 * GB, model_type="bert-1.3b",
-                    num_models=16, arrival_process=arrival_process, slo=slo,
-                    duration=400, policy_name=policy))
+                    num_models=16, total_rate=4*16, rate_distribution="uniform",
+                    arrival_process="gamma", arrival_process_kwargs={"cv": 10},
+                    slo=slo, duration=400, policy_name=policy))
     elif experiment_name.startswith("gamma_2_long_slos_no_ilp_duration_400_pipeline_overhead_"):
         pipeline_overhead = float(experiment_name.split("_")[-1])
         prof_database = ProfilingDatabase(None, new_database=True)
@@ -125,19 +128,20 @@ def run_experiment(experiment_name):
         prof_database.update(result)
         slos = [1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0, 40.0, 44.0, 48.0, 52.0, 56.0, 60.0, 64.0]
         cases = []
-        arrival_process = GammaProcess(4, 10)
         for policy in policies:
             for slo in slos:
-                cases.append(AllEqualCase(
+                cases.append(EqualModelCase(
                     num_devices=8, mem_budget=10 * GB, model_type="bert-1.3b",
-                    num_models=16, arrival_process=arrival_process, slo=slo,
-                    duration=400, policy_name=policy))
+                    num_models=16, total_rate=4*16, rate_distribution="uniform",
+                    arrival_process="gamma", arrival_process_kwargs={"cv": 10},
+                    slo=slo, duration=400, policy_name=policy))
     else:
         raise ValueError(f"Unknown experiment name: {experiment_name}")
-    run_all_equal_cases(cases,
-                        exp_name=experiment_name,
-                        output_file=f"res_{experiment_name}.tsv",
-                        parallel=True)
+
+    run_equal_model_cases(cases,
+                          exp_name=experiment_name,
+                          output_file=f"res_{experiment_name}.tsv",
+                          parallel=True)
 
 
 if __name__ == "__main__":

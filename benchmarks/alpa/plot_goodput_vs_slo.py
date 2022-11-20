@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 
-from benchmarks.alpa.all_equal_case import read_all_equal_case_tsv
+from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
 
 show_name_dict = {
     "sr-greedy":   "Selective Replication (greedy)",
@@ -51,23 +51,18 @@ def read_data(filename):
 
     rate = cv = None
 
-    for line in read_all_equal_case_tsv(filename):
-        policy, slo, goodput, arrival = (
+    for line in read_equal_model_case_tsv(filename):
+        policy, slo, goodput, total_rate, kwargs = (
             line["policy_name"], line["slo"], line["goodput"],
-            line["arrival_process"])
+            line["total_rate"], line["arrival_process_kwargs"])
 
-        if arrival.startswith("GammaProcess"):
-            strs = arrival.split("=")
-            rate_str = strs[1].split(',')[0]
-            cv_str = strs[2].split(')')[0]
-            if rate is None:
-                rate = int(rate_str)
-                cv = int(cv_str)
-            else:
-                assert rate == int(rate_str) and cv == int(cv_str)
+        if rate is None:
+            rate = total_rate
+            cv = kwargs["cv"]
+
         data[policy][slo] = goodput
 
-    return data, {"per_model_rate": rate, "per_model_cv": cv}
+    return data, {"total_rate": rate, "per_model_cv": cv}
 
 
 def plot_goodput_vs_slo(data, title, output, show):

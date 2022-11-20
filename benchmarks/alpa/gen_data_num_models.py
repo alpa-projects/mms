@@ -1,7 +1,6 @@
 import argparse
 
-from benchmarks.alpa.all_equal_case import AllEqualCase, run_all_equal_cases
-from alpa_serve.simulator.workload import GammaProcess
+from benchmarks.alpa.equal_model_case import EqualModelCase, run_equal_model_cases
 from alpa_serve.util import GB
 
 
@@ -22,22 +21,26 @@ if __name__ == "__main__":
     model_type = "bert-2.6b"
     num_models_list = [1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
     per_model_rate = 2
-    per_model_cv = 4
-    arrival_process = GammaProcess(per_model_rate, per_model_cv)
+    rate_distribution = "uniform"
+    arrival_process = "gamma"
+    arrival_process_kwargs = {"cv": 4}
     slos = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0]
     duration = 200
 
     cases = []
     for num_devices in num_devices_list:
         for slo in slos:
-            for policy in policies:
+            for policy_name in policies:
                 for num_models in num_models_list:
-                    cases.append(AllEqualCase(
+                    total_rate = per_model_rate * num_models
+                    cases.append(EqualModelCase(
                         num_devices, mem_budget, model_type, num_models,
-                        arrival_process, slo, duration, policy))
+                        total_rate, rate_distribution,
+                        arrival_process, arrival_process_kwargs,
+                        slo, duration, policy_name))
 
-    run_all_equal_cases(cases,
-                        exp_name=args.exp_name,
-                        output_file=args.output,
-                        mode=args.mode,
-                        parallel=args.parallel)
+    run_equal_model_cases(cases,
+                          exp_name=args.exp_name,
+                          output_file=args.output,
+                          mode=args.mode,
+                          parallel=args.parallel)

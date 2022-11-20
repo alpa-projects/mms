@@ -321,7 +321,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
         # Iterative search
         cur_sols = initial_sols
-        best_score = 0
+        best_score = -1
         best_sol = None
 
         it = 0

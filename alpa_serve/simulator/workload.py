@@ -199,7 +199,7 @@ class Workload:
         self.arrivals = arrivals
         self.requests = requests
 
-        if len(self.arrivals) > 0:
+        if len(self.arrivals) > 1:
             tmp_array = np.array(self.arrivals)
             intervals = tmp_array[1:] - tmp_array[:-1]
             self.rate = 1 / np.mean(intervals)
@@ -328,9 +328,9 @@ class Workload:
 
     def __str__(self):
         return (f"Workload(len={len(self)}, "
-                f"request_rate={self.rate:.2f}, "
+                f"rate={self.rate:.2f}, "
                 f"CV={self.cv:.2f}, "
-                f"arrivals={to_str_round(self.arrivals[:20])} ...)")
+                f"tstamps={to_str_round(self.arrivals[:20])} ...)")
 
 
 if __name__ == "__main__":
