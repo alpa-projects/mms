@@ -170,13 +170,14 @@ class GroupManager:
             self.requests_queue[name].append(rq_info)
             if self.is_idle:
                 await self.handle_batched_requests(name)
+                if rq_info.status == RequestStatus.DONE:
+                    return rq_info.response
 
             while True:
-                # The performance is also sensitive to this sleep interval
+                # The performance is sensitive to this sleep interval
                 await sleep(0.001)
- 
                 if rq_info.status == RequestStatus.DONE:
-                    break
+                    return rq_info.response
 
                 # If the request queue is only consumed when new request comes,
                 # the system may starve. To avoid this, all the requests in the
@@ -184,9 +185,8 @@ class GroupManager:
                 # when current meshgroup becomes idle. This code is crucial for performance.
                 if self.is_idle and rq_info.status == RequestStatus.WAIT:
                     await self.handle_batched_requests(name)
-           
-            assert rq_info.response is not None
-            return rq_info.response
+                    if rq_info.status == RequestStatus.DONE:
+                        return rq_info.response
         else:
             # check if violate slo
             stage_latency = self.latency_dict[name][1]
