@@ -1,10 +1,11 @@
-import os
+import argparse
 from collections import namedtuple, defaultdict
+import os
 
 import ray
 
 from alpa_serve.simulator.controller import Controller, simulate_one_case
-from alpa_serve.simulator.workload import Workload, GammaProcess
+from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
@@ -16,19 +17,20 @@ from benchmarks.alpa.util import get_model_def
 from benchmarks.alpa.run_one_case import run_one_case
 
 
-# A case where all models and all request distributions are the same.
-AllEqualCase = namedtuple("AllEqualCase", [
-    "num_devices", "mem_budget",
-    "model_type", "num_models", "arrival_process",
+# A case where all models are the same
+EqualModelCase = namedtuple("EqualModelCase", [
+    "num_devices", "mem_budget", "model_type", "num_models",
+    "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo", "duration", "policy_name"])
 
 
-def get_all_equal_serving_case(case, prof_database=None):
+def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
         prof_database = ProfilingDatabase("profiling_result.pkl")
 
     (num_devices, mem_budget, model_type, num_models,
-     arrival_process, slo, duration, policy_name) = case
+     total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
+     slo, duration, policy_name) = case
 
     cluster_env = ClusterEnv(num_devices=num_devices, mem_budget=mem_budget)
     num_models = num_models
@@ -37,8 +39,33 @@ def get_all_equal_serving_case(case, prof_database=None):
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
 
-    rates = [arrival_process.rate()] * num_models
-    cvs = [arrival_process.cv()] * num_models
+    if rate_distribution == "uniform":
+        rates = [total_rate / num_models] * num_models
+    elif rate_distribution == "power_law":
+        q = 1/2
+        s = (1 - q ** num_models) / (1 - q)
+        base = total_rate / s
+        rates = [base * (q ** i) for i in range(num_models)]
+    elif rate_distribution is None:
+        pass
+    else:
+        raise ValueError(f"Invalid rate distribution: {rate_distribution}")
+
+    if arrival_process == "gamma":
+        arrival_processes = [
+            GammaProcess(rates[i], arrival_process_kwargs["cv"])
+            for i in range(num_models)
+        ]
+    elif arrival_process == "uniform_mmpp":
+        arrival_processes = [
+            UniformMMPP(**arrival_process_kwargs)
+            for i in range(num_models)
+        ]
+    else:
+        raise ValueError("Invalid arrival process: {arrival_process}")
+
+    rates = [a.rate() for a in arrival_processes]
+    cvs = [a.cv() for a in arrival_processes]
 
     def register_models(controller):
         is_simulator = isinstance(controller, Controller)
@@ -50,9 +77,9 @@ def get_all_equal_serving_case(case, prof_database=None):
 
     def generate_workload(start=0):
         w = Workload.empty()
-        for i, model_name in enumerate(model_names):
-            w += arrival_process.generate_workload(model_name, start, duration,
-                                                   slo=slos[i], seed=i)
+        for i in range(num_models):
+            w += arrival_processes[i].generate_workload(
+                model_names[i], start, duration, slo=slos[i], seed=i)
         return w
 
     def place_models(controller):
@@ -60,7 +87,7 @@ def get_all_equal_serving_case(case, prof_database=None):
         model_datas = []
         for i in range(num_models):
             model_datas.append(ModelData(model_names[i], slos[i], rates[i], cvs[i],
-                               prof_database.get(model_types[i])))
+                                         prof_database.get(model_types[i])))
 
         if policy_name == "sr-ilp":
             policy = SelectiveReplicationILP(verbose=1)
@@ -82,36 +109,38 @@ def get_all_equal_serving_case(case, prof_database=None):
     return ServingCase(register_models, generate_workload, place_models)
 
 
-def simulate_one_all_equal_case(case, prof_database=None):
-    serving_case = get_all_equal_serving_case(case, prof_database)
+def simulate_one_equal_model_case(case, prof_database=None):
+    serving_case = get_equal_model_serving_case(case, prof_database)
     stats, placement = simulate_one_case(serving_case)
     return stats, placement
 
 
-def run_one_all_equal_case(case, prof_database=None):
-    serving_case = get_all_equal_serving_case(case, prof_database)
+def run_one_equal_model_case(case, prof_database=None):
+    serving_case = get_equal_model_serving_case(case, prof_database)
     stats, placement = run_one_case(serving_case)
     return stats, placement
 
 
-_DATA_HEADS = ("exp_name", "num_devices", "mem_budget", "model_type",
-               "num_models", "arrival_process", "slo",
-               "duration", "policy_name", "placement", "goodput", "mode")
+_DATA_HEADS = ("exp_name",
+               "num_devices", "mem_budget", "model_type", "num_models",
+               "total_rate", "rate_distribution",
+               "arrival_process", "arrival_process_kwargs",
+               "slo", "duration", "policy_name",
+               "placement", "goodput", "mode")
 
-
-def run_all_equal_cases(cases, exp_name="default", output_file=None,
-                        mode="simulate", parallel=False):
+def run_equal_model_cases(cases, exp_name="default", output_file=None,
+                          mode="simulate", parallel=False):
     if mode == "simulate":
         if parallel:
             ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
                      ignore_reinit_error=True)
-            run_one_case_ = ray.remote(num_cpus=2)(simulate_one_all_equal_case).remote
+            run_one_case_ = ray.remote(num_cpus=2)(simulate_one_equal_model_case).remote
         else:
-            run_one_case_ = simulate_one_all_equal_case
+            run_one_case_ = simulate_one_equal_model_case
     else:
         ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
                  ignore_reinit_error=True)
-        run_one_case_ = run_one_all_equal_case
+        run_one_case_ = run_one_equal_model_case
 
     run_results = []
     for case in cases:
@@ -137,20 +166,25 @@ def run_all_equal_cases(cases, exp_name="default", output_file=None,
     return results
 
 
-def read_all_equal_case_tsv(filename):
-    rows = []
+def read_equal_model_case_tsv(filename):
+    rows = []  # List[dict]
 
     for line in open(filename):
         line = line.strip()
         if not line or line.startswith("#"):
             continue
 
-        (exp_name, num_devices, mem_budget, model_type, num_models,
-         arrival_process, slo, duration, policy_name, placement,
-         goodput, mode) = line.split("\t")
+        (exp_name,
+         num_devices, mem_budget, model_type, num_models,
+         total_rate, rate_distribution,
+         arrival_process, arrival_process_kwargs,
+         slo, duration, policy_name,
+         placement, goodput, mode) = line.split("\t")
 
         num_devices = int(num_devices)
         num_models = int(num_models)
+        total_rate = float(total_rate)
+        arrival_process_kwargs = eval(arrival_process_kwargs)
         slo = float(slo)
         duration = float(duration)
         goodput = float(goodput)
@@ -166,30 +200,39 @@ def read_all_equal_case_tsv(filename):
 
 
 if __name__ == "__main__":
-    policy = "sr-greedy"
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run", action="store_true",
+        help="Whether to do a real run to check the results of simulation.")
+    args = parser.parse_args()
+
     num_devices = 4
     mem_budget = 12 * GB
     model_type = "bert-1.3b"
-    num_models = 2
-    per_model_rate = 2
-    per_model_cv = 4
-    slo = 0.4
+    num_models = 8
+    total_rate = 30
+    rate_distribution = "uniform"
+    arrival_process = "gamma"
+    arrival_process_kwargs = {"cv": 4}
+    slo = 0.5
     duration = 50
-
-    arrival_process = GammaProcess(per_model_rate, per_model_cv)
+    policy_name = "mp-greedy-2"
 
     cases = [
-        AllEqualCase(num_devices, mem_budget, model_type, num_models,
-                     arrival_process, slo, duration, policy),]
+        EqualModelCase(num_devices, mem_budget, model_type, num_models,
+                       total_rate, rate_distribution,
+                       arrival_process, arrival_process_kwargs,
+                       slo, duration, policy_name)
+    ]
 
-    run_all_equal_cases(cases,
-                        exp_name="tmp",
-                        output_file="tmp.tsv",
-                        mode="run",
-                        parallel=False)
+    if args.run:
+        run_equal_model_cases(cases,
+                             exp_name="tmp",
+                             output_file="tmp.tsv",
+                             mode="run",
+                             parallel=False)
 
-    run_all_equal_cases(cases,
-                        exp_name="tmp",
-                        output_file="tmp.tsv",
-                        mode="simulate",
-                        parallel=True)
+    run_equal_model_cases(cases,
+                          exp_name="tmp",
+                          output_file="tmp.tsv",
+                          mode="simulate",
+                          parallel=True)

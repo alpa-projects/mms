@@ -1,6 +1,6 @@
 import argparse
 
-from benchmarks.alpa.all_equal_case import read_all_equal_case_tsv
+from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
 
 
 def find_max_num_models(data, num_devices, model_type, slo, policy_name, goodput):
@@ -32,12 +32,11 @@ def find_min_num_devices(data, model_type, num_models, slo, policy_name, goodput
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, default="res_num_models.tsv")
-    parser.add_argument("--output", type=str, default="goodput.png")
     parser.add_argument("--show", action="store_true")
 
     args = parser.parse_args()
 
-    data = read_all_equal_case_tsv(args.input)
+    data = read_equal_model_case_tsv(args.input)
 
     # maximum num models one can serve
     num_devices = 8

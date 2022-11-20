@@ -32,8 +32,9 @@ from alpa_serve.util import build_logger, add_sync_method, enable_batching
 logger = logging.getLogger(__file__)
 
 CONTROLLER_NAME = "controller"
-SOCKET_REUSE_PORT_ENABLED = (os.environ.get("SERVE_SOCKET_REUSE_PORT_ENABLED",
-                                            "1") == "1")
+#SOCKET_REUSE_PORT_ENABLED = (os.environ.get("SERVE_SOCKET_REUSE_PORT_ENABLED",
+#                                            "1") == "1")
+SOCKET_REUSE_PORT_ENABLED = False
 
 
 @dataclasses.dataclass
@@ -98,7 +99,12 @@ class GroupManager:
         # Dict[model_name -> Dict[batch_size -> List[stage_latency]]]
         self.latency_dict = defaultdict(dict)
 
-        self.stage_clock = [0] * np.prod(virtual_mesh_shape)
+        # Latency prediction
+        self.request_clocks = [[0] * np.prod(virtual_mesh_shape)]
+        self.request_starts = [0]
+        self.request_stage_latency = [None]
+        self.latency_scale = 1.0
+        self.target_ratio = 0.98
 
         # Dict[str -> Deque]
         self.requests_queue = {}
@@ -111,6 +117,9 @@ class GroupManager:
         self.fixed_overhead = 0.004 # ray overhead
 
         self.logger = build_logger()
+
+        # Constants
+        self.fixed_overhead = 0.004
 
     def create_replica(self, name: str, create_info: CreateInfo):
         assert name not in self.replicas
@@ -260,18 +269,51 @@ class GroupManager:
                     }
 
                 # Accept this request
-                for i in range(len(stage_latency)):
-                    self.stage_clock[i] = req_stage_clock[i]
+                clock_idx = len(self.request_clocks)
+                self.request_clocks.append(req_stage_clock)
+                self.request_starts.append(start_time)
+                self.request_stage_latency.append(stage_latency)
+            else:
+                ret_time = None
         else:
             # A debug path for the API compatbility with simulator
             request = request_wrapper_bytes
+            ret_time = None
 
         # Only for no-batching and debug path, i.e. batching case should never achieve here
         try:
             rets = await self.replicas[name].handle_request([request])
             return rets[0]
         except Exception as e:  # pylint: disable=broad-except
-            return RelayException(e)
+            ret = RelayException(e)
+
+        if ret_time is not None:
+            # Adjust the clock estimation
+            actual_runtime = time.time() - start_time
+            predicted_runtime = ret_time - start_time
+            ratio = actual_runtime / predicted_runtime
+
+            if ratio > 3 or ratio < 0.3:
+                self.logger.warning("The error of latency estimation is too high.")
+
+            lr = 0.2 if ratio > self.target_ratio else 0.1
+            self.latency_scale += lr * (ratio - self.target_ratio)
+
+            # Recompute all clock estimations
+            delta = time.time() - self.request_clocks[clock_idx][i]
+            for i in range(len(stage_latency)):
+                self.request_clocks[clock_idx][i] += delta
+            clock_idx += 1
+            while clock_idx < len(self.request_clocks):
+                t = self.request_starts[clock_idx]
+                stage_latency = self.request_stage_latency[clock_idx]
+                for i in range(len(stage_latency)):
+                    t = (max(self.request_clocks[clock_idx-1][i], t) +
+                         stage_latency[i] * self.latency_scale)
+                    self.request_clocks[clock_idx][i] = t
+                clock_idx += 1
+
+        return ret
 
     def shutdown(self):
         del self.replicas

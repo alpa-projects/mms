@@ -8,7 +8,7 @@ from benchmarks.alpa.suite_debug import suite_debug
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--case", type=str, default="debug_manual_1")
+    parser.add_argument("--case", type=str, default="debug_replicate")
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
 

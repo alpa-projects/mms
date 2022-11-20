@@ -332,16 +332,14 @@ class Client:
 
     @timed_coroutine
     async def submit_one(self, request, idx, start, finish, good):
-        t = clock()
-        start[idx] = t
-        request.submit_time = t
+        start[idx] = clock()
+        request.submit_time = start[idx]
         res = await self.controller.handle_request(request, delay=self.http_overhead())
-        t = clock()
-        finish[idx] = t
-        good[idx] = (res and t <= request.submit_time + request.slo)
+        finish[idx] = clock()
+        e2e_latency = finish[idx] - start[idx]
+        good[idx] = e2e_latency <= request.slo and res
 
         if self.debug:
-            e2e_latency = finish[idx] - start[idx]
             tstamps = to_str_round({x: (y - request.submit_time) * 1e3 for x, y in request.time_stamp.items()}, 2)
             print(f"idx: {idx} ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
 

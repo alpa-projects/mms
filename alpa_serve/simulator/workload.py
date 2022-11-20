@@ -203,7 +203,7 @@ class Workload:
         self.arrivals = arrivals
         self.requests = requests
 
-        if len(self.arrivals) > 0:
+        if len(self.arrivals) > 1:
             tmp_array = np.array(self.arrivals)
             intervals = tmp_array[1:] - tmp_array[:-1]
             self.rate = 1 / np.mean(intervals)
@@ -286,7 +286,7 @@ class Workload:
                   f"p90: {stat.latency_p90*1e3:.2f} ms")
         print("--- overall ---")
         print(f"total #req: {stats.total_num_requests}, "
-              f"request rate: {stats.total_request_rate:.2f} q/s")
+              f"rate: {stats.total_request_rate:.2f} q/s")
         print(f"average goodput: {stats.average_goodput*100:.2f} %")
 
     @classmethod
@@ -311,6 +311,7 @@ class Workload:
         for i, j in enumerate(sorted_indices):
             arrivals[i] = merged_arrivals[j]
             requests[i] = merged_requests[j]
+            requests[i].idx = i
 
         return cls(arrivals, requests)
 
@@ -331,9 +332,9 @@ class Workload:
 
     def __str__(self):
         return (f"Workload(len={len(self)}, "
-                f"request_rate={self.rate:.2f}, "
+                f"rate={self.rate:.2f}, "
                 f"CV={self.cv:.2f}, "
-                f"arrivals={to_str_round(self.arrivals[:20])} ...)")
+                f"tstamps={to_str_round(self.arrivals[:20])} ...)")
 
 
 if __name__ == "__main__":
