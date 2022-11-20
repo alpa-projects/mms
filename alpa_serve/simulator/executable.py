@@ -33,7 +33,7 @@ class Executable:
             request.time_stamp["d"] = clock()
 
         stage_latency = self.latency_mem.latency[len(requests)]
-        manager.is_idle_ = False
+        manager.is_idle = False
         for i, (mesh, latency) in enumerate(zip(self.mesh_group.meshes, stage_latency)):
             # SPMD version
             #stream = mesh.gpus[0].stream_name
@@ -46,7 +46,7 @@ class Executable:
 
             # The GroupManager can receive requests when the first stage is idle
             if i == 0:
-                manager.is_idle_ = True
+                manager.is_idle = True
         for request in requests:
             request.time_stamp["e"] = clock()
         return True
