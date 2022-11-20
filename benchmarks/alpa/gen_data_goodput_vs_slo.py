@@ -2,7 +2,7 @@ import argparse
 
 from benchmarks.alpa.all_equal_case import AllEqualCase, run_all_equal_cases
 from alpa_serve.simulator.workload import GammaProcess
-from alpa_serve.util import GB
+from alpa_serve.util import GB, enable_batching
 
 
 if __name__ == "__main__":
@@ -17,6 +17,8 @@ if __name__ == "__main__":
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
     policies = ["sr-greedy", "mp-greedy-8", "mp-search"]
+    if enable_batching:
+        policies = [policy + "-batch" for policy in policies]
     num_devices = 8
     mem_budget = 10 * GB
     model_type = "bert-1.3b"

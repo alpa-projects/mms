@@ -16,6 +16,9 @@ show_name_dict = {
     "mp-greedy-2": "Pipeline Parallelism (#stage=2)",
     "mp-greedy-4": "Pipeline Parallelism (#stage=4)",
     "mp-greedy-8": "Pipeline Parallelism (#stage=8)",
+    "sr-greedy-batch":   "Selective Replication (greedy) Batching",
+    "mp-search-batch":   "Model Parallelism (search) Batching",
+    "mp-greedy-8-batch": "Pipeline Parallelism (#stage=8) Batching",
 }
 
 def show_name(name):
@@ -28,6 +31,7 @@ method2color_dict = {
 ct = 0
 def method2color(name):
     global ct
+    name = name[:-6] if "batch" in name else name
     if name not in method2color_dict:
         method2color_dict[name] = f"C{ct}"
         ct += 1
@@ -39,6 +43,7 @@ method_order_list = [
 
     "mp-ilp", "mp-search",
     "mp-greedy-2", "mp-greedy-4", "mp-greedy-8",
+    "sr-greedy-batch", "mp-search-batch", "mp-greedy-8-batch"
 ]
 
 def method2order(name):
@@ -85,7 +90,10 @@ def plot_goodput_vs_slo(data, title, output, show):
         curve = data[method]
         xs, ys = zip(*curve.items())
         ys = np.array(ys) * 100
-        curve = ax.plot(xs, ys, color=method2color(method), marker='*')
+        if "batch" in method:
+            curve = ax.plot(xs, ys, "--*", color=method2color(method))
+        else:
+            curve = ax.plot(xs, ys, "-*", color=method2color(method))
         curves.append(curve[0])
         legends.append(show_name(method))
 
