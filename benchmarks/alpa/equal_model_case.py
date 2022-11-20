@@ -5,7 +5,7 @@ import os
 import ray
 
 from alpa_serve.simulator.controller import Controller, simulate_one_case
-from alpa_serve.simulator.workload import Workload, GammaProcess
+from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
@@ -40,19 +40,25 @@ def get_equal_model_serving_case(case, prof_database=None):
     model_types = [model_type] * num_models
 
     if rate_distribution == "uniform":
-        base_rate = total_rate / num_models
-        rates = [base_rate] * num_models
+        rates = [total_rate / num_models] * num_models
     elif rate_distribution == "power_law":
         q = 1/2
         s = (1 - q ** num_models) / (1 - q)
         base = total_rate / s
         rates = [base * (q ** i) for i in range(num_models)]
+    elif rate_distribution is None:
+        pass
     else:
         raise ValueError(f"Invalid rate distribution: {rate_distribution}")
 
     if arrival_process == "gamma":
         arrival_processes = [
             GammaProcess(rates[i], arrival_process_kwargs["cv"])
+            for i in range(num_models)
+        ]
+    elif arrival_process == "uniform_mmpp":
+        arrival_processes = [
+            UniformMMPP(**arrival_process_kwargs)
             for i in range(num_models)
         ]
     else:
