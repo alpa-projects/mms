@@ -233,13 +233,9 @@ class GroupManager:
                     if rq_info.status == RequestStatus.DONE:
                         return rq_info.response
 
-                sleep_time = 0
                 while True:
                     # The performance is sensitive to this sleep interval
                     await asyncio.sleep(0.001)
-                    sleep_time += 0.001
-                    if sleep_time >= 5:
-                        print("sleep too long")
                     if rq_info.status == RequestStatus.DONE:
                         return rq_info.response
 
