@@ -145,6 +145,8 @@ class GroupManager:
                 self.request_clocks.append(req_stage_clock)
                 self.request_starts.append(start_time)
                 self.request_stage_latency.append(stage_latency)
+            else:
+                ret_time = None
         else:
             # A debug path for the API compatbility with simulator
             request = request_wrapper
@@ -155,30 +157,31 @@ class GroupManager:
         except Exception as e:  # pylint: disable=broad-except
             ret = RelayException(e)
 
-        # Adjust the clock estimation
-        actual_runtime = time.time() - start_time
-        predicted_runtime = ret_time - start_time
-        ratio = actual_runtime / predicted_runtime
+        if ret_time is not None:
+            # Adjust the clock estimation
+            actual_runtime = time.time() - start_time
+            predicted_runtime = ret_time - start_time
+            ratio = actual_runtime / predicted_runtime
 
-        if ratio > 3 or ratio < 0.3:
-            self.logger.warning("The error of latency estimation is too high.")
+            if ratio > 3 or ratio < 0.3:
+                self.logger.warning("The error of latency estimation is too high.")
 
-        lr = 0.2 if ratio > self.target_ratio else 0.1
-        self.latency_scale += lr * (ratio - self.target_ratio)
+            lr = 0.2 if ratio > self.target_ratio else 0.1
+            self.latency_scale += lr * (ratio - self.target_ratio)
 
-        # Recompute all clock estimations
-        delta = time.time() - self.request_clocks[clock_idx][i]
-        for i in range(len(stage_latency)):
-            self.request_clocks[clock_idx][i] += delta
-        clock_idx += 1
-        while clock_idx < len(self.request_clocks):
-            t = self.request_starts[clock_idx]
-            stage_latency = self.request_stage_latency[clock_idx]
+            # Recompute all clock estimations
+            delta = time.time() - self.request_clocks[clock_idx][i]
             for i in range(len(stage_latency)):
-                t = (max(self.request_clocks[clock_idx-1][i], t) +
-                     stage_latency[i] * self.latency_scale)
-                self.request_clocks[clock_idx][i] = t
+                self.request_clocks[clock_idx][i] += delta
             clock_idx += 1
+            while clock_idx < len(self.request_clocks):
+                t = self.request_starts[clock_idx]
+                stage_latency = self.request_stage_latency[clock_idx]
+                for i in range(len(stage_latency)):
+                    t = (max(self.request_clocks[clock_idx-1][i], t) +
+                         stage_latency[i] * self.latency_scale)
+                    self.request_clocks[clock_idx][i] = t
+                clock_idx += 1
 
         return ret
 
