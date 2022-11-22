@@ -104,7 +104,7 @@ def get_equal_model_serving_case(case, prof_database=None):
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
         elif policy_name == "mp-search":
-            policy = ModelParallelismSearch(use_real_trace=True, verbose=2)
+            policy = ModelParallelismSearch(verbose=2)
         elif "mp-greedy" in policy_name:
             group_size = int(policy_name.split("-")[2])
             policy = ModelParallelismGreedy(group_size=group_size, verbose=1)

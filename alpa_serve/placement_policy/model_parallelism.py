@@ -3,7 +3,6 @@ from collections import namedtuple
 from functools import partial
 import logging
 import multiprocessing
-from pyexpat import model
 import time
 from typing import List
 
@@ -287,7 +286,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
                  max_pp: int = 8,
                  max_op: int = 4,
                  n_iter: int = 1,
-                 use_real_trace: bool = False,
                  simulation_duration: int = 100,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
@@ -298,7 +296,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
         self.n_iter = n_iter
         self.seed = 1234
         self.duration = simulation_duration
-        self.use_real_trace = use_real_trace
 
         self.model_datas = None
         self.cluster_env = None
