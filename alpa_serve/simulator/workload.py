@@ -43,6 +43,11 @@ class ArrivalProcess(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def generate_arrivals(self, start: float, duration: float,
+                          seed: int = 0):
+        raise NotImplementedError()
+
+    @abstractmethod
     def generate_workload(self, model_name: str, start: float,
                           duration: float, slo: Optional[float] = None,
                           seed: int = 0):
@@ -111,9 +116,7 @@ class GammaProcess(ArrivalProcess):
     def cv(self):
         return self.cv_
 
-    def generate_workload(self, model_name: str, start: float,
-                          duration: float, slo: Optional[float] = None,
-                          seed: int = 0):
+    def generate_arrivals(self, start: float, duration: float, seed: int = 0):
         np.random.seed(seed)
 
         ticks = []
@@ -122,6 +125,12 @@ class GammaProcess(ArrivalProcess):
         while cur < end:
             cur += np.random.gamma(self.shape, self.scale)
             ticks.append(cur)
+        return ticks
+
+    def generate_workload(self, model_name: str, start: float,
+                          duration: float, slo: Optional[float] = None,
+                          seed: int = 0):
+        ticks = self.generate_arrivals(start, duration, seed)
         return Workload(ticks, [
             Request(model_name, None, slo, i, {}) for i in range(len(ticks))])
 
