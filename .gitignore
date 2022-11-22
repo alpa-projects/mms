@@ -78,3 +78,7 @@ examples/imagenet/imagenet
 
 # macOS temp files
 .DS_Store
+
+# images
+alpa_serve/trace/*png
+dataset/
