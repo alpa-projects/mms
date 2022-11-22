@@ -3,6 +3,7 @@ from collections import namedtuple
 from functools import partial
 import logging
 import multiprocessing
+from pyexpat import model
 import time
 from typing import List
 
@@ -17,6 +18,7 @@ from alpa_serve.placement_policy.base_policy import (
 from alpa_serve.simulator.controller import simulate_one_case
 from alpa_serve.simulator.executable import Executable
 from alpa_serve.simulator.workload import Workload, GammaProcess
+from alpa_serve.trace import Trace
 from alpa_serve.util import get_factors, ServingCase, eps
 
 
@@ -285,6 +287,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
                  max_pp: int = 8,
                  max_op: int = 4,
                  n_iter: int = 1,
+                 use_real_trace: bool = False,
                  simulation_duration: int = 100,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
@@ -295,6 +298,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
         self.n_iter = n_iter
         self.seed = 1234
         self.duration = simulation_duration
+        self.use_real_trace = use_real_trace
 
         self.model_datas = None
         self.cluster_env = None
@@ -308,10 +312,19 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
         # Generate workloads
         w = Workload.empty()
-        for i, data in enumerate(model_datas):
-            w += GammaProcess(data.rate, data.cv).generate_workload(
-                data.name, 0, duration=self.duration,
-                slo=data.slo, seed=self.seed + i)
+        if True:
+            azure_v2_trace_dir = "/home/ubuntu/efs/mms/dataset/"
+            azure_v2_trace = Trace("azure_v2", azure_v2_trace_dir)
+            model_names = [model_data.name for model_data in self.model_datas]
+            slos = [model_data.slo for model_data in self.model_datas]
+            trace_replays = azure_v2_trace.replay_vanilla(model_names, start_time='0.0.0', end_time='1.0.0')
+            for model_name, slo in zip(model_names, slos):
+                w += trace_replays[model_name].to_workload(slo)
+        else:
+            for i, data in enumerate(model_datas):
+                w += GammaProcess(data.rate, data.cv).generate_workload(
+                    data.name, 0, duration=self.duration,
+                    slo=data.slo, seed=self.seed + i)
         self.workload = w
 
         # Get initial solutions
@@ -452,9 +465,10 @@ class ModelParallelismSearch(BasePlacementPolicy):
         return ModelPlacement(group_configs, group_models)
 
     def get_scores(self, sols: List[ModelPlacement]):
-        return [self.get_score_one_sol(sol, self.model_datas, self.cluster_env,
-                                       self.workload)
-                for sol in sols]
+        remote_refs = [ray.remote(num_cpus=1)(self.get_score_one_sol).remote(sol, self.model_datas,
+                                              self.cluster_env, self.workload)
+                       for sol in sols]
+        return [ray.get(remote_ref) for remote_ref in remote_refs]
 
     @staticmethod
     def get_score_one_sol(sol: ModelPlacement,

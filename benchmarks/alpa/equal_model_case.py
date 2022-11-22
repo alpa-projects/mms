@@ -11,6 +11,7 @@ from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
     ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
+from alpa_serve.trace import Trace
 from alpa_serve.util import GB, write_tsv, ServingCase
 
 from benchmarks.alpa.util import get_model_def
@@ -77,9 +78,16 @@ def get_equal_model_serving_case(case, prof_database=None):
 
     def generate_workload(start=0):
         w = Workload.empty()
-        for i in range(num_models):
-            w += arrival_processes[i].generate_workload(
-                model_names[i], start, duration, slo=slos[i], seed=i)
+        if True:
+            azure_v2_trace_dir = "/home/ubuntu/efs/mms/dataset/"
+            azure_v2_trace = Trace("azure_v2", azure_v2_trace_dir)
+            trace_replays = azure_v2_trace.replay_vanilla(model_names, start_time='1.0.0', end_time='2.0.0')
+            for model_name, slo in zip(model_names, slos):
+                w += trace_replays[model_name].to_workload(slo)
+        else:
+            for i in range(num_models):
+                w += arrival_processes[i].generate_workload(
+                    model_names[i], start, duration, slo=slos[i], seed=i)
         return w
 
     def place_models(controller):
@@ -96,7 +104,7 @@ def get_equal_model_serving_case(case, prof_database=None):
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
         elif policy_name == "mp-search":
-            policy = ModelParallelismSearch(verbose=2)
+            policy = ModelParallelismSearch(use_real_trace=True, verbose=2)
         elif "mp-greedy" in policy_name:
             group_size = int(policy_name.split("-")[2])
             policy = ModelParallelismGreedy(group_size=group_size, verbose=1)
