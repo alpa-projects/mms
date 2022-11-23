@@ -9,6 +9,7 @@ if __name__ == "__main__":
     parser.add_argument("--exp-name", type=str, default="default")
     parser.add_argument("--output", type=str, default="res_goodput_vs_slo.tsv")
     parser.add_argument("--parallel", action="store_true")
+    parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--mode", choices=["simulate", "run"],
                         default="simulate")
 
@@ -21,10 +22,19 @@ if __name__ == "__main__":
     model_type = "bert-1.3b"
     num_models = 16
     total_rate = 64
-    rate_distribution = "power_law"
-    arrival_process = "gamma"
-    arrival_process_kwargs = {"cv": 4}
+    if args.synthetic:
+        # choices: {"gamma", "uniform_mmpp", "azure_v2"}
+        arrival_process = "gamma"
+        # choices: {"uniform", "power_law", "None"}
+        rate_distribution = "uniform"
+        arrival_process_kwargs = {"cv": 4}
+    else:
+        arrival_process = "azure_v2"
+        rate_distribution = None
+        arrival_process_kwargs = None
+
     slos = [0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0, 4.0, 8.0]
+    # slos = [0.05, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.2, 0.4, 0.6, 0.8]
     duration = 200
 
     cases = []

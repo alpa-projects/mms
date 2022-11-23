@@ -6,6 +6,7 @@ from typing import List
 import numpy as np
 
 from alpa_serve.profiling import ProfilingResult, ParallelConfig
+from alpa_serve.simulator.workload import Workload
 
 
 @dataclasses.dataclass
@@ -37,9 +38,9 @@ class BasePlacementPolicy:
         self.verbose = verbose
 
     def place_models(self, controller, cluster_env: ClusterEnv,
-                     model_datas: List[ModelData]):
+                     model_datas: List[ModelData], train_workload: Workload = None):
         tic = time.time()
-        (placement, debug_info) = self.solve_placement(model_datas, cluster_env)
+        (placement, debug_info) = self.solve_placement(model_datas, cluster_env, train_workload)
         solver_time = time.time() - tic
 
         self.place_models_impl(controller, cluster_env, model_datas, placement)

@@ -10,8 +10,8 @@ from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelPlacement, ModelData, ClusterEnv)
+from alpa_serve.simulator.workload import Workload
 from alpa_serve.util import eps
-
 
 def compute_single_throughput(model_data, max_bs):
     parallel_config = ParallelConfig(1, 1, 1)
@@ -38,7 +38,8 @@ class SelectiveReplicationILP(BasePlacementPolicy):
 
     def solve_placement(self,
                         model_datas: List[ModelData],
-                        cluster_env: ClusterEnv):
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
         tic = time.time()
 
         # Load constants
@@ -125,7 +126,8 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
 
     def solve_placement(self,
                         model_datas: List[ModelData],
-                        cluster_env: ClusterEnv):
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
         # Load constants
         num_devices = cluster_env.num_devices
         num_models = len(model_datas)

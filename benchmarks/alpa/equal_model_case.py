@@ -60,8 +60,23 @@ def get_equal_model_serving_case(case, prof_database=None):
     elif arrival_process == "uniform_mmpp":
         arrival_processes = [
             UniformMMPP(**arrival_process_kwargs)
-            for i in range(num_models)
+            for _ in range(num_models)
         ]
+    elif arrival_process == "azure_v2":
+        azure_v2_trace_dir = "/home/ubuntu/efs/mms/dataset/azure_v2.pkl"
+        azure_v2_trace = Trace("azure_v2", azure_v2_trace_dir)
+        # train_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="vanilla",
+        #                                             start_time='0.0.0', end_time='1.0.0', time_scale_factor=10)
+        # test_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="vanilla",
+        #                                             start_time='1.0.0', end_time='2.0.0', time_scale_factor=10)
+        train_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="gamma",
+                                                    start_time='0.0.0', end_time='1.0.0', rate_scale_factor=2, cv_scale_factor=8)
+        test_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="gamma",
+                                                    start_time='1.0.0', end_time='2.0.0', rate_scale_factor=2, cv_scale_factor=8)
+        train_workload = Workload.empty()
+        for model_name, slo in zip(model_names, slos):
+            train_workload += train_replays[model_name].to_workload(slo)
+        arrival_processes = [test_replays[model_name] for model_name in model_names]
     else:
         raise ValueError("Invalid arrival process: {arrival_process}")
 
@@ -78,16 +93,12 @@ def get_equal_model_serving_case(case, prof_database=None):
 
     def generate_workload(start=0):
         w = Workload.empty()
-        if True:
-            azure_v2_trace_dir = "/home/ubuntu/efs/mms/dataset/"
-            azure_v2_trace = Trace("azure_v2", azure_v2_trace_dir)
-            trace_replays = azure_v2_trace.replay_vanilla(model_names, start_time='1.0.0', end_time='2.0.0')
-            for model_name, slo in zip(model_names, slos):
-                w += trace_replays[model_name].to_workload(slo)
-        else:
-            for i in range(num_models):
-                w += arrival_processes[i].generate_workload(
-                    model_names[i], start, duration, slo=slos[i], seed=i)
+        for i in range(num_models):
+            if "azure" in arrival_process:
+                w += arrival_processes[i].to_workload(slos[i])
+            else:
+                w += arrival_processes[i].generate_workload(model_names[i], start,
+                                                            duration, slo=slos[i], seed=i)
         return w
 
     def place_models(controller):
@@ -111,7 +122,11 @@ def get_equal_model_serving_case(case, prof_database=None):
         else:
             raise ValueError(f"Invalid placement policy: {policy_name}")
 
-        placement = policy.place_models(controller, cluster_env, model_datas)
+        if "azure" in arrival_process:
+            placement = policy.place_models(controller, cluster_env, model_datas, train_workload)
+        else:
+            placement = policy.place_models(controller, cluster_env, model_datas)
+
         return placement
 
     return ServingCase(register_models, generate_workload, place_models)

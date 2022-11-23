@@ -71,7 +71,8 @@ class ModelParallelismILP(BasePlacementPolicy):
 
     def solve_placement(self,
                         model_datas: List[ModelData],
-                        cluster_env: ClusterEnv):
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
         tic = time.time()
 
         # Load constants
@@ -206,7 +207,8 @@ class ModelParallelismGreedy(BasePlacementPolicy):
 
     def solve_placement(self,
                         model_datas: List[ModelData],
-                        cluster_env: ClusterEnv):
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
         # Load constants
         num_devices = cluster_env.num_devices
         num_models = len(model_datas)
@@ -303,26 +305,21 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
     def solve_placement(self,
                         model_datas: List[ModelData],
-                        cluster_env: ClusterEnv):
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
         self.model_datas = model_datas
         self.cluster_env = cluster_env
 
         # Generate workloads
-        w = Workload.empty()
-        if True:
-            azure_v2_trace_dir = "/home/ubuntu/efs/mms/dataset/"
-            azure_v2_trace = Trace("azure_v2", azure_v2_trace_dir)
-            model_names = [model_data.name for model_data in self.model_datas]
-            slos = [model_data.slo for model_data in self.model_datas]
-            trace_replays = azure_v2_trace.replay_vanilla(model_names, start_time='0.0.0', end_time='1.0.0')
-            for model_name, slo in zip(model_names, slos):
-                w += trace_replays[model_name].to_workload(slo)
-        else:
+        if train_workload is None:
+            w = Workload.empty()
             for i, data in enumerate(model_datas):
                 w += GammaProcess(data.rate, data.cv).generate_workload(
                     data.name, 0, duration=self.duration,
                     slo=data.slo, seed=self.seed + i)
-        self.workload = w
+            self.workload = w
+        else:
+            self.workload = train_workload
 
         # Get initial solutions
         initial_sols = self.enumerate_group_configs()
