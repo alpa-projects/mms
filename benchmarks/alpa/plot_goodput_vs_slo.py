@@ -58,7 +58,7 @@ def read_data(filename):
 
         if rate is None:
             rate = total_rate
-            cv = kwargs["cv"]
+        cv = kwargs["cv"] if kwargs else 1
 
         data[policy][slo] = goodput
 
@@ -88,10 +88,12 @@ def plot_goodput_vs_slo(data, title, output, show):
         y_max = max(y_max, *ys)
 
     ax.set_ylim(bottom=0, top=max(y_max * 1.05, 100))
+    ax.set_xlim(left=0.045, right=1)
     ax.set_ylabel("Goodput (%)")
     ax.set_xlabel("SLO (second)")
     ax.set_xscale("log")
-    xticks = [0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8]
+    # xticks = [0.05, 0.1, 0.2, 0.4, 0.8]
+    xticks = [0.05, 0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8]
     ax.set_xticks(xticks)
     ax.set_xticklabels(xticks)
     ax.set_xticks([], minor=True)

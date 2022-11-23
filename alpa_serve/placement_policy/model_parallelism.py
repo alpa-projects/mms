@@ -17,6 +17,7 @@ from alpa_serve.placement_policy.base_policy import (
 from alpa_serve.simulator.controller import simulate_one_case
 from alpa_serve.simulator.executable import Executable
 from alpa_serve.simulator.workload import Workload, GammaProcess
+from alpa_serve.trace import Trace
 from alpa_serve.util import get_factors, ServingCase, eps
 
 
@@ -70,7 +71,8 @@ class ModelParallelismILP(BasePlacementPolicy):
 
     def solve_placement(self,
                         model_datas: List[ModelData],
-                        cluster_env: ClusterEnv):
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
         tic = time.time()
 
         # Load constants
@@ -205,7 +207,8 @@ class ModelParallelismGreedy(BasePlacementPolicy):
 
     def solve_placement(self,
                         model_datas: List[ModelData],
-                        cluster_env: ClusterEnv):
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
         # Load constants
         num_devices = cluster_env.num_devices
         num_models = len(model_datas)
@@ -302,17 +305,21 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
     def solve_placement(self,
                         model_datas: List[ModelData],
-                        cluster_env: ClusterEnv):
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
         self.model_datas = model_datas
         self.cluster_env = cluster_env
 
         # Generate workloads
-        w = Workload.empty()
-        for i, data in enumerate(model_datas):
-            w += GammaProcess(data.rate, data.cv).generate_workload(
-                data.name, 0, duration=self.duration,
-                slo=data.slo, seed=self.seed + i)
-        self.workload = w
+        if train_workload is None:
+            w = Workload.empty()
+            for i, data in enumerate(model_datas):
+                w += GammaProcess(data.rate, data.cv).generate_workload(
+                    data.name, 0, duration=self.duration,
+                    slo=data.slo, seed=self.seed + i)
+            self.workload = w
+        else:
+            self.workload = train_workload
 
         # Get initial solutions
         initial_sols = self.enumerate_group_configs()
@@ -452,9 +459,10 @@ class ModelParallelismSearch(BasePlacementPolicy):
         return ModelPlacement(group_configs, group_models)
 
     def get_scores(self, sols: List[ModelPlacement]):
-        return [self.get_score_one_sol(sol, self.model_datas, self.cluster_env,
-                                       self.workload)
-                for sol in sols]
+        remote_refs = [ray.remote(num_cpus=1)(self.get_score_one_sol).remote(sol, self.model_datas,
+                                              self.cluster_env, self.workload)
+                       for sol in sols]
+        return [ray.get(remote_ref) for remote_ref in remote_refs]
 
     @staticmethod
     def get_score_one_sol(sol: ModelPlacement,

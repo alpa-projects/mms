@@ -165,6 +165,10 @@ class TraceReplay:
         self.cv_scale_factor = cv_scale_factor
         self.time_scale_factor = time_scale_factor
 
+        # stats
+        self._rate = None
+        self._cv = None
+
     def to_workload(self, slo: float):
         return Workload(self.arrivals.tolist(), [Request(self.model, None, slo, i, {})
                                         for i in range(len(self.arrivals))])
@@ -217,7 +221,40 @@ class TraceReplay:
                    f"({self.rate_scale_factor},{self.cv_scale_factor},{self.time_scale_factor}).png"
         fig.savefig(os.path.join(fig_folder, fig_name), bbox_inches='tight')
         plt.close()
+    
+    def _compute_rate(self):
+        if self.arrival_distribution_params is not None:
+            rates = []
+            for param in self.arrival_distribution_params:
+                if param is not None:
+                    rate, _ = param
+                    rates.append(rate)
+            self._rate = sum(rates) / len(rates)
+        else:
+            self._rate = self.n_arrivals / (self.end_seconds - self.start_seconds)
+        
+    def _compute_cv(self):
+        if self.arrival_distribution_params is not None:
+            cvs = []
+            for param in self.arrival_distribution_params:
+                if param is not None:
+                    _, cv = param
+                    cvs.append(cv)
+            self._cv = sum(cvs) / len(cvs)
+        else:
+            # This is set arbitrarily and it should not be used
+            self._cv = 1
 
+    def rate(self):
+        if self._rate is None:
+            self._compute_rate()
+        return self._rate
+    
+    def cv(self):
+        if self._cv is None:
+            self._compute_cv()
+        return self._cv
+    
     @property
     def n_arrivals(self):
         return self.arrivals.size
