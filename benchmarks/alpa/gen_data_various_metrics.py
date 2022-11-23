@@ -63,20 +63,6 @@ if __name__ == "__main__":
                           output_file=args.output,
                           mode=args.mode, parallel=args.parallel)
 
-    ##### goodput vs total_rate #####
-    cases = []
-    for total_rate in total_rates:
-        for policy_name in policies:
-            cases.append(EqualModelCase(
-                fixed_num_devices, mem_budget, model_type, fixed_num_models,
-                total_rate, rate_distribution,
-                arrival_process, fixed_cv,
-                fixed_slo, duration, policy_name))
-
-    run_equal_model_cases(cases, exp_name="goodput_vs_total_rate",
-                          output_file=args.output,
-                          mode=args.mode, parallel=args.parallel)
-
     ##### goodput vs slo #####
     cases = []
     for slo in slos:
@@ -88,6 +74,20 @@ if __name__ == "__main__":
                 slo, duration, policy_name))
 
     run_equal_model_cases(cases, exp_name="goodput_vs_slo",
+                          output_file=args.output,
+                          mode=args.mode, parallel=args.parallel)
+
+    ##### goodput vs total_rate #####
+    cases = []
+    for total_rate in total_rates:
+        for policy_name in policies:
+            cases.append(EqualModelCase(
+                fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                total_rate, rate_distribution,
+                arrival_process, fixed_cv,
+                fixed_slo, duration, policy_name))
+
+    run_equal_model_cases(cases, exp_name="goodput_vs_total_rate",
                           output_file=args.output,
                           mode=args.mode, parallel=args.parallel)
 
