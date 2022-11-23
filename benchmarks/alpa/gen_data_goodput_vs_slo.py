@@ -23,12 +23,13 @@ if __name__ == "__main__":
     num_models = 16
     total_rate = 64
     if args.synthetic:
-        # choices: {"gamma", "uniform_mmpp", "azure_v2"}
+        # choices: {"gamma", "uniform_mmpp"}
         arrival_process = "gamma"
-        # choices: {"uniform", "power_law", "None"}
+        # choices: {"uniform", "power_law"}
         rate_distribution = "uniform"
         arrival_process_kwargs = {"cv": 4}
     else:
+        # choices: {"azure_v2"}
         arrival_process = "azure_v2"
         rate_distribution = None
         arrival_process_kwargs = None
