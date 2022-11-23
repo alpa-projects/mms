@@ -4,7 +4,7 @@ import csv
 import pickle
 import time
 import warnings
-from typing import List
+from typing import List, Dict
 from collections import OrderedDict
 
 import matplotlib.pyplot as plt
@@ -144,7 +144,10 @@ class TraceReplay:
                  end_time,
                  interval_seconds,
                  arrival_distribution,
-                 arrival_distribution_params=None):
+                 arrival_distribution_params=None,
+                 rate_scale_factor=1.0,
+                 cv_scale_factor=1.0,
+                 time_scale_factor=1.0):
         """A TraceReplay specifies the traffic arrival pattern of a model."""
         self.model = model
         self.arrivals = arrivals
@@ -156,6 +159,11 @@ class TraceReplay:
         self.arrival_distribution = arrival_distribution
         self.interval_seconds = interval_seconds
         self.arrival_distribution_params = arrival_distribution_params
+
+        # scale factors
+        self.rate_scale_factor = rate_scale_factor
+        self.cv_scale_factor = cv_scale_factor
+        self.time_scale_factor = time_scale_factor
 
     def to_workload(self, slo: float):
         return Workload(self.arrivals.tolist(), [Request(self.model, None, slo, i, {})
@@ -170,19 +178,19 @@ class TraceReplay:
                     rate, cv = param
                     rates.append(rate)
                     cvs.append(cv)
-            print(f"Trace for model: {self.model}, duration: {self.duration}, "
-                  f"duration (seconds): {self.duration_seconds}, "
+            print(f"Trace for model: {self.model}, duration: {self.duration}, #arrivals: {self.arrivals.size}, "
+                  f"duration (s): {self.duration_seconds}, "
                   f"arrival distribution: {self.arrival_distribution}, "
                   f"generation interval: {self.interval_seconds}, "
-                  f"generation rates: min rate {min(rates):.2f}, mean rate {sum(rates) / len(rates):.2f}, max rate: {max(rates):.2f}, "
-                  f"generate cvs: min cv {min(cvs):.2f}, mean cv {sum(cvs) / len(cvs):.2f}, max cv: {max(cvs):.2f}, "
-                  f"#arrivals: {self.arrivals.size}")
+                  f"generation rates: mean rate {sum(rates) / len(rates):.2f}, max rate: {max(rates):.2f}, "
+                  f"generate cvs: mean cv {sum(cvs) / len(cvs):.2f}, max cv: {max(cvs):.2f}, "
+                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, {self.time_scale_factor}).")
         else:
-            print(f"Trace for model: {self.model}, duration: {self.duration}, "
+            print(f"Trace for model: {self.model}, duration: {self.duration}, #arrivals: {self.arrivals.size}, "
                   f"duration (seconds): {self.duration_seconds}, "
                   f"arrival distribution: {self.arrival_distribution}, "
                   f"generation interval: {self.interval_seconds}, "
-                  f"n arrivals: {self.arrivals.size}")
+                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, {self.time_scale_factor}).")
 
     def visualize(self, n_interval=100):
         if np.argwhere(np.isnan(self.arrivals)).size > 0:
@@ -205,7 +213,8 @@ class TraceReplay:
         fig_folder = "plots"
         os.makedirs(fig_folder, exist_ok=True)
         fig_name = f"{self.model}-{self.trace_name}-{self.arrival_distribution}-" \
-                   f"{self.start_time}-{self.end_time}-{self.interval_seconds}.png"
+                   f"{self.start_time}-{self.end_time}-{self.interval_seconds}-" \
+                   f"({self.rate_scale_factor},{self.cv_scale_factor},{self.time_scale_factor}).png"
         fig.savefig(os.path.join(fig_folder, fig_name), bbox_inches='tight')
         plt.close()
 
@@ -311,12 +320,44 @@ class Trace:
 
     def replay(self,
                models: List[str],
-               model_mapping_strategy = "round_robin",
+               model_mapping_strategy: str = "round_robin",
                start_time: str = "0.0.0",
                end_time: str = "13.23.60",
-               arrival_distribution="exponential",
-               interval_seconds: int = 60):
-        """Return a workload that replays a given slice of the trace."""
+               arrival_distribution : str = "exponential",
+               interval_seconds: int = 600,
+               rate_scale_factor: float = 1.0,
+               cv_scale_factor: float = 1.0,
+               time_scale_factor: float = 1.0) -> Dict[str, TraceReplay]:
+        """Return a workload that replays a given slice of the trace.
+
+        The method replays the trace by mapping functions in the trace to models provided by
+        the input `models`.
+
+        Args:
+            models (List[str]): a list of model names.
+            model_mapping_strategy (str): `round_robin` or `stripe`.
+            start_time (str): in the form of `{day}.{hour}.{minute}`.
+            end_time (str): in the form of `{day}.{hour}.{minute}`.
+            arrival_distribution (str): `vanilla`, `exponential`, or `gamma`.
+            interval_seconds (int): the length of the interval in seconds to estimate a generation process.
+            rate_scale_factor (float): scale the estimated rate give this factor.
+            cv_scale_factor (float): scale the cv given this factor. Only works when distribution = `gamma`.
+            time_scale_factor (float): downscale the time, e.g., when it is 2, a 1 hour trace will be used as if 30 mins.
+
+        Returns:
+            replays (Dict[str, TraceReplay]): the TraceReplay for each model.
+        """
+        # Do some checks
+        if time_scale_factor != 1.0:
+            if self.trace_name != "azure_v2":
+                raise RuntimeError("Cannot do time-scaling on azure_v1.")
+            if arrival_distribution != "vanilla":
+                raise RuntimeError("Can only do time-scaleing on vanilla distributions.")
+        if arrival_distribution != "gamma" and cv_scale_factor != 1.0:
+            raise RuntimeError("No CV for exponential distributions.")
+        if time_scale_factor != 1.0 and (rate_scale_factor != 1.0 or cv_scale_factor != 1.0):
+            raise RuntimeError("Choose one: scale rate/cv, or scale time.")
+
         replays = OrderedDict()
         # Step 1: generate the model-function mapping
         function_model_mapping = self.map_model(models, self.function_names, model_mapping_strategy)
@@ -353,7 +394,8 @@ class Trace:
             # Estimate distribution parameters with histogram dataset
             distributions = self.estimate_parameters_with_histogram(histogram_dataset,
                                                                     interval_seconds,
-                                                                    arrival_distribution)
+                                                                    arrival_distribution,
+                                                                    rate_scale_factor)
         elif self.trace_name == "azure_v2":
             # Trace are exact arrivals
             # 1. Convert function trace to model trace
@@ -371,10 +413,17 @@ class Trace:
 
             if arrival_distribution == "vanilla":
                 for m in model_arrivals:
-                    # TODO: Change this to be workload instead TraceReplay?
-                    replays[m] = (
-                        TraceReplay(m, model_arrivals[m], self.trace_name, start_time, end_time,
-                                    end_timestamp_seconds - start_timestamp_seconds, arrival_distribution, None))
+                    model_arrivals[m] = (model_arrivals[m] - start_timestamp_seconds) / time_scale_factor + start_timestamp_seconds
+                    replays[m] = TraceReplay(m,
+                                        model_arrivals[m],
+                                        self.trace_name,
+                                        start_time,
+                                        end_time,
+                                        end_timestamp_seconds - start_timestamp_seconds,
+                                        arrival_distribution,
+                                        rate_scale_factor=rate_scale_factor,
+                                        cv_scale_factor=cv_scale_factor,
+                                        time_scale_factor=time_scale_factor)
                 return replays
 
             # 2. bucketing arrivals based on `interval_seconds` and start/end time.
@@ -392,7 +441,10 @@ class Trace:
                 arrival_dataset[m] = interval_dataset
 
             # 3. estimate distribution parameters based on arrivals
-            distributions = self.estimate_parameters_with_arrivals(arrival_dataset, arrival_distribution)
+            distributions = self.estimate_parameters_with_arrivals(arrival_dataset,
+                                                                   arrival_distribution,
+                                                                   rate_scale_factor,
+                                                                   cv_scale_factor)
         else:
             raise NotImplementedError("Other trace ")
 
@@ -405,11 +457,19 @@ class Trace:
                     arrival_distribution_params.append(None)
                     continue
                 start = seed * interval_seconds + start_timestamp_seconds
-                generated = distribution.generate_arrivals(start, interval_seconds, seed)
                 arrivals.extend(distribution.generate_arrivals(start, interval_seconds, seed))
                 arrival_distribution_params.append(distribution.params())
-            replays[m] = TraceReplay(m, np.array(arrivals), self.trace_name, start_time, end_time,
-                                     interval_seconds, arrival_distribution, arrival_distribution_params)
+            replays[m] = TraceReplay(m,
+                                     np.array(arrivals),
+                                     self.trace_name,
+                                     start_time,
+                                     end_time,
+                                     interval_seconds,
+                                     arrival_distribution,
+                                     arrival_distribution_params=arrival_distribution_params,
+                                     rate_scale_factor=rate_scale_factor,
+                                     cv_scale_factor=cv_scale_factor,
+                                     time_scale_factor=time_scale_factor)
         return replays
 
     def replay_vanilla(self,
@@ -440,22 +500,31 @@ class Trace:
                 mapping[f] = models[i % n_model]
         return mapping
 
-    def estimate_parameters_with_histogram(self, dataset, interval_seconds, arrival_distribution="exponential"):
+    def estimate_parameters_with_histogram(self,
+                                           dataset,
+                                           interval_seconds,
+                                           arrival_distribution="exponential",
+                                           rate_scale_factor=1.0):
         if arrival_distribution not in ["exponential"]:
-            raise NotImplementedError(f"We can only use histogram data for exponential distribution,"
-                                      f" got {arrival_distribution}")
+            raise NotImplementedError(f"We can only use histogram data for exponential distribution, "
+                                      f"got {arrival_distribution}")
         distributions = OrderedDict()
         for model, histogram in dataset.items():
             distributions[model] = []
             for h in histogram:
                 if h == 0:
-                    distributions[model].append(PoissonProcess(arrival_rate))
+                    distributions[model].append(None)
                 else:
                     arrival_rate = h / interval_seconds
+                    arrival_rate = arrival_rate * rate_scale_factor
                     distributions[model].append(PoissonProcess(arrival_rate))
         return distributions
 
-    def estimate_parameters_with_arrivals(self, dataset, arrival_distribution="exponential"):
+    def estimate_parameters_with_arrivals(self,
+                                          dataset,
+                                          arrival_distribution="exponential",
+                                          rate_scale_factor=1.0,
+                                          cv_scale_factor=1.0):
         if arrival_distribution not in ["exponential", "gamma"]:
             raise NotImplementedError(f"Only support exponential | gamma, "
                                       f" got {arrival_distribution}")
@@ -473,6 +542,9 @@ class Trace:
                     else:
                         try:
                             arrival_rate, cv = self.estimate_gamma(inter_arrival)
+                            # scale them
+                            arrival_rate = arrival_rate * rate_scale_factor
+                            cv = cv * cv_scale_factor
                             distributions[model].append(GammaProcess(arrival_rate, cv))
                         except ValueError as ve:
                             warnings.warn("Failed to fit a gamma distribution.")
