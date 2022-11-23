@@ -3,6 +3,7 @@ import os.path
 import csv
 import pickle
 import time
+import warnings
 from typing import List
 from collections import OrderedDict
 
@@ -141,7 +142,9 @@ class TraceReplay:
                  trace_name,
                  start_time,
                  end_time,
-                 arrival_distribution):
+                 interval_seconds,
+                 arrival_distribution,
+                 arrival_distribution_params=None):
         """A TraceReplay specifies the traffic arrival pattern of a model."""
         self.model = model
         self.arrivals = arrivals
@@ -151,18 +154,42 @@ class TraceReplay:
         self.start_time = start_time
         self.end_time = end_time
         self.arrival_distribution = arrival_distribution
+        self.interval_seconds = interval_seconds
+        self.arrival_distribution_params = arrival_distribution_params
 
     def to_workload(self, slo: float):
         return Workload(self.arrivals.tolist(), [Request(self.model, None, slo, i, {})
                                         for i in range(len(self.arrivals))])
 
     def report_stats(self):
-        print(f"Trace for model: {self.model}, duration: {self.duration}, "
-              f"duration (seconds): {self.duration_seconds}, "
-              f"arrival distribution: {self.arrival_distribution}")
+        if self.arrival_distribution_params is not None:
+            rates = []
+            cvs = []
+            for param in self.arrival_distribution_params:
+                if param is not None:
+                    rate, cv = param
+                    rates.append(rate)
+                    cvs.append(cv)
+            print(f"Trace for model: {self.model}, duration: {self.duration}, "
+                  f"duration (seconds): {self.duration_seconds}, "
+                  f"arrival distribution: {self.arrival_distribution}, "
+                  f"generation interval: {self.interval_seconds}, "
+                  f"generation rates: min rate {min(rates):.2f}, mean rate {sum(rates) / len(rates):.2f}, max rate: {max(rates):.2f}, "
+                  f"generate cvs: min cv {min(cvs):.2f}, mean cv {sum(cvs) / len(cvs):.2f}, max cv: {max(cvs):.2f}, "
+                  f"#arrivals: {self.arrivals.size}")
+        else:
+            print(f"Trace for model: {self.model}, duration: {self.duration}, "
+                  f"duration (seconds): {self.duration_seconds}, "
+                  f"arrival distribution: {self.arrival_distribution}, "
+                  f"generation interval: {self.interval_seconds}, "
+                  f"n arrivals: {self.arrivals.size}")
 
     def visualize(self, n_interval=100):
-        assert np.all(self.arrivals > self.start_seconds)
+        if np.argwhere(np.isnan(self.arrivals)).size > 0:
+            print(self.arrivals)
+        assert np.all(self.arrivals > self.start_seconds), \
+            f"arrivals: {np.argwhere(np.isnan(self.arrivals))}, " \
+            f"start_seconds: {self.start_seconds}"
         plt.figure()
         plt.hist(self.arrivals, bins=np.linspace(self.start_seconds, self.end_seconds,
                                                  n_interval),
@@ -171,14 +198,14 @@ class TraceReplay:
         plt.ylabel("#requests")
         plt.xlabel("time (s)")
         plt.legend()
+        plt.ylim(0, 1000)
         fig = plt.gcf()
         figure_size = (8, 4)
         fig.set_size_inches(figure_size)
-        interval_seconds = self.duration_seconds // n_interval
         fig_folder = "plots"
         os.makedirs(fig_folder, exist_ok=True)
         fig_name = f"{self.model}-{self.trace_name}-{self.arrival_distribution}-" \
-                   f"{self.start_time}-{self.end_time}-{interval_seconds}.png"
+                   f"{self.start_time}-{self.end_time}-{self.interval_seconds}.png"
         fig.savefig(os.path.join(fig_folder, fig_name), bbox_inches='tight')
         plt.close()
 
@@ -294,7 +321,9 @@ class Trace:
         # Step 1: generate the model-function mapping
         function_model_mapping = self.map_model(models, self.function_names, model_mapping_strategy)
         start_d, start_h, start_m = self.timestr_to_dhm(start_time)
+        end_d, end_h, end_m = self.timestr_to_dhm(end_time)
         start_timestamp_seconds = start_d * 24 * 60 * 60 + start_h * 60 * 60 + start_m * 60
+        end_timestamp_seconds = end_d * 24 * 60 * 60 + end_h * 60 * 60 + end_m * 60
 
         if self.trace_name == "azure_v1":
             # Trace are 1-min histograms
@@ -344,13 +373,12 @@ class Trace:
                 for m in model_arrivals:
                     # TODO: Change this to be workload instead TraceReplay?
                     replays[m] = (
-                        TraceReplay(m, model_arrivals[m], self.trace_name, start_time, end_time, arrival_distribution))
+                        TraceReplay(m, model_arrivals[m], self.trace_name, start_time, end_time,
+                                    end_timestamp_seconds - start_timestamp_seconds, arrival_distribution, None))
                 return replays
 
             # 2. bucketing arrivals based on `interval_seconds` and start/end time.
             arrival_dataset = OrderedDict()
-            end_d, end_h, end_m = self.timestr_to_dhm(end_time)
-            end_timestamp_seconds = end_d * 24 * 60 * 60 + end_h * 60 * 60 + end_m * 60
             intervals = np.arange(start_timestamp_seconds, end_timestamp_seconds, interval_seconds)
             if intervals[-1] != end_timestamp_seconds:
                 intervals = np.append(intervals, end_timestamp_seconds)
@@ -365,20 +393,23 @@ class Trace:
 
             # 3. estimate distribution parameters based on arrivals
             distributions = self.estimate_parameters_with_arrivals(arrival_dataset, arrival_distribution)
-
         else:
             raise NotImplementedError("Other trace ")
 
         # Sample from the distributions and generate the arrivals
         for m in distributions:
             arrivals = []
+            arrival_distribution_params = []
             for seed, distribution in enumerate(distributions[m]):
                 if distribution is None:
+                    arrival_distribution_params.append(None)
                     continue
                 start = seed * interval_seconds + start_timestamp_seconds
+                generated = distribution.generate_arrivals(start, interval_seconds, seed)
                 arrivals.extend(distribution.generate_arrivals(start, interval_seconds, seed))
+                arrival_distribution_params.append(distribution.params())
             replays[m] = TraceReplay(m, np.array(arrivals), self.trace_name, start_time, end_time,
-                                     arrival_distribution)
+                                     interval_seconds, arrival_distribution, arrival_distribution_params)
         return replays
 
     def replay_vanilla(self,
@@ -433,15 +464,19 @@ class Trace:
             distributions[model] = []
             for arrival in arrivals:
                 inter_arrival = np.diff(arrival) + 1e-6
-                if inter_arrival.size == 0:
+                if inter_arrival.size == 0 or (inter_arrival.size == 1 and arrival_distribution == "gamma"):
                     distributions[model].append(None)
                 else:
                     if arrival_distribution == "exponential":
                         arrival_rate = self.estimate_exponential(inter_arrival)
                         distributions[model].append(PoissonProcess(arrival_rate))
                     else:
-                        arrival_rate, cv = self.estimate_gamma(inter_arrival)
-                        distributions[model].append(GammaProcess(arrival_rate, cv))
+                        try:
+                            arrival_rate, cv = self.estimate_gamma(inter_arrival)
+                            distributions[model].append(GammaProcess(arrival_rate, cv))
+                        except ValueError as ve:
+                            warnings.warn("Failed to fit a gamma distribution.")
+                            distributions[model].append(None)
         return distributions
 
     @staticmethod
@@ -479,7 +514,7 @@ class Trace:
                 n_invocations.append(np.sum(arrival_or_histogram))
             else:
                 n_invocations.append(arrival_or_histogram.size)
-        print(f"Sliced trace tats: #functions: {n_function}, "
+        print(f"Sliced trace stats: #functions: {n_function}, "
           f"total invocations: {sum(n_invocations)}, "
           f"max: {max(n_invocations)}, min: {min(n_invocations)}, "
           f"avg: {sum(n_invocations) / n_function}")

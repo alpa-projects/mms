@@ -81,4 +81,5 @@ examples/imagenet/imagenet
 
 # images
 alpa_serve/trace/*png
+alpa_serve/trace/plots
 dataset/
