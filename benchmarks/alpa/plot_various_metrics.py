@@ -196,8 +196,8 @@ if __name__ == "__main__":
 
     threshold = 0.99
 
-    #plot_goodput_vs_num_devices(lines, threshold, args.show)
-    #plot_goodput_vs_num_models(lines, threshold, args.show)
-    #plot_goodput_vs_slo(lines, threshold, args.show)
-    #plot_goodput_vs_total_rate(lines, threshold, args.show)
+    plot_goodput_vs_num_devices(lines, threshold, args.show)
+    plot_goodput_vs_num_models(lines, threshold, args.show)
+    plot_goodput_vs_slo(lines, threshold, args.show)
+    plot_goodput_vs_total_rate(lines, threshold, args.show)
     plot_goodput_vs_cv(lines, threshold, args.show)
