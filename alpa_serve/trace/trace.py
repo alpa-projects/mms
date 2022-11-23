@@ -1,6 +1,8 @@
 import math
 import os.path
 import csv
+import pickle
+import time
 from typing import List
 from collections import OrderedDict
 
@@ -11,12 +13,12 @@ import numpy as np
 from alpa_serve.simulator.workload import Workload, PoissonProcess, GammaProcess, Request
 
 
-def load_azure_v1_trace(trace_dir, n_day=14):
-    """Load and preprocess Azure v1 trace."""
+def preprocess_azure_v1_trace(trace_dir, n_day=14):
     if not os.path.exists(trace_dir):
         raise RuntimeError(f"{trace_dir}")
     tracelines = OrderedDict()
-    print(f"Reading azure v1 trace in {n_day} days; it might take a while...")
+    print(f"Reading azure v1 trace in 14 days; it might take a while...")
+    tic = time.time()
     for i in range(1, n_day + 1):
         day_str = str(i) if i >= 10 else "0" + str(i)
         filename = os.path.join(trace_dir, f"invocations_per_function_md.anon.d{day_str}.csv")
@@ -45,14 +47,14 @@ def load_azure_v1_trace(trace_dir, n_day=14):
                     else:
                         tracelines[function_name] = np.concatenate((np.zeros((expected_size, ), dtype=np.int32),
                                                                    histogram_1min))
-
     for function_name, histogram_1min in tracelines.items():
         if histogram_1min.size != n_day * 1440:
             diff = n_day * 1440 - histogram_1min.size
             assert diff % 1440 == 0
             tracelines[function_name] = np.concatenate((tracelines[function_name], np.zeros((diff,), dtype=np.int32)))
+    print(f"Reading takes: {time.time() - tic}s.")
 
-    # do some check
+    # report the stats.
     num_function_invocations = []
     for function_name, histogram_1min in tracelines.items():
         assert (histogram_1min.size == 1440 * n_day), f"length: {histogram_1min.size}"
@@ -62,14 +64,22 @@ def load_azure_v1_trace(trace_dir, n_day=14):
           f"total invocations: {sum(num_function_invocations)}, "
           f"max: {max(num_function_invocations)}, min: {min(num_function_invocations)}, "
           f"avg: {sum(num_function_invocations) / num_functions}")
-    return tracelines
 
-def load_azure_v2_trace(trace_dir):
+    # pickle it to disk
+    save_path = os.path.join(trace_dir, "azure_v1.pkl")
+    with open(save_path, "wb") as handle:
+        pickle.dump(tracelines, handle)
+    print(f"Dump the data into {save_path}, file size: {os.path.getsize(save_path) // 1e6} MB.")
+
+
+def preprocess_azure_v2_trace(trace_dir):
     """Load and process azure v2 trace."""
     if not os.path.exists(trace_dir):
         raise RuntimeError(f"{trace_dir}")
     filename = os.path.join(trace_dir, "AzureFunctionsInvocationTraceForTwoWeeksJan2021.txt")
     tracelines = OrderedDict()
+    print(f"Reading azure v2 trace in 14 days...")
+    tic = time.time()
     with open(filename, newline="") as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
@@ -83,13 +93,41 @@ def load_azure_v2_trace(trace_dir):
 
     for function_name, trace in tracelines.items():
         tracelines[function_name] = np.sort(np.array(tracelines[function_name]))
-
+    print(f"Reading takes: {time.time() - tic}s.")
     # Do some check and report stats:
     num_functions = len(tracelines.keys())
     num_function_invocations = []
     for function_name, trace in tracelines.items():
         num_function_invocations.append(len(trace))
     print(f"Azure trace v2, stats: #days: 14, #functions: {num_functions}, "
+          f"total invocations: {sum(num_function_invocations)}, "
+          f"max: {max(num_function_invocations)}, min: {min(num_function_invocations)}, "
+          f"avg: {sum(num_function_invocations) / num_functions}")
+
+    # pickle it to disk
+    save_path = os.path.join(trace_dir, "azure_v2.pkl")
+    with open(save_path, "wb") as handle:
+        pickle.dump(tracelines, handle)
+    print(f"Dump the data into {save_path}, file size: {os.path.getsize(save_path) // 1e6} MB.")
+
+
+def load_trace(path: str) -> OrderedDict:
+    assert path.endswith(".pkl")
+    tic = time.time()
+    with open(path, "rb") as handle:
+        tracelines = pickle.load(handle)
+    print(f"Reading takes: {time.time() - tic}s.")
+
+    # Do some check and report stats:
+    num_functions = len(tracelines.keys())
+    num_function_invocations = []
+    for function_name, trace in tracelines.items():
+        if trace.dtype == np.int32:
+            num_function_invocations.append(np.sum(trace))
+        else:
+            num_function_invocations.append(trace.size)
+
+    print(f"Trace: {path[:-4]}, stats: #days: 14, #functions: {num_functions}, "
           f"total invocations: {sum(num_function_invocations)}, "
           f"max: {max(num_function_invocations)}, min: {min(num_function_invocations)}, "
           f"avg: {sum(num_function_invocations) / num_functions}")
@@ -176,39 +214,22 @@ class TraceReplay:
         return end_timestamp_seconds
 
 class Trace:
-    def __init__(self, trace_name, trace_dir, n_day=14):
+    def __init__(self, trace_name, trace_dir):
         self.trace_name: str = trace_name
         self.trace_dir: str = trace_dir
         self.have_timestamp: bool = False
         self.function_arrivals = None
         self.function_histogram = None
-        self.n_day = n_day
+        self.n_day = 14
 
         if trace_name == "azure_v1":
-            self.function_histogram = load_azure_v1_trace(trace_dir)
-            self.n_day = n_day
+            self.function_histogram = load_trace(trace_dir)
         elif trace_name == "azure_v2":
-            if n_day != 14:
-                raise RuntimeError(f"We must read all 14 days trace for {trace_name}.")
-            self.function_arrivals = load_azure_v2_trace(trace_dir)
+            self.function_arrivals = load_trace(trace_dir)
         elif trace_name == "alibaba":
             raise NotImplementedError(f"To be implemented for {trace_name}")
         else:
             raise RuntimeError("Choose trace from `azure_v1 | azure_v2 | alibaba`")
-
-    # def trace_to_histogram(self, traces, interval_seconds=60):
-    #     histogram = OrderedDict()
-    #     total_seconds = 24 * 60 * 60 * self.num_day
-    #     assert total_seconds % interval_seconds == 0, \
-    #         f"interval seconds must be divisible by {total_seconds}"
-    #     num_slots = total_seconds // interval_seconds
-    #     for function_name, trace in traces.items():
-    #         h = np.zeros((num_slots, ), dtype=np.int32)
-    #         for start_time in trace:
-    #             slot_index = start_time // interval_seconds
-    #             h[slot_index] += 1
-    #         histogram[function_name] = h
-    #     return histogram
 
     @staticmethod
     def timestr_to_dhm(time_str):
