@@ -100,6 +100,8 @@ def plot_goodput_vs_slo(data, title, output, show):
     ax.legend(curves, legends)
     ax.set_title(title)
 
+    #ax.axline([1, 99], [2, 99], color="gray", linestyle='--')
+
     if show:
         plt.show()
 
