@@ -153,7 +153,7 @@ class TraceReplay:
         self.arrival_distribution = arrival_distribution
 
     def to_workload(self, slo: float):
-        return Workload(self.arrivals, [Request(self.model, None, slo, i, {})
+        return Workload(self.arrivals.tolist(), [Request(self.model, None, slo, i, {})
                                         for i in range(len(self.arrivals))])
 
     def report_stats(self):
@@ -212,6 +212,7 @@ class TraceReplay:
         end_d, end_h, end_m = Trace.timestr_to_dhm(self.end_time)
         end_timestamp_seconds = end_d * 24 * 60 * 60 + end_h * 60 * 60 + end_m * 60
         return end_timestamp_seconds
+
 
 class Trace:
     def __init__(self, trace_name, trace_dir):
