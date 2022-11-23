@@ -67,6 +67,9 @@ class ArrivalProcess(ABC):
                 f"rate={self.rate()}, "
                 f"cv={self.cv()})")
 
+    def params(self):
+        return self.rate(), self.cv()
+
 
 class DeterministicProcess(ArrivalProcess):
     """Deterministic arrival process."""
