@@ -147,7 +147,8 @@ class TraceReplay:
                  arrival_distribution_params=None,
                  rate_scale_factor=1.0,
                  cv_scale_factor=1.0,
-                 time_scale_factor=1.0):
+                 time_scale_factor=1.0,
+                 replication_factor=1):
         """A TraceReplay specifies the traffic arrival pattern of a model."""
         self.model = model
         self.arrivals = arrivals
@@ -164,6 +165,7 @@ class TraceReplay:
         self.rate_scale_factor = rate_scale_factor
         self.cv_scale_factor = cv_scale_factor
         self.time_scale_factor = time_scale_factor
+        self.replication_factor = replication_factor
 
         # stats
         self._rate = None
@@ -188,13 +190,15 @@ class TraceReplay:
                   f"generation interval: {self.interval_seconds}, "
                   f"generation rates: mean rate {sum(rates) / len(rates):.2f}, max rate: {max(rates):.2f}, "
                   f"generate cvs: mean cv {sum(cvs) / len(cvs):.2f}, max cv: {max(cvs):.2f}, "
-                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, {self.time_scale_factor}).")
+                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, "
+                  f"{self.time_scale_factor}, {self.replication_factor}).")
         else:
             print(f"Trace for model: {self.model}, duration: {self.duration}, #arrivals: {self.arrivals.size}, "
                   f"duration (seconds): {self.duration_seconds}, "
                   f"arrival distribution: {self.arrival_distribution}, "
                   f"generation interval: {self.interval_seconds}, "
-                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, {self.time_scale_factor}).")
+                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, "
+                  f"{self.time_scale_factor}, {self.replication_factor}).")
 
     def visualize(self, n_interval=100):
         if np.argwhere(np.isnan(self.arrivals)).size > 0:
@@ -218,7 +222,8 @@ class TraceReplay:
         os.makedirs(fig_folder, exist_ok=True)
         fig_name = f"{self.model}-{self.trace_name}-{self.arrival_distribution}-" \
                    f"{self.start_time}-{self.end_time}-{self.interval_seconds}-" \
-                   f"({self.rate_scale_factor},{self.cv_scale_factor},{self.time_scale_factor}).png"
+                   f"({self.rate_scale_factor},{self.cv_scale_factor}," \
+                   f"{self.time_scale_factor}, {self.replication_factor}).png"
         fig.savefig(os.path.join(fig_folder, fig_name), bbox_inches='tight')
         plt.close()
     
@@ -364,7 +369,8 @@ class Trace:
                interval_seconds: int = 600,
                rate_scale_factor: float = 1.0,
                cv_scale_factor: float = 1.0,
-               time_scale_factor: float = 1.0) -> Dict[str, TraceReplay]:
+               time_scale_factor: float = 1.0,
+               replication_factor: int = 1) -> Dict[str, TraceReplay]:
         """Return a workload that replays a given slice of the trace.
 
         The method replays the trace by mapping functions in the trace to models provided by
@@ -379,17 +385,24 @@ class Trace:
             interval_seconds (int): the length of the interval in seconds to estimate a generation process.
             rate_scale_factor (float): scale the estimated rate give this factor.
             cv_scale_factor (float): scale the cv given this factor. Only works when distribution = `gamma`.
-            time_scale_factor (float): downscale the time, e.g., when it is 2, a 1 hour trace will be used as if 30 mins.
+            time_scale_factor (float): downscale the time, e.g., when it is 2,
+                a 1-hour trace will be used as if it were 30 mins.
+            replication_factor (int): simply replicate each arrival given a factor.
 
         Returns:
             replays (Dict[str, TraceReplay]): the TraceReplay for each model.
         """
         # Do some checks
+        if replication_factor < 1:
+            warnings.warn("`replication factor` should not be less than 1. Reset it to 1.")
+        if replication_factor > 1:
+            if not (self.trace_name == "azure_v2" and arrival_distribution == "vanilla"):
+                raise RuntimeError("We can only replicate azure v2 trace.")
         if time_scale_factor != 1.0:
             if self.trace_name != "azure_v2":
                 raise RuntimeError("Cannot do time-scaling on azure_v1.")
             if arrival_distribution != "vanilla":
-                raise RuntimeError("Can only do time-scaleing on vanilla distributions.")
+                raise RuntimeError("Can only do time-scaling on vanilla distributions.")
         if arrival_distribution != "gamma" and cv_scale_factor != 1.0:
             raise RuntimeError("No CV for exponential distributions.")
         if time_scale_factor != 1.0 and (rate_scale_factor != 1.0 or cv_scale_factor != 1.0):
@@ -449,7 +462,11 @@ class Trace:
 
 
             if arrival_distribution == "vanilla":
+                if replication_factor > 1:
+                    for m in model_arrivals:
+                        model_arrivals[m] = np.repeat(model_arrivals[m], replication_factor)
                 for m in model_arrivals:
+                    model_arrivals[m] = model_arrivals[m]
                     model_arrivals[m] = (model_arrivals[m] - start_timestamp_seconds) / time_scale_factor + start_timestamp_seconds
                     replays[m] = TraceReplay(m,
                                         model_arrivals[m],
@@ -460,7 +477,8 @@ class Trace:
                                         arrival_distribution,
                                         rate_scale_factor=rate_scale_factor,
                                         cv_scale_factor=cv_scale_factor,
-                                        time_scale_factor=time_scale_factor)
+                                        time_scale_factor=time_scale_factor,
+                                        replication_factor=replication_factor)
                 return replays
 
             # 2. bucketing arrivals based on `interval_seconds` and start/end time.
