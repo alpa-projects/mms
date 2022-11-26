@@ -43,46 +43,46 @@ if __name__ == "__main__":
     slos = [0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2]
 
     ##### goodput vs num_devices #####
-    # cases = []
-    # for num_devices in num_devices_list:
-    #     for policy_name in policies:
-    #         cases.append(EqualModelCase(
-    #             num_devices, mem_budget, model_type, fixed_num_models,
-    #             total_rate, rate_distribution,
-    #             arrival_process, arrival_process_kwargs,
-    #             fixed_slo, duration, policy_name))
+    cases = []
+    for num_devices in num_devices_list:
+        for policy_name in policies:
+            cases.append(EqualModelCase(
+                num_devices, mem_budget, model_type, fixed_num_models,
+                total_rate, rate_distribution,
+                arrival_process, arrival_process_kwargs,
+                fixed_slo, duration, policy_name))
 
-    # run_equal_model_cases(cases, exp_name="goodput_vs_num_devices",
-    #                       output_file=args.output,
-    #                       mode=args.mode, parallel=args.parallel)
+    run_equal_model_cases(cases, exp_name="goodput_vs_num_devices",
+                          output_file=args.output,
+                          mode=args.mode, parallel=args.parallel)
 
     # ##### goodput vs num_models #####
-    # cases = []
-    # for num_models in num_models_list:
-    #     for policy_name in policies:
-    #         cases.append(EqualModelCase(
-    #             fixed_num_devices, mem_budget, model_type, num_models,
-    #             total_rate, rate_distribution,
-    #             arrival_process, arrival_process_kwargs,
-    #             fixed_slo, duration, policy_name))
+    cases = []
+    for num_models in num_models_list:
+        for policy_name in policies:
+            cases.append(EqualModelCase(
+                fixed_num_devices, mem_budget, model_type, num_models,
+                total_rate, rate_distribution,
+                arrival_process, arrival_process_kwargs,
+                fixed_slo, duration, policy_name))
 
-    # run_equal_model_cases(cases, exp_name="goodput_vs_num_models",
-    #                       output_file=args.output,
-    #                       mode=args.mode, parallel=args.parallel)
+    run_equal_model_cases(cases, exp_name="goodput_vs_num_models",
+                          output_file=args.output,
+                          mode=args.mode, parallel=args.parallel)
 
     # ##### goodput vs slo #####
-    # cases = []
-    # for slo in slos:
-    #     for policy_name in policies:
-    #         cases.append(EqualModelCase(
-    #             fixed_num_devices, mem_budget, model_type, fixed_num_models,
-    #             total_rate, rate_distribution,
-    #             arrival_process, arrival_process_kwargs,
-    #             slo, duration, policy_name))
+    cases = []
+    for slo in slos:
+        for policy_name in policies:
+            cases.append(EqualModelCase(
+                fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                total_rate, rate_distribution,
+                arrival_process, arrival_process_kwargs,
+                slo, duration, policy_name))
 
-    # run_equal_model_cases(cases, exp_name="goodput_vs_slo",
-    #                       output_file=args.output,
-    #                       mode=args.mode, parallel=args.parallel)
+    run_equal_model_cases(cases, exp_name="goodput_vs_slo",
+                          output_file=args.output,
+                          mode=args.mode, parallel=args.parallel)
 
     # ##### goodput vs rate_scale #####
     cases = []
@@ -101,17 +101,17 @@ if __name__ == "__main__":
                           mode=args.mode, parallel=args.parallel)
 
     # ##### goodput vs cv_scale #####
-    # cases = []
-    # for cv_scale in cv_scales:
-    #     for policy_name in policies:
-    #         arrival_process_kwargs = {"rate_scale": fixed_rate_scale, 
-    #                                   "cv_scale": cv_scale}
-    #         cases.append(EqualModelCase(
-    #             fixed_num_devices, mem_budget, model_type, fixed_num_models,
-    #             total_rate, rate_distribution,
-    #             arrival_process, arrival_process_kwargs,
-    #             fixed_slo, duration, policy_name))
+    cases = []
+    for cv_scale in cv_scales:
+        for policy_name in policies:
+            arrival_process_kwargs = {"rate_scale": fixed_rate_scale, 
+                                      "cv_scale": cv_scale}
+            cases.append(EqualModelCase(
+                fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                total_rate, rate_distribution,
+                arrival_process, arrival_process_kwargs,
+                fixed_slo, duration, policy_name))
 
-    # run_equal_model_cases(cases, exp_name="goodput_vs_cv_scale",
-    #                       output_file=args.output,
-    #                       mode=args.mode, parallel=args.parallel)
+    run_equal_model_cases(cases, exp_name="goodput_vs_cv_scale",
+                          output_file=args.output,
+                          mode=args.mode, parallel=args.parallel)
