@@ -69,10 +69,16 @@ def get_equal_model_serving_case(case, prof_database=None):
         #                                             start_time='0.0.0', end_time='1.0.0', time_scale_factor=10)
         # test_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="vanilla",
         #                                             start_time='1.0.0', end_time='2.0.0', time_scale_factor=10)
-        train_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="gamma",
-                                                    start_time='0.0.0', end_time='1.0.0', rate_scale_factor=2, cv_scale_factor=8)
-        test_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="gamma",
-                                                    start_time='1.0.0', end_time='2.0.0', rate_scale_factor=2, cv_scale_factor=8)
+        train_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="round_robin",
+                                              arrival_distribution="gamma",
+                                              start_time='0.0.0', end_time='1.0.0',
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        test_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="round_robin",
+                                              arrival_distribution="gamma",
+                                              start_time='0.0.0', end_time='1.0.0',
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
         train_workload = Workload.empty()
         for model_name, slo in zip(model_names, slos):
             train_workload += train_replays[model_name].to_workload(slo)
@@ -206,7 +212,7 @@ def read_equal_model_case_tsv(filename):
 
         num_devices = int(num_devices)
         num_models = int(num_models)
-        total_rate = float(total_rate)
+        total_rate = float(total_rate) 
         arrival_process_kwargs = eval(arrival_process_kwargs)
         slo = float(slo)
         duration = float(duration)

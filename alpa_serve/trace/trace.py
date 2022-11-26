@@ -234,7 +234,7 @@ class TraceReplay:
                 if param is not None:
                     rate, _ = param
                     rates.append(rate)
-            self._rate = sum(rates) / len(rates)
+            self._rate = sum(rates) / len(rates) if len(rates) else 1e-9
         else:
             self._rate = self.n_arrivals / (self.end_seconds - self.start_seconds)
         
@@ -245,7 +245,7 @@ class TraceReplay:
                 if param is not None:
                     _, cv = param
                     cvs.append(cv)
-            self._cv = sum(cvs) / len(cvs)
+            self._cv = sum(cvs) / len(cvs) if len(cvs) else 1
         else:
             # This is set arbitrarily and it should not be used
             self._cv = 1
