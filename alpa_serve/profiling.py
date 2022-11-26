@@ -74,8 +74,8 @@ class ProfilingDatabase:
     def _extract_data(self, row):
         """Extract the profiling results from a row of the profiling CSV file."""
         stage_latencies = list(map(float, row["StageLatencies(s)"].strip("[]").split()))
-        weight_mem = list(map(float, row["StageWeights(GB)"].strip("[]").split()))
-        peak_mem = list(map(float, row["StagePeakMem(GB)"].strip("[]").split()))
+        weight_mem = list(map(float, row["StageWeights(B)"].strip("[]").split()))
+        peak_mem = list(map(float, row["StagePeakMem(B)"].strip("[]").split()))
         act_mem = [peak_mem - weight_mem for peak_mem, weight_mem in zip(peak_mem, weight_mem)]
         assert min(act_mem) > 0, "negative activation memory"
         parallel_config = ParallelConfig(int(row["DP"]), int(row["OP"]), int(row["PP"]))
