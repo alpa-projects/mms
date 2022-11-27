@@ -8,10 +8,14 @@ from typing import List, Dict
 from collections import OrderedDict
 
 import matplotlib.pyplot as plt
-from scipy.stats import expon, gamma
+from scipy.stats import expon, gamma, pareto, loggamma
 import numpy as np
 
-from alpa_serve.simulator.workload import Workload, PoissonProcess, GammaProcess, Request
+from alpa_serve.simulator.workload import Workload, PoissonProcess, GammaProcess, \
+    Request, ParetoProcess, LoggammaProcess
+
+
+DEBUG = False
 
 
 def preprocess_azure_v1_trace(trace_dir, n_day=14):
@@ -201,8 +205,6 @@ class TraceReplay:
                   f"{self.time_scale_factor}, {self.replication_factor}).")
 
     def visualize(self, n_interval=100):
-        if np.argwhere(np.isnan(self.arrivals)).size > 0:
-            print(self.arrivals)
         assert np.all(self.arrivals > self.start_seconds), \
             f"arrivals: {np.argwhere(np.isnan(self.arrivals))}, " \
             f"start_seconds: {self.start_seconds}"
@@ -362,7 +364,7 @@ class Trace:
 
     def replay(self,
                models: List[str],
-               model_mapping_strategy: str = "round_robin",
+               model_mapping_strategy: str = "stripe",
                start_time: str = "0.0.0",
                end_time: str = "13.23.60",
                arrival_distribution : str = "exponential",
@@ -460,7 +462,6 @@ class Trace:
             for m in model_arrivals:
                 model_arrivals[m] = np.sort(model_arrivals[m])
 
-
             if arrival_distribution == "vanilla":
                 if replication_factor > 1:
                     for m in model_arrivals:
@@ -513,6 +514,9 @@ class Trace:
                     continue
                 start = seed * interval_seconds + start_timestamp_seconds
                 arrivals.extend(distribution.generate_arrivals(start, interval_seconds, seed))
+                # if DEBUG:
+                #     arrivals.extend(distribution.generate_arrivals(0, 1.0e9, seed))
+                #     self.visualize_inter_arrival(np.array(arrivals), "test")
                 arrival_distribution_params.append(distribution.params())
             replays[m] = TraceReplay(m,
                                      np.array(arrivals),
@@ -529,7 +533,7 @@ class Trace:
 
     def replay_vanilla(self,
                        models: List[str],
-                       model_mapping_strategy: str ="round_robin",
+                       model_mapping_strategy: str ="stripe",
                        start_time: str = "0.0.0",
                        end_time: str = "13.23.60"):
         """Return exactly the same trace; only works for azure_v2."""
@@ -541,7 +545,7 @@ class Trace:
                            end_time=end_time,
                            arrival_distribution="vanilla")
 
-    def map_model(self, models, function_names, strategy="round_robin"):
+    def map_model(self, models, function_names, strategy="stripe"):
         mapping = OrderedDict()
         n_model = len(models)
         n_function = len(function_names)
@@ -580,21 +584,23 @@ class Trace:
                                           arrival_distribution="exponential",
                                           rate_scale_factor=1.0,
                                           cv_scale_factor=1.0):
-        if arrival_distribution not in ["exponential", "gamma"]:
-            raise NotImplementedError(f"Only support exponential | gamma, "
+        if arrival_distribution not in ["exponential", "gamma", "pareto", "loggamma"]:
+            raise NotImplementedError(f"Only support exponential | gamma | pareto, "
                                       f" got {arrival_distribution}")
         distributions = OrderedDict()
         for model, arrivals in dataset.items():
             distributions[model] = []
-            for arrival in arrivals:
+            for i, arrival in enumerate(arrivals):
                 inter_arrival = np.diff(arrival) + 1e-6
                 if inter_arrival.size == 0 or (inter_arrival.size == 1 and arrival_distribution == "gamma"):
                     distributions[model].append(None)
                 else:
+                    if DEBUG:
+                        self.visualize_inter_arrival(inter_arrival, f"{model}-{i}", n_interval=2000)
                     if arrival_distribution == "exponential":
                         arrival_rate = self.estimate_exponential(inter_arrival)
                         distributions[model].append(PoissonProcess(arrival_rate))
-                    else:
+                    elif arrival_distribution == "gamma":
                         try:
                             arrival_rate, cv = self.estimate_gamma(inter_arrival)
                             # scale them
@@ -604,7 +610,27 @@ class Trace:
                         except ValueError as ve:
                             warnings.warn("Failed to fit a gamma distribution.")
                             distributions[model].append(None)
+                    elif arrival_distribution == "pareto":
+                        shape, scale, loc = self.estimate_pareto(inter_arrival)
+                        distributions[model].append(ParetoProcess(shape, scale, loc))
+                    elif arrival_distribution == "loggamma":
+                        shape, scale, loc = self.estimate_loggamma(inter_arrival)
+                        distributions[model].append(LoggammaProcess(shape, scale, loc))
+                    else:
+                        raise RuntimeError(f"Unrecognized distribution: {arrival_distribution}")
         return distributions
+
+    @staticmethod
+    def visualize_inter_arrival(inter_arrival, name, n_interval=300):
+        count, bins, _ = plt.hist(inter_arrival, bins=np.linspace(0, 300, n_interval))
+        plt.show()
+        plt.ylabel("#reqs")
+        plt.xlabel("#seconds")
+        fig = plt.gcf()
+        figure_size = (8, 4)
+        fig.set_size_inches(figure_size)
+        fig.savefig(f"plots/{name}.png", bbox_inches='tight')
+        plt.close()
 
     @staticmethod
     def estimate_exponential(inter_arrivals):
@@ -618,6 +644,17 @@ class Trace:
         cv = math.sqrt(1.0 / shape)
         arrival_rate = 1.0 / (shape * scale)
         return arrival_rate, cv
+
+    @staticmethod
+    def estimate_pareto(inter_arrivals):
+        shape, loc, scale = pareto.fit(inter_arrivals)
+        return shape, scale, loc
+
+    @staticmethod
+    def estimate_loggamma(inter_arrivals):
+        shape, loc, scale = loggamma.fit(inter_arrivals)
+        return shape, scale, loc
+
 
     @staticmethod
     def estimate_mmpp(self, inter_arrivals):
@@ -645,3 +682,9 @@ class Trace:
           f"total invocations: {sum(n_invocations)}, "
           f"max: {max(n_invocations)}, min: {min(n_invocations)}, "
           f"avg: {sum(n_invocations) / n_function}")
+
+    def bic(self):
+        pass
+
+    def aic(self):
+        pass

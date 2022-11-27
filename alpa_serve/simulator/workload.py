@@ -6,6 +6,7 @@ import random
 from typing import Any, List, Sequence, Dict, Optional
 
 import numpy as np
+from scipy.stats import pareto, loggamma
 
 from alpa_serve.simulator.util import MMPPSampler
 from alpa.util import to_str_round
@@ -201,6 +202,75 @@ class UniformMMPP(ArrivalProcess):
         return Workload(ticks, [
             Request(model_name, None, slo, i, {}) for i in range(n_requests)])
 
+
+class ParetoProcess:
+    def __init__(self, shape, scale, loc=0.0):
+        self.shape = shape
+        self.scale = scale
+        self.loc = loc
+
+    def generate_arrivals(self, start: float, duration: float, seed: int = 0):
+        rs = np.random.RandomState(seed)
+        ticks = []
+        cur = start
+        end = start + duration
+        while cur < end:
+            cur += pareto.rvs(self.shape, loc = self.loc, scale = self.scale, random_state=rs)
+            ticks.append(cur)
+        return ticks
+
+    def generate_workload(self, model_name: str, start: float,
+                          duration: float, slo: Optional[float] = None,
+                          seed: int = 0):
+        ticks = self.generate_arrivals(start, duration, seed)
+        return Workload(ticks, [
+            Request(model_name, None, slo, i, {}) for i in range(len(ticks))])
+
+    def rate(self):
+        """TODO(Hao): this is wrong."""
+        return 1.0
+
+    def cv(self):
+        """TODO(Hao): this is wrong."""
+        return 1.0
+
+    def params(self):
+        return self.rate(), self.cv()
+
+
+class LoggammaProcess:
+    def __init__(self, shape, scale, loc=0.0):
+        self.shape = shape
+        self.scale = scale
+        self.loc = loc
+
+    def generate_arrivals(self, start: float, duration: float, seed: int = 0):
+        rs = np.random.RandomState(seed)
+        ticks = []
+        cur = start
+        end = start + duration
+        while cur < end:
+            cur += loggamma.rvs(self.shape, loc = self.loc, scale = self.scale, random_state=rs)
+            ticks.append(cur)
+        return ticks
+
+    def generate_workload(self, model_name: str, start: float,
+                          duration: float, slo: Optional[float] = None,
+                          seed: int = 0):
+        ticks = self.generate_arrivals(start, duration, seed)
+        return Workload(ticks, [
+            Request(model_name, None, slo, i, {}) for i in range(len(ticks))])
+
+    def rate(self):
+        """TODO(Hao): this is wrong."""
+        return 1.0
+
+    def cv(self):
+        """TODO(Hao): this is wrong."""
+        return 1.0
+
+    def params(self):
+        return self.rate(), self.cv()
 
 class Workload:
     """A sorted list of requests."""
