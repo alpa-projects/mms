@@ -27,7 +27,7 @@ replays = trace.replay(models,
                        model_mapping_strategy="stripe",
                        start_time="6.0.0",
                        end_time="7.0.0",
-                       interval_seconds=7200,
+                       interval_seconds=7200 * 2,
                        arrival_distribution="gamma")
 for m in replays:
     replays[m].report_stats()

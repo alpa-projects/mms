@@ -278,12 +278,11 @@ class Workload:
     def __init__(self, arrivals: List[float], requests: List[Request]):
         assert len(arrivals) == len(requests)
 
-        self.arrivals = arrivals
+        self.arrivals = np.array(arrivals)
         self.requests = requests
 
         if len(self.arrivals) > 1:
-            tmp_array = np.array(self.arrivals)
-            intervals = tmp_array[1:] - tmp_array[:-1]
+            intervals = self.arrivals[1:] - self.arrivals[:-1]
             self.rate = 1 / np.mean(intervals)
             self.cv = np.std(intervals) * self.rate
         else:
@@ -378,7 +377,7 @@ class Workload:
 
         number = sum(len(x) for x in args)
 
-        merged_arrivals = sum((x.arrivals for x in args), [])
+        merged_arrivals = np.concatenate(tuple(x.arrivals for x in args))
         merged_requests = sum((x.requests for x in args), [])
 
         sorted_indices = np.argsort(merged_arrivals)
@@ -416,7 +415,10 @@ class Workload:
 
 
 if __name__ == "__main__":
-    w = PoissonProcess(10).generate_workload("m", start=0, duration=1000, seed=0)
-    print(w)
-    w = GammaProcess(10, 5).generate_workload("m", start=0, duration=1000, seed=0)
-    print(w)
+    w1 = PoissonProcess(10).generate_workload("m", start=0, duration=1000, seed=0)
+    print(w1)
+    w2 = GammaProcess(10, 5).generate_workload("m", start=0, duration=1000, seed=0)
+    print(w2)
+
+    w3 = w1 + w2
+
