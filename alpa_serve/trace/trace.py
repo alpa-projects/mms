@@ -188,8 +188,8 @@ class TraceReplay:
                   f"duration (s): {self.duration_seconds}, "
                   f"arrival distribution: {self.arrival_distribution}, "
                   f"generation interval: {self.interval_seconds}, "
-                  f"generation rates: mean rate {sum(rates) / len(rates):.2f}, max rate: {max(rates):.2f}, "
-                  f"generate cvs: mean cv {sum(cvs) / len(cvs):.2f}, max cv: {max(cvs):.2f}, "
+                  f"generation rates: mean rate {self.rate():.2f}"
+                  f"generate cvs: mean cv {self.cv():.2f}"
                   f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, "
                   f"{self.time_scale_factor}, {self.replication_factor}).")
         else:
@@ -234,9 +234,9 @@ class TraceReplay:
                 if param is not None:
                     rate, _ = param
                     rates.append(rate)
-            self._rate = sum(rates) / len(rates) if len(rates) else 1e-9
+            self._rate = sum(rates) / len(rates) if len(rates) else 1e-9 # workaround for rate = 0
         else:
-            self._rate = self.n_arrivals / (self.end_seconds - self.start_seconds)
+            self._rate = self.n_arrivals / (self.end_seconds - self.start_seconds) + 1e-9 # workaround for rate = 0
         
     def _compute_cv(self):
         if self.arrival_distribution_params is not None:
