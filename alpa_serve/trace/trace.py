@@ -64,7 +64,7 @@ def preprocess_azure_v1_trace(trace_dir, n_day=14):
     print(f"Azure trace v1, stats: #days: {n_day}, #functions: {num_functions}, "
           f"total invocations: {sum(num_function_invocations)}, "
           f"max: {max(num_function_invocations)}, min: {min(num_function_invocations)}, "
-          f"avg: {sum(num_function_invocations) / num_functions}")
+          f"avg: {np.mean(num_function_invocations):.2f}")
 
     # pickle it to disk
     save_path = os.path.join(trace_dir, "azure_v1.pkl")
@@ -103,7 +103,7 @@ def preprocess_azure_v2_trace(trace_dir):
     print(f"Azure trace v2, stats: #days: 14, #functions: {num_functions}, "
           f"total invocations: {sum(num_function_invocations)}, "
           f"max: {max(num_function_invocations)}, min: {min(num_function_invocations)}, "
-          f"avg: {sum(num_function_invocations) / num_functions}")
+          f"avg: {np.mean(num_function_invocations):.2f}")
 
     # pickle it to disk
     save_path = os.path.join(trace_dir, "azure_v2.pkl")
@@ -131,7 +131,7 @@ def load_trace(path: str) -> OrderedDict:
     print(f"Trace: {path[:-4]}, stats: #days: 14, #functions: {num_functions}, "
           f"total invocations: {sum(num_function_invocations)}, "
           f"max: {max(num_function_invocations)}, min: {min(num_function_invocations)}, "
-          f"avg: {sum(num_function_invocations) / num_functions}")
+          f"avg: {np.mean(num_functions):.2f}")
     return tracelines
 
 
@@ -166,11 +166,16 @@ class TraceReplay:
         self.time_scale_factor = time_scale_factor
 
         # stats
-        self._rate = None
-        self._cv = None
+        if len(self.arrivals) > 1:
+            intervals = self.arrivals[1:] - self.arrivals[:-1]
+            self._rate = 1 / np.mean(intervals)
+            self._cv = np.std(intervals) * self._rate
+        else:
+            self._rate = 0
+            self._cv = 0
 
     def to_workload(self, slo: float):
-        return Workload(self.arrivals.tolist(), [Request(self.model, None, slo, i, {})
+        return Workload(self.arrivals, [Request(self.model, None, slo, i, {})
                                         for i in range(len(self.arrivals))])
 
     def report_stats(self):
@@ -187,14 +192,16 @@ class TraceReplay:
                   f"arrival distribution: {self.arrival_distribution}, "
                   f"generation interval: {self.interval_seconds}, "
                   f"generation rates: mean rate {sum(rates) / len(rates):.2f}, max rate: {max(rates):.2f}, "
-                  f"generate cvs: mean cv {sum(cvs) / len(cvs):.2f}, max cv: {max(cvs):.2f}, "
-                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, {self.time_scale_factor}).")
+                  f"generation cvs: mean cv {sum(cvs) / len(cvs):.2f}, max cv: {max(cvs):.2f}, "
+                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, {self.time_scale_factor}), "
+                  f"overall rate: {self._rate:.2f}, overall cv: {self._cv:.2f}.")
         else:
             print(f"Trace for model: {self.model}, duration: {self.duration}, #arrivals: {self.arrivals.size}, "
                   f"duration (seconds): {self.duration_seconds}, "
                   f"arrival distribution: {self.arrival_distribution}, "
                   f"generation interval: {self.interval_seconds}, "
-                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, {self.time_scale_factor}).")
+                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, {self.time_scale_factor}), "
+                  f"overall rate: {self._rate:.2f}, overall cv: {self._cv:.2f}.")
 
     def visualize(self, n_interval=100):
         if np.argwhere(np.isnan(self.arrivals)).size > 0:
@@ -221,43 +228,12 @@ class TraceReplay:
                    f"({self.rate_scale_factor},{self.cv_scale_factor},{self.time_scale_factor}).png"
         fig.savefig(os.path.join(fig_folder, fig_name), bbox_inches='tight')
         plt.close()
-    
-    def _compute_rate(self):
-        if self.arrival_distribution_params is not None:
-            rates = []
-            for param in self.arrival_distribution_params:
-                if param is not None:
-                    rate, _ = param
-                    rates.append(rate)
-            self._rate = sum(rates) / len(rates)
-        else:
-            self._rate = self.n_arrivals / (self.end_seconds - self.start_seconds)
-        
-    def _compute_cv(self):
-        if self.arrival_distribution_params is not None:
-            cvs = []
-            for param in self.arrival_distribution_params:
-                if param is not None:
-                    _, cv = param
-                    cvs.append(cv)
-            self._cv = sum(cvs) / len(cvs)
-        else:
-            # This is set arbitrarily and it should not be used
-            self._cv = 1
 
     def rate(self):
-        if self._rate is None:
-            self._compute_rate()
         return self._rate
-    
+
     def cv(self):
-        if self._cv is None:
-            self._compute_cv()
-        return self._cv
-    
-    @property
-    def n_arrivals(self):
-        return self.arrivals.size
+        return slef._cv
 
     @property
     def duration_seconds(self):
@@ -267,7 +243,7 @@ class TraceReplay:
     @property
     def duration(self):
         duration_mins = self.duration_seconds // 60
-        duration_remained_seconds = duration_mins % 60
+        duration_remained_seconds = self.duration_seconds % 60
         duration_hours = duration_mins // 60
         duration_remained_mins = duration_mins % 60
         duration_day = duration_hours // 24
@@ -364,7 +340,8 @@ class Trace:
                interval_seconds: int = 600,
                rate_scale_factor: float = 1.0,
                cv_scale_factor: float = 1.0,
-               time_scale_factor: float = 1.0) -> Dict[str, TraceReplay]:
+               time_scale_factor: float = 1.0,
+               seed: int = 0) -> Dict[str, TraceReplay]:
         """Return a workload that replays a given slice of the trace.
 
         The method replays the trace by mapping functions in the trace to models provided by
@@ -380,6 +357,7 @@ class Trace:
             rate_scale_factor (float): scale the estimated rate give this factor.
             cv_scale_factor (float): scale the cv given this factor. Only works when distribution = `gamma`.
             time_scale_factor (float): downscale the time, e.g., when it is 2, a 1 hour trace will be used as if 30 mins.
+            seed (int): random seed for the generation process.
 
         Returns:
             replays (Dict[str, TraceReplay]): the TraceReplay for each model.
@@ -489,13 +467,14 @@ class Trace:
         for m in distributions:
             arrivals = []
             arrival_distribution_params = []
-            for seed, distribution in enumerate(distributions[m]):
+            for i, distribution in enumerate(distributions[m]):
                 if distribution is None:
                     arrival_distribution_params.append(None)
                     continue
-                start = seed * interval_seconds + start_timestamp_seconds
+                start = i * interval_seconds + start_timestamp_seconds
                 arrivals.extend(distribution.generate_arrivals(start, interval_seconds, seed))
                 arrival_distribution_params.append(distribution.params())
+                seed += 1
             replays[m] = TraceReplay(m,
                                      np.array(arrivals),
                                      self.trace_name,
@@ -575,13 +554,14 @@ class Trace:
                 else:
                     if arrival_distribution == "exponential":
                         arrival_rate = self.estimate_exponential(inter_arrival)
+                        arrival_rate *= rate_scale_factor
                         distributions[model].append(PoissonProcess(arrival_rate))
                     else:
                         try:
                             arrival_rate, cv = self.estimate_gamma(inter_arrival)
                             # scale them
-                            arrival_rate = arrival_rate * rate_scale_factor
-                            cv = cv * cv_scale_factor
+                            arrival_rate *= rate_scale_factor
+                            cv *= cv_scale_factor
                             distributions[model].append(GammaProcess(arrival_rate, cv))
                         except ValueError as ve:
                             warnings.warn("Failed to fit a gamma distribution.")
@@ -624,6 +604,6 @@ class Trace:
             else:
                 n_invocations.append(arrival_or_histogram.size)
         print(f"Sliced trace stats: #functions: {n_function}, "
-          f"total invocations: {sum(n_invocations)}, "
-          f"max: {max(n_invocations)}, min: {min(n_invocations)}, "
-          f"avg: {sum(n_invocations) / n_function}")
+              f"total invocations: {sum(n_invocations)}, "
+              f"max: {max(n_invocations)}, min: {min(n_invocations)}, "
+              f"avg: {np.mean(n_invocations):.2f}")
