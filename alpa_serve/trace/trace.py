@@ -8,7 +8,7 @@ from typing import List, Dict
 from collections import OrderedDict
 
 import matplotlib.pyplot as plt
-from scipy.stats import expon, gamma, pareto, loggamma, fisk
+from scipy.stats import expon, gamma, pareto
 import numpy as np
 
 from alpa_serve.simulator.workload import Workload, PoissonProcess, GammaProcess, \
@@ -206,7 +206,7 @@ class TraceReplay:
         plt.ylabel("#requests")
         plt.xlabel("time (s)")
         plt.legend()
-        plt.ylim(0, 100)
+        plt.ylim(0, 500)
         fig = plt.gcf()
         figure_size = (8, 4)
         fig.set_size_inches(figure_size)
