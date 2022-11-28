@@ -83,3 +83,7 @@ examples/imagenet/imagenet
 alpa_serve/trace/*png
 alpa_serve/trace/plots
 dataset/
+
+# experiments
+experiments/e2e_goodput/*png
+experiments/e2e_goodput/*tsv

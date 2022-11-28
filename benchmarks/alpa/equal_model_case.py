@@ -63,22 +63,18 @@ def get_equal_model_serving_case(case, prof_database=None):
             for _ in range(num_models)
         ]
     elif arrival_process == "azure_v2":
-        azure_v2_trace_dir = "/home/ubuntu/efs/mms/dataset/azure_v2.pkl"
+        azure_v2_trace_dir = arrival_process_kwargs["trace_dir"]
         azure_v2_trace = Trace("azure_v2", azure_v2_trace_dir)
         train_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="vanilla",
                                                     start_time='0.0.0', end_time='1.0.0', replication_factor=arrival_process_kwargs["rate_scale"])
-        test_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="vanilla",
-                                                    start_time='5.0.0', end_time='6.0.0', replication_factor=arrival_process_kwargs["rate_scale"])
-        # train_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe",
-        #                                       arrival_distribution="gamma",
-        #                                       start_time='0.0.0', end_time='1.0.0',
-        #                                       rate_scale_factor=arrival_process_kwargs["rate_scale"],
-        #                                       cv_scale_factor=arrival_process_kwargs["cv_scale"])
-        # test_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe",
-        #                                       arrival_distribution="gamma",
-        #                                       start_time='0.0.0', end_time='1.0.0',
-        #                                       rate_scale_factor=arrival_process_kwargs["rate_scale"],
-        #                                       cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        test_replays = azure_v2_trace.replay(model_names,
+                                              model_mapping_strategy="stripe",
+                                              arrival_distribution="gamma",
+                                              start_time='5.0.0',
+                                              end_time='6.0.0',
+                                              interval_seconds=5400,
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
         train_workload = Workload.empty()
         for model_name, slo in zip(model_names, slos):
             train_workload += train_replays[model_name].to_workload(slo)

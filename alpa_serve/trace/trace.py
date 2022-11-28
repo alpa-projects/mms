@@ -174,7 +174,7 @@ class TraceReplay:
         # stats
         if len(self.arrivals) > 1:
             intervals = self.arrivals[1:] - self.arrivals[:-1]
-            self._rate = 1 / np.mean(intervals)
+            self._rate = 1 / (np.mean(intervals) + 1e-5)
             self._cv = np.std(intervals) * self._rate
         else:
             self._rate = 0
