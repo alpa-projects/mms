@@ -8,11 +8,11 @@ from typing import List, Dict
 from collections import OrderedDict
 
 import matplotlib.pyplot as plt
-from scipy.stats import expon, gamma, pareto, loggamma
+from scipy.stats import expon, gamma, pareto
 import numpy as np
 
 from alpa_serve.simulator.workload import Workload, PoissonProcess, GammaProcess, \
-    Request, ParetoProcess, LoggammaProcess
+    Request, ParetoProcess
 
 
 DEBUG = False
@@ -185,31 +185,14 @@ class TraceReplay:
                                         for i in range(len(self.arrivals))])
 
     def report_stats(self):
-        if self.arrival_distribution_params is not None:
-            rates = []
-            cvs = []
-            for param in self.arrival_distribution_params:
-                if param is not None:
-                    rate, cv = param
-                    rates.append(rate)
-                    cvs.append(cv)
-            print(f"Trace for model: {self.model}, duration: {self.duration}, #arrivals: {self.arrivals.size}, "
-                  f"duration (s): {self.duration_seconds}, "
-                  f"arrival distribution: {self.arrival_distribution}, "
-                  f"generation interval: {self.interval_seconds}, "
-                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, "
-                  f"{self.time_scale_factor}, {self.replication_factor}). "
-                  f"generation rates: mean rate {sum(rates) / len(rates):.2f}, max rate: {max(rates):.2f}, "
-                  f"generation cvs: mean cv {sum(cvs) / len(cvs):.2f}, max cv: {max(cvs):.2f}, "
-                  f"overall rate: {self._rate:.2f}, overall cv: {self._cv:.2f}.")
-        else:
-            print(f"Trace for model: {self.model}, duration: {self.duration}, #arrivals: {self.arrivals.size}, "
-                  f"duration (seconds): {self.duration_seconds}, "
-                  f"arrival distribution: {self.arrival_distribution}, "
-                  f"generation interval: {self.interval_seconds}, "
-                  f"overall rate: {self._rate:.2f}, overall cv: {self._cv:.2f}. "
-                  f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, "
-                  f"{self.time_scale_factor}, {self.replication_factor}).")
+        print(f"Trace for {self.model}, duration: {self.duration}, {self.duration_seconds} (s), #arrivals: {self.arrivals.size}, "
+              f"arrival distribution: {self.arrival_distribution}, "
+              f"generation interval: {self.interval_seconds}, "
+              f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, {self.time_scale_factor}, {self.replication_factor}). "
+              # f"generation rates: mean rate {sum(rates) / len(rates):.2f}, max rate: {max(rates):.2f}, "
+              # f"generation cvs: mean cv {sum(cvs) / len(cvs):.2f}, max cv: {max(cvs):.2f}, "
+              f"overall rate: {self._rate:.2f}, overall cv: {self._cv:.2f}.")
+
 
     def visualize(self, n_interval=100):
         assert np.all(self.arrivals > self.start_seconds), \
@@ -223,7 +206,7 @@ class TraceReplay:
         plt.ylabel("#requests")
         plt.xlabel("time (s)")
         plt.legend()
-        plt.ylim(0, 1000)
+        plt.ylim(0, 500)
         fig = plt.gcf()
         figure_size = (8, 4)
         fig.set_size_inches(figure_size)
@@ -240,7 +223,7 @@ class TraceReplay:
         return self._rate
 
     def cv(self):
-        return slef._cv
+        return self._cv
 
     @property
     def duration_seconds(self):
@@ -377,7 +360,8 @@ class Trace:
             warnings.warn("`replication factor` should not be less than 1. Reset it to 1.")
         if replication_factor > 1:
             if not (self.trace_name == "azure_v2" and arrival_distribution == "vanilla"):
-                raise RuntimeError("We can only replicate azure v2 trace.")
+                raise RuntimeError(f"We can only replicate vanilla azure v2 trace, "
+                                   f"got: {self.trace_name}, {arrival_distribution}")
         if time_scale_factor != 1.0:
             if self.trace_name != "azure_v2":
                 raise RuntimeError("Cannot do time-scaling on azure_v1.")
@@ -476,6 +460,7 @@ class Trace:
             # 3. estimate distribution parameters based on arrivals
             distributions = self.estimate_parameters_with_arrivals(arrival_dataset,
                                                                    arrival_distribution,
+                                                                   interval_seconds,
                                                                    rate_scale_factor,
                                                                    cv_scale_factor)
         else:
@@ -560,15 +545,18 @@ class Trace:
     def estimate_parameters_with_arrivals(self,
                                           dataset,
                                           arrival_distribution="exponential",
+                                          interval_seconds=600,
                                           rate_scale_factor=1.0,
                                           cv_scale_factor=1.0):
-        if arrival_distribution not in ["exponential", "gamma", "pareto", "loggamma"]:
+        if arrival_distribution not in ["exponential", "gamma", "pareto"]:
             raise NotImplementedError(f"Only support exponential | gamma | pareto, "
                                       f" got {arrival_distribution}")
         distributions = OrderedDict()
+        model_index = 0
         for model, arrivals in dataset.items():
             distributions[model] = []
             for i, arrival in enumerate(arrivals):
+                empirical_arrival_rate = arrival.size / interval_seconds
                 inter_arrival = np.diff(arrival) + 1e-6
                 if inter_arrival.size == 0 or (inter_arrival.size == 1 and arrival_distribution == "gamma"):
                     distributions[model].append(None)
@@ -577,11 +565,17 @@ class Trace:
                         self.visualize_inter_arrival(inter_arrival, f"{model}-{i}", n_interval=2000)
                     if arrival_distribution == "exponential":
                         arrival_rate = self.estimate_exponential(inter_arrival)
+                        if arrival_rate > 5 * empirical_arrival_rate:
+                            warnings.warn(f"Estimation for model {model_index} is highly biased. Hard reset.")
+                            arrival_rate = empirical_arrival_rate
                         arrival_rate *= rate_scale_factor
                         distributions[model].append(PoissonProcess(arrival_rate))
                     elif arrival_distribution == "gamma":
                         try:
                             arrival_rate, cv = self.estimate_gamma(inter_arrival)
+                            if arrival_rate > 5 * empirical_arrival_rate:
+                                warnings.warn(f"Estimation for model {model_index} is highly biased. Hard reset.")
+                                arrival_rate = empirical_arrival_rate
                             # scale them
                             arrival_rate *= rate_scale_factor
                             cv *= cv_scale_factor
@@ -590,13 +584,12 @@ class Trace:
                             warnings.warn("Failed to fit a gamma distribution.")
                             distributions[model].append(None)
                     elif arrival_distribution == "pareto":
+                        inter_arrival += 1.0
                         shape, scale, loc = self.estimate_pareto(inter_arrival)
                         distributions[model].append(ParetoProcess(shape, scale, loc))
-                    elif arrival_distribution == "loggamma":
-                        shape, scale, loc = self.estimate_loggamma(inter_arrival)
-                        distributions[model].append(LoggammaProcess(shape, scale, loc))
                     else:
                         raise RuntimeError(f"Unrecognized distribution: {arrival_distribution}")
+            model_index += 1
         return distributions
 
     @staticmethod
@@ -626,14 +619,8 @@ class Trace:
 
     @staticmethod
     def estimate_pareto(inter_arrivals):
-        shape, loc, scale = pareto.fit(inter_arrivals)
+        shape, loc, scale = pareto.fit(inter_arrivals, floc=0.0, fscale=1.0)
         return shape, scale, loc
-
-    @staticmethod
-    def estimate_loggamma(inter_arrivals):
-        shape, loc, scale = loggamma.fit(inter_arrivals)
-        return shape, scale, loc
-
 
     @staticmethod
     def estimate_mmpp(self, inter_arrivals):
