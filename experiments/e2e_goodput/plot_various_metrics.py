@@ -6,6 +6,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
+from benchmarks.alpa.general_model_case import read_general_model_case_tsv
 
 show_name_dict = {
     "sr-greedy":   "Selective Replication (greedy)",
@@ -188,16 +189,20 @@ def plot_goodput_vs_cv_scale(lines, threshold, show):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, default="res_various_metrics.tsv")
+    parser.add_argument("--input", type=str, required=True)
     parser.add_argument("--show", action="store_true")
+    parser.add_argument("--general-case", action="store_true")
     args = parser.parse_args()
 
-    lines = read_equal_model_case_tsv(args.input)
+    if args.general_case:
+        lines = read_general_model_case_tsv(args.input)
+    else:
+        lines = read_equal_model_case_tsv(args.input)
 
     threshold = 0.99
 
     plot_goodput_vs_num_devices(lines, threshold, args.show)
-    plot_goodput_vs_num_models(lines, threshold, args.show)
-    plot_goodput_vs_slo(lines, threshold, args.show)
-    plot_goodput_vs_rate_scale(lines, threshold, args.show)
+    # plot_goodput_vs_num_models(lines, threshold, args.show)
+    # plot_goodput_vs_slo(lines, threshold, args.show)
+    # plot_goodput_vs_rate_scale(lines, threshold, args.show)
     # plot_goodput_vs_cv_scale(lines, threshold, args.show)
