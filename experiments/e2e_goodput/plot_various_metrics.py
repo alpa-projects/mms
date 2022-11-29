@@ -145,11 +145,11 @@ def plot_goodput_vs_slo(lines, threshold, show):
             continue
 
         policy, x, goodput =  (
-            line["policy_name"], line["slo"], line["goodput"])
+            line["policy_name"], line["slo_scale"], line["goodput"])
         data[policy][x] = goodput
 
-    plot_goodput_common(data, threshold, True, "SLO (s)",
-                        "Goodput vs. SLO", "goodput_vs_slo.png",
+    plot_goodput_common(data, threshold, True, "SLO Scale",
+                        "Goodput vs. SLO Scale", "goodput_vs_slo_scale.png",
                         args.show)
 
 
@@ -202,7 +202,7 @@ if __name__ == "__main__":
     threshold = 0.99
 
     plot_goodput_vs_num_devices(lines, threshold, args.show)
-    # plot_goodput_vs_num_models(lines, threshold, args.show)
-    # plot_goodput_vs_slo(lines, threshold, args.show)
-    # plot_goodput_vs_rate_scale(lines, threshold, args.show)
-    # plot_goodput_vs_cv_scale(lines, threshold, args.show)
+    plot_goodput_vs_num_models(lines, threshold, args.show)
+    plot_goodput_vs_slo(lines, threshold, args.show)
+    plot_goodput_vs_rate_scale(lines, threshold, args.show)
+    plot_goodput_vs_cv_scale(lines, threshold, args.show)

@@ -1,5 +1,4 @@
-import argparse
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 import os
 
 import ray
@@ -18,28 +17,27 @@ from benchmarks.alpa.util import get_model_def
 from benchmarks.alpa.run_one_case import run_one_case
 
 
-# A case where all models are the same
-EqualModelCase = namedtuple("EqualModelCase", [
-    "num_devices", "mem_budget", "model_type", "num_models",
+GeneralModelCase = namedtuple("GeneralModelCase", [
+    "num_devices", "mem_budget", "model_types", "model_names",
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name"])
 
 default_slos = {"bert-1.3b": 0.5, "bert-2.6b": 0.8, "bert-6.7b": 1.2}
 
-def get_equal_model_serving_case(case, prof_database=None):
+def get_general_model_serving_case(case, prof_database=None):
+    assert isinstance(case, GeneralModelCase), "not GeneralModelCase"     
     if prof_database is None:
         prof_database = ProfilingDatabase("profiling_result.pkl")
 
-    (num_devices, mem_budget, model_type, num_models,
+    (num_devices, mem_budget, model_types, model_names,
      total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
      slo_scale, duration, policy_name) = case
 
     cluster_env = ClusterEnv(num_devices=num_devices, mem_budget=mem_budget)
-    num_models = num_models
+    assert len(model_names) == len(model_types)
+    num_models = len(model_names)
 
-    model_names = [f"m{i}" for i in range(num_models)]
-    model_types = [model_type] * num_models
-    slos = [slo_scale * default_slos[model_type]] * num_models
+    slos = [default_slos[model_type] * slo_scale for model_type in model_types]
 
     if rate_distribution == "uniform":
         rates = [total_rate / num_models] * num_models
@@ -69,13 +67,13 @@ def get_equal_model_serving_case(case, prof_database=None):
         train_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="vanilla",
                                                     start_time='0.0.0', end_time='1.0.0', replication_factor=arrival_process_kwargs["rate_scale"])
         test_replays = azure_v2_trace.replay(model_names,
-                                              model_mapping_strategy="stripe",
-                                              arrival_distribution="gamma",
-                                              start_time='5.0.0',
-                                              end_time='6.0.0',
-                                              interval_seconds=5400,
-                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
-                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
+                                             model_mapping_strategy="stripe",
+                                             arrival_distribution="gamma",
+                                             start_time='5.0.0',
+                                             end_time='6.0.0',
+                                             interval_seconds=5400,
+                                             rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                             cv_scale_factor=arrival_process_kwargs["cv_scale"])
         train_workload = Workload.empty()
         for model_name, slo in zip(model_names, slos):
             train_workload += train_replays[model_name].to_workload(slo)
@@ -135,38 +133,36 @@ def get_equal_model_serving_case(case, prof_database=None):
     return ServingCase(register_models, generate_workload, place_models)
 
 
-def simulate_one_equal_model_case(case, prof_database=None):
-    serving_case = get_equal_model_serving_case(case, prof_database)
+def simulate_one_general_model_case(case, prof_database=None):
+    serving_case = get_general_model_serving_case(case, prof_database)
     stats, placement = simulate_one_case(serving_case)
     return stats, placement
 
 
-def run_one_equal_model_case(case, prof_database=None):
-    serving_case = get_equal_model_serving_case(case, prof_database)
+def run_one_general_model_case(case, prof_database=None):
+    serving_case = get_general_model_serving_case(case, prof_database)
     stats, placement = run_one_case(serving_case)
     return stats, placement
 
 
-_DATA_HEADS = ("exp_name",
-               "num_devices", "mem_budget", "model_type", "num_models",
-               "total_rate", "rate_distribution",
-               "arrival_process", "arrival_process_kwargs",
-               "slo", "duration", "policy_name",
-               "placement", "goodput", "mode")
+_DATA_HEADS = ("exp_name", "num_models",
+               "num_devices", "mem_budget", "total_rate", "rate_distribution",
+               "arrival_process", "arrival_process_kwargs", "slo_scale", "duration",
+               "policy_name", "placement", "goodput", "mode")
 
-def run_equal_model_cases(cases, exp_name="default", output_file=None,
-                          mode="simulate", parallel=False):
+def run_general_model_cases(cases, exp_name="default", output_file=None,
+                            mode="simulate", parallel=False):
     if mode == "simulate":
         if parallel:
             ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
                      ignore_reinit_error=True)
-            run_one_case_ = ray.remote(num_cpus=2)(simulate_one_equal_model_case).remote
+            run_one_case_ = ray.remote(num_cpus=2)(simulate_one_general_model_case).remote
         else:
-            run_one_case_ = simulate_one_equal_model_case
+            run_one_case_ = simulate_one_general_model_case
     else:
         ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
                  ignore_reinit_error=True)
-        run_one_case_ = run_one_equal_model_case
+        run_one_case_ = run_one_general_model_case
 
     run_results = []
     for case in cases:
@@ -182,8 +178,16 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
         Workload.print_stats(stats)
         goodput = stats.average_goodput
 
+        (num_devices, mem_budget, model_types, model_names,
+        total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
+        slo_scale, duration, policy_name) = case
+
+        case_info = (num_devices, mem_budget, total_rate,
+                     rate_distribution, arrival_process,
+                     arrival_process_kwargs, slo_scale,
+                     duration, policy_name)
         res = (placement, round(goodput, 3), mode)
-        values = (exp_name,) + tuple(case) + res
+        values = (exp_name, len(model_types)) + case_info + res
 
         if output_file is not None:
             write_tsv(_DATA_HEADS, values, output_file)
@@ -192,7 +196,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
     return results
 
 
-def read_equal_model_case_tsv(filename):
+def read_general_model_case_tsv(filename):
     rows = []  # List[dict]
 
     for line in open(filename):
@@ -200,18 +204,18 @@ def read_equal_model_case_tsv(filename):
         if not line or line.startswith("#"):
             continue
 
-        (exp_name,
-         num_devices, mem_budget, model_type, num_models,
+        (exp_name, num_models,
+         num_devices, mem_budget,
          total_rate, rate_distribution,
          arrival_process, arrival_process_kwargs,
-         slo, duration, policy_name,
+         slo_scale, duration, policy_name,
          placement, goodput, mode) = line.split("\t")
 
         num_devices = int(num_devices)
         num_models = int(num_models)
         total_rate = float(total_rate) 
         arrival_process_kwargs = eval(arrival_process_kwargs)
-        slo = float(slo)
+        slo_scale = float(slo_scale)
         duration = float(duration)
         goodput = float(goodput)
 
@@ -223,42 +227,3 @@ def read_equal_model_case_tsv(filename):
         rows.append(row)
 
     return rows
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--run", action="store_true",
-        help="Whether to do a real run to check the results of simulation.")
-    args = parser.parse_args()
-
-    num_devices = 4
-    mem_budget = 12 * GB
-    model_type = "bert-1.3b"
-    num_models = 8
-    total_rate = 30
-    rate_distribution = "uniform"
-    arrival_process = "gamma"
-    arrival_process_kwargs = {"cv": 4}
-    slo = 0.5
-    duration = 50
-    policy_name = "mp-greedy-2"
-
-    cases = [
-        EqualModelCase(num_devices, mem_budget, model_type, num_models,
-                       total_rate, rate_distribution,
-                       arrival_process, arrival_process_kwargs,
-                       slo, duration, policy_name)
-    ]
-
-    if args.run:
-        run_equal_model_cases(cases,
-                             exp_name="tmp",
-                             output_file="tmp.tsv",
-                             mode="run",
-                             parallel=False)
-
-    run_equal_model_cases(cases,
-                          exp_name="tmp",
-                          output_file="tmp.tsv",
-                          mode="simulate",
-                          parallel=True)

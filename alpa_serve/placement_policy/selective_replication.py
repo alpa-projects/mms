@@ -176,7 +176,7 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
 
                 used_mem[d_id] += weight_mem[m_id]
                 model_set[d_id].add(m_id)
-                burst_tolerance[m_id] += single_throughput[m_id] / rate[m_id]
+                burst_tolerance[m_id] += single_throughput[m_id] / (rate[m_id] + eps)
 
         # Parse solution
         group_configs = []
