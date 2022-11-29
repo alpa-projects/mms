@@ -22,8 +22,9 @@ from benchmarks.alpa.run_one_case import run_one_case
 EqualModelCase = namedtuple("EqualModelCase", [
     "num_devices", "mem_budget", "model_type", "num_models",
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
-    "slo", "duration", "policy_name"])
+    "slo_scale", "duration", "policy_name"])
 
+default_slos = {"bert-1.3b": 0.5, "bert-2.6b": 0.8, "bert-6.7b": 1.2}
 
 def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
@@ -31,12 +32,12 @@ def get_equal_model_serving_case(case, prof_database=None):
 
     (num_devices, mem_budget, model_type, num_models,
      total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
-     slo, duration, policy_name) = case
+     slo_scale, duration, policy_name) = case
 
     cluster_env = ClusterEnv(num_devices=num_devices, mem_budget=mem_budget)
     num_models = num_models
 
-    slos = [slo] * num_models
+    slos = [slo_scale * default_slos[model_type]] * num_models
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
 
