@@ -154,7 +154,7 @@ _DATA_HEADS = ("exp_name",
                "num_devices", "mem_budget", "model_type", "num_models",
                "total_rate", "rate_distribution",
                "arrival_process", "arrival_process_kwargs",
-               "slo", "duration", "policy_name",
+               "slo_scale", "duration", "policy_name",
                "placement", "goodput", "mode")
 
 def run_equal_model_cases(cases, exp_name="default", output_file=None,
@@ -207,14 +207,14 @@ def read_equal_model_case_tsv(filename):
          num_devices, mem_budget, model_type, num_models,
          total_rate, rate_distribution,
          arrival_process, arrival_process_kwargs,
-         slo, duration, policy_name,
+         slo_scale, duration, policy_name,
          placement, goodput, mode) = line.split("\t")
 
         num_devices = int(num_devices)
         num_models = int(num_models)
         total_rate = float(total_rate) 
         arrival_process_kwargs = eval(arrival_process_kwargs)
-        slo = float(slo)
+        slo_scale = float(slo_scale)
         duration = float(duration)
         goodput = float(goodput)
 
