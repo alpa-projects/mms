@@ -572,6 +572,9 @@ class Trace:
                         self.visualize_inter_arrival(inter_arrival, f"{model}-{i}", n_interval=2000)
                     if arrival_distribution == "exponential":
                         arrival_rate = self.estimate_exponential(inter_arrival)
+                        if np.isnan(arrival_rate):
+                            distributions[model].append(None)
+                            continue
                         if arrival_rate > 5 * empirical_arrival_rate:
                             warnings.warn(f"Estimation for model {model_index} is highly biased. "
                                           f"Hard reset to empirical rate: {empirical_arrival_rate}.")
@@ -581,6 +584,9 @@ class Trace:
                     elif arrival_distribution == "gamma":
                         try:
                             arrival_rate, cv = self.estimate_gamma(inter_arrival)
+                            if np.isnan(arrival_rate) or np.isnan(cv):
+                                distributions[model].append(None)
+                                continue
                             if arrival_rate > 5 * empirical_arrival_rate:
                                 warnings.warn(f"Estimation for model {model_index} is highly biased. "
                                               f"Hard reset to empirical rate: {empirical_arrival_rate}.")
@@ -595,6 +601,8 @@ class Trace:
                     elif arrival_distribution == "pareto":
                         inter_arrival += 1.0
                         shape, scale, loc = self.estimate_pareto(inter_arrival)
+                        if np.isnan(shape) or np.isnan(scale) or np.isnan(loc):
+                            continue
                         distributions[model].append(ParetoProcess(shape, scale, loc))
                     else:
                         raise RuntimeError(f"Unrecognized distribution: {arrival_distribution}")
