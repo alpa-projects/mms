@@ -1,7 +1,7 @@
 """
 The serving controller.
 
-This file simulates `alpa_serve/controler.py`.
+This file simulates `alpa_serve/controller.py`.
 """
 import asyncio
 import math
@@ -129,7 +129,7 @@ class Controller:
             num_gpus: int = 0):
         assert group_id not in self.group_info, (
             f"Mesh group {group_id} is already launched")
-        self.logger.info(f"Create mesh group manager {group_id} with "
+        self.logger.debug(f"Create mesh group manager {group_id} with "
                          f"shape={virtual_mesh_shape}")
         manager = (self.group_manager_class.options(
             name=f"mesh_group_manager_{group_id}",
@@ -170,7 +170,7 @@ class Controller:
             create_info = model_info.create_info.append_init_args(
                 append_init_args, append_init_kwargs)
 
-            self.logger.info(f"Create replica of {name} on group {group_id}")
+            self.logger.debug(f"Create replica of {name} on group {group_id}")
             model_info.group_ids.append(group_id)
         await manager.create_replica.remote(name, create_info)
 

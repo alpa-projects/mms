@@ -102,7 +102,7 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
     print(f"Output the plot to {output}")
 
 
-def plot_goodput_vs_num_devices(lines, threshold, show):
+def plot_goodput_vs_num_devices(lines, threshold, show, folder):
     # Dict[policy -> Dict[num_devices -> goodput]]
     data = defaultdict(lambda: defaultdict(dict))
 
@@ -115,11 +115,11 @@ def plot_goodput_vs_num_devices(lines, threshold, show):
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, True, "#devices",
-                        "Goodput vs. #devices", "goodput_vs_num_devices.png",
+                        "Goodput vs. #devices", folder + "/goodput_vs_num_devices.png",
                         args.show)
 
 
-def plot_goodput_vs_num_models(lines, threshold, show):
+def plot_goodput_vs_num_models(lines, threshold, show, folder):
     # Dict[policy -> Dict[num_models -> goodput]]
     data = defaultdict(lambda: defaultdict(dict))
 
@@ -132,11 +132,11 @@ def plot_goodput_vs_num_models(lines, threshold, show):
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, False, "#models",
-                        "Goodput vs. #models", "goodput_vs_num_models.png",
+                        "Goodput vs. #models", folder + "/goodput_vs_num_models.png",
                         args.show)
 
 
-def plot_goodput_vs_slo(lines, threshold, show):
+def plot_goodput_vs_slo(lines, threshold, show, folder):
     # Dict[policy -> Dict[slo -> goodput]]
     data = defaultdict(lambda: defaultdict(dict))
 
@@ -149,11 +149,11 @@ def plot_goodput_vs_slo(lines, threshold, show):
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, True, "SLO Scale",
-                        "Goodput vs. SLO Scale", "goodput_vs_slo_scale.png",
+                        "Goodput vs. SLO Scale", folder + "/goodput_vs_slo.png",
                         args.show)
 
 
-def plot_goodput_vs_rate_scale(lines, threshold, show):
+def plot_goodput_vs_rate_scale(lines, threshold, show, folder):
     # Dict[policy -> Dict[rate_scale -> goodput]]
     data = defaultdict(lambda: defaultdict(dict))
 
@@ -166,11 +166,11 @@ def plot_goodput_vs_rate_scale(lines, threshold, show):
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, False, "Rate Scale",
-                        "Goodput vs. Rate Scale", "goodput_vs_rate_scale.png",
+                        "Goodput vs. Rate Scale", folder + "/goodput_vs_rate_scale.png",
                         args.show)
 
 
-def plot_goodput_vs_cv_scale(lines, threshold, show):
+def plot_goodput_vs_cv_scale(lines, threshold, show, folder):
     # Dict[policy -> Dict[cv_scale -> goodput]]
     data = defaultdict(lambda: defaultdict(dict))
 
@@ -183,7 +183,7 @@ def plot_goodput_vs_cv_scale(lines, threshold, show):
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, False, "CV Scale",
-                        "Goodput vs. CV Scale", "goodput_vs_cv_scale.png",
+                        "Goodput vs. CV Scale", folder + "/goodput_vs_cv_scale.png",
                         args.show)
 
 
@@ -199,10 +199,15 @@ if __name__ == "__main__":
     else:
         lines = read_equal_model_case_tsv(args.input)
 
+    if len(args.input.split("/")) > 1:
+        folder = args.input.split("/")[0]
+    else:
+        folder = ""
+
     threshold = 0.99
 
-    plot_goodput_vs_num_devices(lines, threshold, args.show)
-    plot_goodput_vs_num_models(lines, threshold, args.show)
-    plot_goodput_vs_slo(lines, threshold, args.show)
-    plot_goodput_vs_rate_scale(lines, threshold, args.show)
-    plot_goodput_vs_cv_scale(lines, threshold, args.show)
+    plot_goodput_vs_num_devices(lines, threshold, args.show, folder)
+    plot_goodput_vs_num_models(lines, threshold, args.show, folder)
+    plot_goodput_vs_slo(lines, threshold, args.show, folder)
+    plot_goodput_vs_rate_scale(lines, threshold, args.show, folder)
+    # plot_goodput_vs_cv_scale(lines, threshold, args.show, folder)

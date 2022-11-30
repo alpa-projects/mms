@@ -76,6 +76,9 @@ def get_equal_model_serving_case(case, prof_database=None):
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        for m in test_replays:
+            test_replays[m].report_stats()
+
         train_workload = Workload.empty()
         for model_name, slo in zip(model_names, slos):
             train_workload += train_replays[model_name].to_workload(slo)

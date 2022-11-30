@@ -1,4 +1,6 @@
 import argparse
+import os
+from datetime import datetime
 
 from benchmarks.alpa.equal_model_case import EqualModelCase, run_equal_model_cases
 from alpa_serve.util import GB
@@ -6,12 +8,13 @@ from alpa_serve.util import GB
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exp-name", type=str, default="default")
-    parser.add_argument("--output", type=str, default="res_equal_model_cases.tsv")
+    parser.add_argument("--exp-name", type=str, default="")
+    parser.add_argument("--output", type=str, default="res_various_metrics.tsv")
     parser.add_argument("--parallel", action="store_true")
     parser.add_argument("--mode", choices=["simulate", "run"],
                         default="simulate")
     parser.add_argument("--trace-dir", type=str, default="~/azure_v2.pkl")
+    parser.add_argument("--exp-ids", type=str, default="0,1,2,3,4")
 
     args = parser.parse_args()
 
@@ -45,76 +48,93 @@ if __name__ == "__main__":
     cv_scales = [1, 2, 4, 8, 16]
     slo_scales = [0.25, 0.5, 1, 2, 4, 8]
 
+    exp_ids = args.exp_ids.split(",")
+    exp_ids = [int(exp_id) for exp_id in exp_ids]
+
+
+    if args.exp_name:
+        os.makedirs(args.exp_name, exist_ok=True)
+        output_file = os.path.join(args.exp_name, args.output)
+    else:
+        output_folder = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        os.makedirs(output_folder, exist_ok=True)
+        output_file = os.path.join(output_folder, args.output)
+
     ##### goodput vs num_devices #####
-    cases = []
-    for num_devices in num_devices_list:
-        for policy_name in policies:
-            cases.append(EqualModelCase(
-                num_devices, mem_budget, model_type, fixed_num_models,
-                total_rate, rate_distribution,
-                arrival_process, arrival_process_kwargs,
-                fixed_slo_scale, duration, policy_name))
+    if 0 in exp_ids:
+        cases = []
+        for num_devices in num_devices_list:
+            for policy_name in policies:
+                cases.append(EqualModelCase(
+                    num_devices, mem_budget, model_type, fixed_num_models,
+                    total_rate, rate_distribution,
+                    arrival_process, arrival_process_kwargs,
+                    fixed_slo_scale, duration, policy_name))
 
-    run_equal_model_cases(cases, exp_name="goodput_vs_num_devices",
-                          output_file=args.output,
-                          mode=args.mode, parallel=args.parallel)
+        run_equal_model_cases(cases, exp_name="goodput_vs_num_devices",
+                              output_file=output_file,
+                              mode=args.mode, parallel=args.parallel)
 
-    ##### goodput vs num_models #####
-    cases = []
-    for num_models in num_models_list:
-        for policy_name in policies:
-            cases.append(EqualModelCase(
-                fixed_num_devices, mem_budget, model_type, num_models,
-                total_rate, rate_distribution,
-                arrival_process, arrival_process_kwargs,
-                fixed_slo_scale, duration, policy_name))
+    #### goodput vs num_models #####
+    if 1 in exp_ids:
+        cases = []
+        for num_models in num_models_list:
+            for policy_name in policies:
+                cases.append(EqualModelCase(
+                    fixed_num_devices, mem_budget, model_type, num_models,
+                    total_rate, rate_distribution,
+                    arrival_process, arrival_process_kwargs,
+                    fixed_slo_scale, duration, policy_name))
 
-    run_equal_model_cases(cases, exp_name="goodput_vs_num_models",
-                          output_file=args.output,
-                          mode=args.mode, parallel=args.parallel)
+        run_equal_model_cases(cases, exp_name="goodput_vs_num_models",
+                              output_file=output_file,
+                              mode=args.mode, parallel=args.parallel)
 
-    ##### goodput vs slo #####
-    cases = []
-    for slo_scale in slo_scales:
-        for policy_name in policies:
-            cases.append(EqualModelCase(
-                fixed_num_devices, mem_budget, model_type, fixed_num_models,
-                total_rate, rate_distribution,
-                arrival_process, arrival_process_kwargs,
-                slo_scale, duration, policy_name))
+    #### goodput vs slo #####
+    if 2 in exp_ids:
+        cases = []
+        for slo_scale in slo_scales:
+            for policy_name in policies:
+                cases.append(EqualModelCase(
+                    fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                    total_rate, rate_distribution,
+                    arrival_process, arrival_process_kwargs,
+                    slo_scale, duration, policy_name))
 
-    run_equal_model_cases(cases, exp_name="goodput_vs_slo",
-                          output_file=args.output,
-                          mode=args.mode, parallel=args.parallel)
+        run_equal_model_cases(cases, exp_name="goodput_vs_slo",
+                              output_file=output_file,
+                              mode=args.mode, parallel=args.parallel)
 
-    ##### goodput vs rate_scale #####
-    cases = []
-    for rate_scale in rate_scales:
-        for policy_name in policies:
-            arrival_process_kwargs = {"rate_scale": rate_scale,
-                                      "cv_scale": fixed_cv_scale}
-            cases.append(EqualModelCase(
-                fixed_num_devices, mem_budget, model_type, fixed_num_models,
-                total_rate, rate_distribution,
-                arrival_process, arrival_process_kwargs,
-                fixed_slo_scale, duration, policy_name))
+    #### goodput vs rate_scale #####
+    if 3 in exp_ids:
+        cases = []
+        for rate_scale in rate_scales:
+            for policy_name in policies:
+                arrival_process_kwargs = {"rate_scale": rate_scale,
+                                          "cv_scale": fixed_cv_scale}
+                cases.append(EqualModelCase(
+                    fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                    total_rate, rate_distribution,
+                    arrival_process, arrival_process_kwargs,
+                    fixed_slo_scale, duration, policy_name))
 
-    run_equal_model_cases(cases, exp_name="goodput_vs_rate_scale",
-                          output_file=args.output,
-                          mode=args.mode, parallel=args.parallel)
+        run_equal_model_cases(cases, exp_name="goodput_vs_rate_scale",
+                              output_file=output_file,
+                              mode=args.mode, parallel=args.parallel)
 
-    ##### goodput vs cv_scale #####
-    cases = []
-    for cv_scale in cv_scales:
-        for policy_name in policies:
-            arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
-                                      "cv_scale": cv_scale}
-            cases.append(EqualModelCase(
-                fixed_num_devices, mem_budget, model_type, fixed_num_models,
-                total_rate, rate_distribution,
-                arrival_process, arrival_process_kwargs,
-                fixed_slo_scale, duration, policy_name))
+    #### goodput vs cv_scale #####
+    if 4 in exp_ids:
+        cases = []
+        for cv_scale in cv_scales:
+            for policy_name in policies:
+                arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
+                                          "cv_scale": cv_scale}
+                cases.append(EqualModelCase(
+                    fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                    total_rate, rate_distribution,
+                    arrival_process, arrival_process_kwargs,
+                    fixed_slo_scale, duration, policy_name))
 
-    run_equal_model_cases(cases, exp_name="goodput_vs_cv_scale",
-                          output_file=args.output,
-                          mode=args.mode, parallel=args.parallel)
+        run_equal_model_cases(cases, exp_name="goodput_vs_cv_scale",
+                              output_file=output_file,
+                              mode=args.mode, parallel=args.parallel)
