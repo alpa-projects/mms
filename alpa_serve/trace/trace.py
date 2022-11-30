@@ -373,8 +373,6 @@ class Trace:
             raise RuntimeError("Choose one: scale rate/cv, or scale time.")
 
         replays = OrderedDict()
-        # Step 1: generate the model-function mapping
-        function_model_mapping = self.map_model(models, self.function_names, model_mapping_strategy)
         start_d, start_h, start_m = self.timestr_to_dhm(start_time)
         end_d, end_h, end_m = self.timestr_to_dhm(end_time)
         start_timestamp_seconds = start_d * 24 * 60 * 60 + start_h * 60 * 60 + start_m * 60
@@ -385,6 +383,12 @@ class Trace:
             # 1. Convert function trace to model trace
             model_histogram = OrderedDict()
             function_histogram = self.slice(start_time, end_time)
+            # filter out all functions that have zero arrivals:
+            functions_to_remove = [f for f in function_histogram if np.sum(function_histogram[f]) == 0]
+            for f in functions_to_remove:
+                del function_histogram[f]
+            # generate function model mapping.
+            function_model_mapping = self.map_model(models, function_histogram.keys(), model_mapping_strategy)
             for f, m in function_model_mapping.items():
                 if m not in model_histogram:
                     model_histogram[m] = function_histogram[f]
@@ -416,6 +420,11 @@ class Trace:
             model_arrivals = OrderedDict()
             assert self.function_arrivals is not None
             function_arrivals = self.slice(start_time, end_time)
+            functions_to_remove = [f for f in function_arrivals if function_arrivals[f].size == 0]
+            for f in functions_to_remove:
+                del function_arrivals[f]
+            # generate function model mapping.
+            function_model_mapping = self.map_model(models, function_arrivals.keys(), model_mapping_strategy)
             for f, m in function_model_mapping.items():
                 if m not in model_arrivals:
                     model_arrivals[m] = function_arrivals[f]
