@@ -22,7 +22,7 @@ if __name__ == "__main__":
     policies = ["sr-greedy", "mp-greedy-4"]
     fixed_slos = {"bert-1.3b": 0.5, "bert-2.6b": 0.8, "bert-6.7b": 1.2}
     mem_budget = 16 * GB
-    model_type = "bert-1.3b"
+    model_type = "bert-2.6b"
 
     # real trace does not need these config
     rate_distribution = None
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     num_models_list = [4, 8, 16, 32, 64, 80]
     rate_scales = [1, 2, 4, 8, 16]
     cv_scales = [1, 2, 4, 8, 16]
-    slo_scales = [0.25, 0.5, 1, 2, 4, 8]
+    slo_scales = [0.5, 1, 2, 4, 8]
 
     exp_ids = args.exp_ids.split(",")
     exp_ids = [int(exp_id) for exp_id in exp_ids]
@@ -111,7 +111,8 @@ if __name__ == "__main__":
         for rate_scale in rate_scales:
             for policy_name in policies:
                 arrival_process_kwargs = {"rate_scale": rate_scale,
-                                          "cv_scale": fixed_cv_scale}
+                                          "cv_scale": fixed_cv_scale,
+                                          "trace_dir": args.trace_dir}
                 cases.append(EqualModelCase(
                     fixed_num_devices, mem_budget, model_type, fixed_num_models,
                     total_rate, rate_distribution,
@@ -128,7 +129,8 @@ if __name__ == "__main__":
         for cv_scale in cv_scales:
             for policy_name in policies:
                 arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
-                                          "cv_scale": cv_scale}
+                                          "cv_scale": cv_scale,
+                                          "trace_dir": args.trace_dir}
                 cases.append(EqualModelCase(
                     fixed_num_devices, mem_budget, model_type, fixed_num_models,
                     total_rate, rate_distribution,

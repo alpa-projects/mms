@@ -210,4 +210,4 @@ if __name__ == "__main__":
     plot_goodput_vs_num_models(lines, threshold, args.show, folder)
     plot_goodput_vs_slo(lines, threshold, args.show, folder)
     plot_goodput_vs_rate_scale(lines, threshold, args.show, folder)
-    # plot_goodput_vs_cv_scale(lines, threshold, args.show, folder)
+    plot_goodput_vs_cv_scale(lines, threshold, args.show, folder)
