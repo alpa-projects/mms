@@ -15,32 +15,44 @@ if __name__ == "__main__":
                         default="simulate")
     parser.add_argument("--trace-dir", type=str, default="~/azure_v2.pkl")
     parser.add_argument("--exp-ids", type=str, default="0,1,2,3,4")
+    parser.add_argument("--synthetic", action="store_true")
+    parser.add_argument("--rate-distribution", choices=["uniform", "power_law"],
+                        default="uniform")
+    parser.add_argument("--rate", type=float, default=64)
+    parser.add_argument("--cv", type=float, default=4)
+    parser.add_argument('--duration', type=float, default=200)
 
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
     policies = ["sr-greedy", "mp-greedy-4"]
-    fixed_slos = {"bert-1.3b": 0.5, "bert-2.6b": 0.8, "bert-6.7b": 1.2}
     mem_budget = 16 * GB
     model_type = "bert-2.6b"
-
-    # real trace does not need these config
-    rate_distribution = None
-    total_rate = -1
-    duration = -1
 
     # default configuration
     fixed_num_devices = 32
     fixed_num_models = 32
     fixed_rate_scale = 1
-    fixed_cv_scale = 4
-    fixed_slo_scale = fixed_slos[model_type]
+    fixed_cv_scale = 1
+    fixed_slo_scale = 1
 
-    # real trace related
-    arrival_process = "azure_v2"
-    arrival_process_kwargs = {"rate_scale": fixed_rate_scale, 
-                              "cv_scale": fixed_cv_scale,
-                              "trace_dir": args.trace_dir}
+    if args.synthetic:
+        rate_distribution = args.rate_distribution
+        total_rate = args.rate
+        duration = args.duration
+
+        arrival_process = "gamma"
+        arrival_process_kwargs = {"cv": args.cv} 
+    else:
+        # real trace does not need these config
+        rate_distribution = None
+        total_rate = -1
+        duration = -1
+
+        arrival_process = "azure_v2"
+        arrival_process_kwargs = {"rate_scale": fixed_rate_scale, 
+                                "cv_scale": fixed_cv_scale,
+                                "trace_dir": args.trace_dir}
 
     num_devices_list = [8, 16, 24, 32, 48, 64, 96, 128]
     num_models_list = [4, 8, 16, 32, 64, 80]
