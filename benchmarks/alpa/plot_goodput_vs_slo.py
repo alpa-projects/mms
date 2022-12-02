@@ -9,13 +9,15 @@ from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
 
 show_name_dict = {
     "sr-greedy":   "Selective Replication (greedy)",
+    "sr-search":   "Selective Replication (search)",
     "sr-ilp":      "Selective Replication (ilp)",
 
-    "mp-ilp":      "Model Parallelism (ilp)",
-    "mp-search":   "Model Parallelism (search)",
-    "mp-greedy-2": "Pipeline Parallelism (#stage=2)",
-    "mp-greedy-4": "Pipeline Parallelism (#stage=4)",
-    "mp-greedy-8": "Pipeline Parallelism (#stage=8)",
+    "mp-ilp":         "Model Parallelism (ilp)",
+    "mp-search":      "Model Parallelism (search)",
+    "mp-search-old":  "Model Parallelism (search-old)",
+    "mp-greedy-2":    "Pipeline Parallelism (#stage=2)",
+    "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",
+    "mp-greedy-8":    "Pipeline Parallelism (#stage=8)",
 }
 
 def show_name(name):
@@ -35,9 +37,9 @@ def method2color(name):
 
 
 method_order_list = [
-    "sr-greedy", "sr-ilp",
+    "sr-greedy", "sr-search", "sr-ilp",
 
-    "mp-ilp", "mp-search",
+    "mp-ilp", "mp-search-old", "mp-search",
     "mp-greedy-2", "mp-greedy-4", "mp-greedy-8",
 ]
 

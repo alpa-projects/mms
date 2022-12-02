@@ -62,6 +62,7 @@ class ModelInfo:
 class GroupInfo:
     manager: ActorHandle
     queue_size: int
+    num_total_requests: int
 
 
 @ray.remote(num_cpus=1)
@@ -234,7 +235,8 @@ class Controller:
         manager = (self.group_manager_class.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
-        self.group_info[group_id] = GroupInfo(manager=manager, queue_size=0)
+        self.group_info[group_id] = GroupInfo(
+            manager=manager, queue_size=0, num_total_requests=0)
 
     async def register_model(self,
                              name: str,
@@ -264,7 +266,8 @@ class Controller:
                 f"Group {group_id} does not exist")
             model_info = self.model_info[name]
             manager = self.group_info[group_id].manager
-            assert group_id not in model_info.group_ids
+            assert group_id not in model_info.group_ids, (
+                f"Model {name} is already created on group {group_id}")
             create_info = model_info.create_info.append_init_args(
                 append_init_args, append_init_kwargs)
 
@@ -298,6 +301,7 @@ class Controller:
         self.group_info[group_id].queue_size += 1
         response = await manager.handle_request.remote(name, request)
         self.group_info[group_id].queue_size -= 1
+        self.group_info[group_id].num_total_requests += 1
 
         return response
 
@@ -337,6 +341,7 @@ class Controller:
             response = await manager.handle_request.remote(
                 name, request_wrapper_bytes)
             self.group_info[group_id].queue_size -= 1
+            self.group_info[group_id].num_total_requests += 1
 
             if isinstance(response, RelayException):
                 response = make_error_response(response)
