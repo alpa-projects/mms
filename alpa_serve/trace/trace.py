@@ -204,7 +204,7 @@ class TraceReplay:
         plt.ylabel("#requests")
         plt.xlabel("time (s)")
         plt.legend()
-        plt.ylim(0, 500)
+        plt.ylim(0, 200)
         fig = plt.gcf()
         figure_size = (8, 4)
         fig.set_size_inches(figure_size)

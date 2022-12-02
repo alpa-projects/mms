@@ -1,4 +1,7 @@
 import argparse
+import warnings
+
+import os
 from collections import defaultdict
 
 import numpy as np
@@ -47,6 +50,9 @@ def method2order(name):
 
 
 def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show):
+    if len(data) == 0:
+        warnings.warn(f"No data to draw for {output}. Skipped.")
+
     fig, ax = plt.subplots()
     figure_size = (5, 5)
 
@@ -85,7 +91,7 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
         x_max = max(x_max, *xs)
         y_max = max(y_max, *ys)
 
-    ax.set_ylim(bottom=0, top=max(y_max * 1.05, 100))
+    ax.set_ylim(bottom=75, top=max(y_max * 1.02, 102))
     ax.set_ylabel("Goodput (%)")
     ax.set_xlabel(xlabel)
     ax.legend(curves, legends)
@@ -199,8 +205,8 @@ if __name__ == "__main__":
     else:
         lines = read_equal_model_case_tsv(args.input)
 
-    if len(args.input.split("/")) > 1:
-        folder = args.input.split("/")[0]
+    if len(args.input) > 1:
+        folder = os.path.dirname(args.input)
     else:
         folder = ""
 
