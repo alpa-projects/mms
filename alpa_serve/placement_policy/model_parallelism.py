@@ -377,9 +377,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 if pp > self.max_pp or op > self.max_op:
                     continue
 
-                if (op, pp) != (1, 4):
-                    continue
-
                 sols.append(ModelPlacement([ParallelConfig(1, op, pp)] * num_groups,
                                            [[] for _ in range(num_groups)]))
         return sols
@@ -404,11 +401,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 if parallel_config in x.profiling_result.para_dict
                 else inf
                 for x in model_datas]
-
-        # Status variables
-        burst_tolerance = np.zeros(num_models)
-        used_mem = np.zeros(num_groups)
-        model_set = [set() for _ in range(num_groups)]
 
         # Beam search
         beam = [sol]

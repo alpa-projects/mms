@@ -220,6 +220,15 @@ class SelectiveReplicationSearch(BasePlacementPolicy):
                         train_workload: Workload = None):
         tic = time.time()
 
+        # Generate workloads
+        if train_workload is None:
+            w = Workload.empty()
+            for i, data in enumerate(model_datas):
+                w += GammaProcess(data.rate, data.cv).generate_workload(
+                    data.name, 0, duration=self.duration,
+                    slo=data.slo, seed=self.seed + i)
+            train_workload = w
+
         # Load constants
         num_models = len(model_datas)
         num_devices = cluster_env.num_devices
@@ -229,15 +238,6 @@ class SelectiveReplicationSearch(BasePlacementPolicy):
         weight_mem = [
             max(x.profiling_result.para_dict[parallel_config].weight_mem)
             for x in model_datas]
-
-        # Generate workloads
-        if train_workload is None:
-            w = Workload.empty()
-            for i, data in enumerate(model_datas):
-                w += GammaProcess(data.rate, data.cv).generate_workload(
-                    data.name, 0, duration=self.duration,
-                    slo=data.slo, seed=self.seed + i)
-            train_workload = w
 
         # Beam search
         beam = [ModelPlacement([parallel_config] * num_devices,

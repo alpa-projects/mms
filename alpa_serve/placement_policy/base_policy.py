@@ -30,7 +30,7 @@ class ModelPlacement:
         group_models = []
         for i in range(len(self.group_models)):
             group_models.append(tuple(sorted(self.group_models[i])))
-        group_models = tuple(group_models)
+        group_models = tuple(sorted(group_models))
         return ModelPlacement(self.group_configs, group_models)
 
 
