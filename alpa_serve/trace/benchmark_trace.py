@@ -1,7 +1,7 @@
 from alpa_serve.trace import Trace, TraceReplay
 
 trace_name = "azure_v2"
-trace_dir = "azure_v2.pkl"
+trace_dir = "/mnt/e/projects/projects/dataset/mms_dataset/azure_v2.pkl"
 
 
 n_model = 32
@@ -11,7 +11,7 @@ trace = Trace(trace_name, trace_dir)
 
 # replication_factors = [1, 2, 3]
 
-distributions = ["exponential", "gamma"]
+distributions = ["gamma"]
 # for rf in replication_factors:
 replays = trace.replay_vanilla(models,
                                model_mapping_strategy="stripe",

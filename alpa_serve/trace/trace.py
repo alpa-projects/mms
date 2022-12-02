@@ -131,11 +131,11 @@ def load_trace(path: str) -> OrderedDict:
             num_function_invocations.append(np.sum(trace))
         else:
             num_function_invocations.append(trace.size)
-
-    print(f"Trace: {path[:-4]}, stats: #days: 14, #functions: {num_functions}, "
-          f"total invocations: {sum(num_function_invocations)}, "
-          f"max: {max(num_function_invocations)}, min: {min(num_function_invocations)}, "
-          f"avg: {np.mean(num_functions):.2f}")
+    if DEBUG:
+        print(f"Trace: {path[:-4]}, stats: #days: 14, #functions: {num_functions}, "
+              f"total invocations: {sum(num_function_invocations)}, "
+              f"max: {max(num_function_invocations)}, min: {min(num_function_invocations)}, "
+              f"avg: {np.mean(num_functions):.2f}")
     return tracelines
 
 
@@ -173,9 +173,9 @@ class TraceReplay:
 
         # stats
         if len(self.arrivals) > 1:
+            self._rate = len(self.arrivals) / ((self.end_seconds - self.start_seconds) // self.time_scale_factor)
             intervals = self.arrivals[1:] - self.arrivals[:-1]
-            self._rate = 1 / np.mean(intervals)
-            self._cv = np.std(intervals) * self._rate
+            self._cv = np.std(intervals)  / (np.mean(intervals) + 1e-5)
         else:
             self._rate = 0
             self._cv = 0
@@ -189,8 +189,6 @@ class TraceReplay:
               f"arrival distribution: {self.arrival_distribution}, "
               f"generation interval: {self.interval_seconds}, "
               f"scale factor: ({self.rate_scale_factor}, {self.cv_scale_factor}, {self.time_scale_factor}, {self.replication_factor}). "
-              # f"generation rates: mean rate {sum(rates) / len(rates):.2f}, max rate: {max(rates):.2f}, "
-              # f"generation cvs: mean cv {sum(cvs) / len(cvs):.2f}, max cv: {max(cvs):.2f}, "
               f"overall rate: {self._rate:.2f}, overall cv: {self._cv:.2f}.")
 
 
@@ -206,7 +204,7 @@ class TraceReplay:
         plt.ylabel("#requests")
         plt.xlabel("time (s)")
         plt.legend()
-        plt.ylim(0, 500)
+        plt.ylim(0, 200)
         fig = plt.gcf()
         figure_size = (8, 4)
         fig.set_size_inches(figure_size)
@@ -214,7 +212,7 @@ class TraceReplay:
         os.makedirs(fig_folder, exist_ok=True)
         fig_name = f"{self.model}-{self.trace_name}-{self.arrival_distribution}-" \
                    f"{self.start_time}-{self.end_time}-{self.interval_seconds}-" \
-                   f"({self.rate_scale_factor},{self.cv_scale_factor}," \
+                   f"({self.rate_scale_factor}, {self.cv_scale_factor}," \
                    f"{self.time_scale_factor}, {self.replication_factor}).png"
         fig.savefig(os.path.join(fig_folder, fig_name), bbox_inches='tight')
         plt.close()
@@ -574,16 +572,24 @@ class Trace:
                         self.visualize_inter_arrival(inter_arrival, f"{model}-{i}", n_interval=2000)
                     if arrival_distribution == "exponential":
                         arrival_rate = self.estimate_exponential(inter_arrival)
+                        if np.isnan(arrival_rate):
+                            distributions[model].append(None)
+                            continue
                         if arrival_rate > 5 * empirical_arrival_rate:
-                            warnings.warn(f"Estimation for model {model_index} is highly biased. Hard reset.")
+                            warnings.warn(f"Estimation for model {model_index} is highly biased. "
+                                          f"Hard reset to empirical rate: {empirical_arrival_rate}.")
                             arrival_rate = empirical_arrival_rate
                         arrival_rate *= rate_scale_factor
                         distributions[model].append(PoissonProcess(arrival_rate))
                     elif arrival_distribution == "gamma":
                         try:
                             arrival_rate, cv = self.estimate_gamma(inter_arrival)
+                            if np.isnan(arrival_rate) or np.isnan(cv):
+                                distributions[model].append(None)
+                                continue
                             if arrival_rate > 5 * empirical_arrival_rate:
-                                warnings.warn(f"Estimation for model {model_index} is highly biased. Hard reset.")
+                                warnings.warn(f"Estimation for model {model_index} is highly biased. "
+                                              f"Hard reset to empirical rate: {empirical_arrival_rate}.")
                                 arrival_rate = empirical_arrival_rate
                             # scale them
                             arrival_rate *= rate_scale_factor
@@ -595,6 +601,8 @@ class Trace:
                     elif arrival_distribution == "pareto":
                         inter_arrival += 1.0
                         shape, scale, loc = self.estimate_pareto(inter_arrival)
+                        if np.isnan(shape) or np.isnan(scale) or np.isnan(loc):
+                            continue
                         distributions[model].append(ParetoProcess(shape, scale, loc))
                     else:
                         raise RuntimeError(f"Unrecognized distribution: {arrival_distribution}")

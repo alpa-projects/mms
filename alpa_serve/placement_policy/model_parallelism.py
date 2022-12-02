@@ -269,7 +269,7 @@ class ModelParallelismGreedy(BasePlacementPolicy):
 
                 used_mem[g_id] += weight_mem[m_id]
                 model_set[g_id].add(m_id)
-                burst_tolerance[m_id] += single_throughput[m_id] / rate[m_id]
+                burst_tolerance[m_id] += single_throughput[m_id] / (rate[m_id] + eps)
 
         # Parse solution
         group_configs = []
@@ -528,7 +528,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 used_mem[g_id] += weight_mem[parallel_config][m_id]
                 model_set[g_id].add(m_id)
                 burst_tolerance[m_id] += (
-                    single_throughput[parallel_config][m_id] / rate[m_id])
+                    single_throughput[parallel_config][m_id] / (rate[m_id] + eps))
 
         # Parse solution
         group_models = []
