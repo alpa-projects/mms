@@ -32,13 +32,14 @@ if __name__ == "__main__":
     mem_budget = 16 * GB
     model_type = "bert-2.6b"
 
-    # default configuration
+    # default config
     fixed_num_devices = 32
     fixed_num_models = 32
     fixed_rate_scale = 1
     fixed_cv_scale = 1
     fixed_slo_scale = 1
 
+    # workload config
     if args.synthetic:
         rate_distribution = args.rate_distribution
         total_rate = args.rate
@@ -57,6 +58,7 @@ if __name__ == "__main__":
                                 "cv_scale": fixed_cv_scale,
                                 "trace_dir": args.trace_dir}
 
+    # variables
     num_devices_list = [8, 16, 24, 32, 48, 64, 96, 128]
     num_models_list = [4, 8, 16, 32, 64, 80, 96]
     rate_list = [16, 32, 48, 64, 80] # synthetic trace only

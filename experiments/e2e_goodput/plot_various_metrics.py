@@ -171,7 +171,7 @@ def plot_goodput_vs_rate(lines, threshold, show, folder):
             line["policy_name"], line["total_rate"], line["goodput"])
         data[policy][x] = goodput
 
-    plot_goodput_common(data, threshold, False, "Rate(s)",
+    plot_goodput_common(data, threshold, False, "Rate(r/s)",
                         "Goodput vs. Rate", folder + "/goodput_vs_rate.png",
                         args.show)
 
@@ -232,6 +232,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, required=True)
     parser.add_argument("--show", action="store_true")
+    parser.add_argument("--general-case", action="store_true")
     parser.add_argument("--synthetic", action="store_true")
     args = parser.parse_args()
 
@@ -242,10 +243,10 @@ if __name__ == "__main__":
 
     threshold = 0.99
 
-    if args.synthetic:
-        lines = read_equal_model_case_tsv(args.input)
-    else:
+    if args.general_case:
         lines = read_general_model_case_tsv(args.input)
+    else:
+        lines = read_equal_model_case_tsv(args.input)
 
     plot_goodput_vs_num_devices(lines, threshold, args.show, folder)
     plot_goodput_vs_num_models(lines, threshold, args.show, folder)
