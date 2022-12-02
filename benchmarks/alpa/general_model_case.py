@@ -177,7 +177,7 @@ def run_general_model_cases(cases, exp_name="default", output_file=None,
             stats, placement = run_res
 
         Workload.print_stats(stats)
-        goodput = stats.average_goodput
+        goodput = stats.goodput
 
         (num_devices, mem_budget, model_types, model_names,
         total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
