@@ -1,4 +1,5 @@
 """Selective replication."""
+import logging
 import multiprocessing
 import time
 from typing import List
@@ -6,12 +7,15 @@ from typing import List
 import numpy as np
 import pulp
 from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
+import ray
 
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
-    BasePlacementPolicy, ModelPlacement, ModelData, ClusterEnv)
-from alpa_serve.simulator.workload import Workload
+    BasePlacementPolicy, ModelPlacement, ModelData, ClusterEnv,
+    get_scores)
+from alpa_serve.simulator.workload import Workload, GammaProcess
 from alpa_serve.util import eps
+
 
 def compute_single_throughput(model_data, max_bs):
     parallel_config = ParallelConfig(1, 1, 1)
@@ -144,6 +148,7 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
         burst_tolerance = np.zeros(num_models)
         used_mem = np.zeros(num_devices)
         model_set = [set() for _ in range(num_devices)]
+        num_replicas = [0] * num_models
 
         # Optimization loop
         modified = True
@@ -153,7 +158,11 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
             model_ids = np.argsort(burst_tolerance)
             device_ids = np.argsort(used_mem)
 
-            # Greedly pick one model and a list of devices
+            ## compute load
+            #loads = [sum(rate[m_id]/num_replicas[m_id] for m_id in ms) for ms in model_set]
+            #print(loads)
+
+            # Greedily pick one model and a list of devices
             candidates = []
             for m_id in model_ids:
                 for start_idx, d_id in enumerate(device_ids):
@@ -177,6 +186,7 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
                 used_mem[d_id] += weight_mem[m_id]
                 model_set[d_id].add(m_id)
                 burst_tolerance[m_id] += single_throughput[m_id] / rate[m_id]
+                num_replicas[m_id] += 1
 
         # Parse solution
         group_configs = []
@@ -187,3 +197,99 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
 
         return (ModelPlacement(group_configs, group_models),
                 {"objective": min(burst_tolerance)})
+
+
+class SelectiveReplicationSearch(BasePlacementPolicy):
+
+    def __init__(self, verbose: int = 0):
+        super().__init__(verbose=verbose)
+
+        self.max_bs = 1
+        self.beam_size = 1
+        self.seed = 1234
+        self.duration = 100
+        self.approximate = False
+        self.parallel = True
+
+        if self.parallel:
+            ray.init(address="auto", ignore_reinit_error=True)
+
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
+        tic = time.time()
+
+        # Load constants
+        num_models = len(model_datas)
+        num_devices = cluster_env.num_devices
+        mem_budget = cluster_env.mem_budget
+
+        parallel_config = ParallelConfig(1, 1, 1)
+        weight_mem = [
+            max(x.profiling_result.para_dict[parallel_config].weight_mem)
+            for x in model_datas]
+
+        # Generate workloads
+        if train_workload is None:
+            w = Workload.empty()
+            for i, data in enumerate(model_datas):
+                w += GammaProcess(data.rate, data.cv).generate_workload(
+                    data.name, 0, duration=self.duration,
+                    slo=data.slo, seed=self.seed + i)
+            train_workload = w
+
+        # Beam search
+        beam = [ModelPlacement([parallel_config] * num_devices,
+                                [[] for _ in range(num_devices)])]
+        it = 0
+
+        best_score = -1
+        best_sol = None
+        visited = set()
+
+        while True:
+            # Expand one layer
+            next_sols = []
+            for sol in beam:
+                group_mem = [
+                    sum(weight_mem[m_id] for m_id in group_ms)
+                    for group_ms in sol.group_models
+                ]
+                for g_id in range(num_devices):
+                    for m_id in range(num_models):
+                        if (weight_mem[m_id] + group_mem[g_id] < mem_budget and
+                            m_id not in sol.group_models[g_id]):
+                            next_sol = sol.add_model(g_id, m_id).normalize()
+
+                            if next_sol.group_models not in visited:
+                                visited.add(next_sol.group_models)
+                                next_sols.append(next_sol)
+
+            if not next_sols:
+                break
+
+            # Pick the new top-k
+            next_scores = get_scores(next_sols, model_datas, cluster_env,
+                                     train_workload, self.approximate,
+                                     self.parallel)
+            next_indices = np.argsort(np.array(next_scores))[::-1][:self.beam_size]
+
+            beam = []
+            for idx in next_indices:
+                beam.append(next_sols[idx])
+
+                if next_scores[idx] > best_score:
+                    best_score = next_scores[idx]
+                    best_sol = next_sols[idx]
+
+            if self.verbose >= 1:
+                print(f"iter: {it}, best score: {best_score:.6f}, "
+                      f"iter score: {next_scores[next_indices[0]]:.6f}, "
+                      f"iter #sol: {len(next_sols)}, "
+                      f"elapsed: {time.time() - tic:.2f}, "
+                      f"best placement: {best_sol}, ")
+
+            it += 1
+
+        return best_sol, {}
