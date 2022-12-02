@@ -12,11 +12,12 @@ from typing import Callable, List, Dict, Optional, Tuple
 import numpy as np
 
 from alpa_serve.controller import CreateInfo, ModelInfo, GroupInfo, build_logger
+from alpa_serve.profiling import ProfilingResult
 from alpa_serve.simulator.cluster import VirtualMesh
 from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
     main_loop, sleep, run_event_loop)
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
-from alpa_serve.simulator.workload import Workload
+from alpa_serve.simulator.workload import Workload, StatsResult, PerDeviceStatsResult
 from alpa_serve.util import ServingCase
 from alpa.util import to_str_round
 
@@ -49,7 +50,7 @@ class GroupManager:
         # Simulator specific code
         install_remote_methods(self)
 
-    async def create_replica(self, name: str, create_info: CreateInfo):
+    def create_replica(self, name: str, create_info: CreateInfo):
         assert name not in self.replicas
 
         model_def, args, kwargs = (create_info.model_def, create_info.init_args,
@@ -121,8 +122,7 @@ class Controller:
         self.group_manager_class = partial(lambda: None)
         self.group_manager_class.options = lambda *args, **kwargs: group_manager_init
 
-    @async_to_sync
-    async def create_mesh_group_manager(
+    def create_mesh_group_manager(
             self,
             group_id: int,
             virtual_mesh_shape: Optional[Tuple[int]] = None,
@@ -134,45 +134,42 @@ class Controller:
         manager = (self.group_manager_class.options(
             name=f"mesh_group_manager_{group_id}",
             num_gpus=num_gpus).remote(virtual_mesh_shape))
-        self.group_info[group_id] = GroupInfo(manager=manager, queue_size=0)
+        self.group_info[group_id] = GroupInfo(
+            manager=manager, queue_size=0, num_total_requests=0)
 
-    @async_to_sync
-    async def register_model(self,
-                             name: str,
-                             model_def: Callable,
-                             init_args: Optional[List] = None,
-                             init_kwargs: Optional[Dict] = None,
-                             override: bool = False):
-        async with self.manager_lock[name]:
-            if name in self.model_info:
-                if override:
-                    for group_id in self.model_info[name].group_ids:
-                        await self.group_info[group_id
-                            ].manager.delete_replica.remote(name)
-                else:
-                    raise ValueError(f"Model {name} is already registered")
+    def register_model(self,
+                       name: str,
+                       model_def: Callable,
+                       init_args: Optional[List] = None,
+                       init_kwargs: Optional[Dict] = None,
+                       override: bool = False):
+        if name in self.model_info:
+            if override:
+                for group_id in self.model_info[name].group_ids:
+                    self.group_info[group_id].manager.delete_replica.remote(name)
+            else:
+                raise ValueError(f"Model {name} is already registered")
 
-            self.model_info[name] = ModelInfo(
-                CreateInfo(model_def, init_args, init_kwargs), [])
+        self.model_info[name] = ModelInfo(
+            CreateInfo(model_def, init_args, init_kwargs), [])
 
-    @async_to_sync
-    async def create_replica(self,
-                             name: str,
-                             group_id: int,
-                             append_init_args: Optional[List] = None,
-                             append_init_kwargs: Optional[Dict] = None):
-        async with self.manager_lock[name]:
-            assert group_id in self.group_info, (
-                f"Group {group_id} does not exist")
-            model_info = self.model_info[name]
-            manager = self.group_info[group_id].manager
-            assert group_id not in model_info.group_ids
-            create_info = model_info.create_info.append_init_args(
-                append_init_args, append_init_kwargs)
+    def create_replica(self,
+                       name: str,
+                       group_id: int,
+                       append_init_args: Optional[List] = None,
+                       append_init_kwargs: Optional[Dict] = None):
+        assert group_id in self.group_info, (
+            f"Group {group_id} does not exist")
+        model_info = self.model_info[name]
+        manager = self.group_info[group_id].manager
+        assert group_id not in model_info.group_ids, (
+            f"Model {name} is already created on group {group_id}")
+        create_info = model_info.create_info.append_init_args(
+            append_init_args, append_init_kwargs)
 
-            self.logger.debug(f"Create replica of {name} on group {group_id}")
-            model_info.group_ids.append(group_id)
-        await manager.create_replica.remote(name, create_info)
+        self.logger.info(f"Create replica of {name} on group {group_id}")
+        model_info.group_ids.append(group_id)
+        manager.create_replica.remote(name, create_info)
 
     def select_group_id(self, group_ids):
         min_id = -1
@@ -204,6 +201,7 @@ class Controller:
         response = await manager.handle_request.remote(name, request,
             delay=abs(self.dispatch_overhead()))
         self.group_info[group_id].queue_size -= 1
+        self.group_info[group_id].num_total_requests += 1
 
         return response
 
@@ -258,6 +256,7 @@ async def run_workload(client, workload, warmup):
 
 
 def simulate_one_case(case: ServingCase, warmup=10, debug=False):
+    """Simulate a serving case."""
     register_models, generate_workload, place_models = case
 
     # Launch the controller
@@ -271,4 +270,151 @@ def simulate_one_case(case: ServingCase, warmup=10, debug=False):
 
     # Run workloads
     stats = run_event_loop(run_workload(client, workload, warmup))
+    stats.per_device_stats = tuple(
+        PerDeviceStatsResult(x.num_total_requests)
+        for x in controller.group_info.values()
+    )
+    return stats, placement
+
+
+class DummyController:
+    """A dummy controller used for approximation with queueing theory."""
+
+    def __init__(self):
+        self.name2profiling = {}
+
+        install_remote_methods(self)
+
+    def register_model(self, name: str, model_def: Callable):
+        assert isinstance(model_def, partial)
+
+        for a in model_def.args:
+            if isinstance(a, ProfilingResult):
+                self.name2profiling[name] = a
+                break
+
+    def create_mesh_group_manager(self, *args, **kwargs):
+        pass
+
+    def create_replica(self, *args, **kwargs):
+        pass
+
+    def sync(self, *args, **kwargs):
+        pass
+
+
+def kingman_formula(arrival_rate, arrival_CV, service_rate):
+    p = arrival_rate / service_rate
+    if p > 1:
+        return 100
+    assert 0 <= p <= 1
+    return p / (1 - p) * (arrival_CV ** 2) / 2 * (1 / service_rate)
+
+
+def approximate_one_case(case: ServingCase,
+                         seed: int = 0,
+                         warmup: int = 10,
+                         debug: bool = False):
+    """Use kingman's formula to approximate a case."""
+    from alpa_serve.placement_policy.base_policy import ModelData
+
+    register_models, generate_workload, place_models = case
+
+    # Launch the controller
+    controller = DummyController()
+    register_models(controller)
+    placement = place_models(controller)
+
+    model_names, prof_ress = zip(*controller.name2profiling.items())
+    model_datas = [ModelData(model_names[i], None, None, None, prof_ress[i])
+                   for i in range(len(model_names))]
+
+    # Generate workload
+    workload = generate_workload()
+
+    # Load constants
+    group_configs, group_models = placement.group_configs, placement.group_models
+    name2model_id = {m.name: i for i, m in enumerate(model_datas)}
+    num_groups = len(group_configs)
+    max_bs = 1
+    model_id2group_ids = defaultdict(list)
+    for g_id, m_ids in enumerate(group_models):
+        for m_id in m_ids:
+            model_id2group_ids[m_id].append(g_id)
+
+    # Run load balance
+    group_throughputs = [
+        1 / max(model_datas[0].profiling_result.para_dict[c].latency[max_bs])
+        for c in group_configs]
+    group_total_latencies = [
+        sum(model_datas[0].profiling_result.para_dict[c].latency[max_bs])
+        for c in group_configs]
+    group_counters = [0] * num_groups
+    group_arrivals = [[] for _ in range(num_groups)]
+
+    request_gids = []
+    for i in range(len(workload)):
+        model_id = name2model_id[workload.requests[i].model_name]
+        group_ids = model_id2group_ids[model_id]
+
+        # Pick the group with least requests
+        min_group_id = None
+        min_group_value = 1e20
+        for g_id in group_ids:
+            if group_counters[g_id] / group_throughputs[g_id] < min_group_value:
+                min_group_value = group_counters[g_id] / group_throughputs[g_id]
+                min_group_id = g_id
+
+        request_gids.append(min_group_id)
+        if min_group_id is not None:
+            group_arrivals[min_group_id].append(workload.arrivals[i])
+            group_counters[min_group_id] += 1
+
+    if debug:
+        print(f"group_throughputs: {group_throughputs}, "
+              f"group_counters: {group_counters}, "
+              f"group_total_latencies: {group_total_latencies}")
+
+    # Compute mean waiting time
+    group_waiting_time = []
+    for i in range(num_groups):
+        arrivals = np.array(group_arrivals[i])
+        if len(arrivals) > 1:
+            intervals = arrivals[1:] - arrivals[:-1]
+            rate = 1 / np.mean(intervals)
+            cv = np.std(intervals) * rate
+        else:
+            rate = 0
+            cv = 0
+
+        if debug:
+            print(f"rate: {rate:.2f}, cv: {cv:.2f}")
+
+        waiting_time = kingman_formula(rate, cv, group_throughputs[i])
+        group_waiting_time.append(waiting_time)
+
+    if debug:
+        print(f"group_waiting_time: {group_waiting_time}")
+
+    # Compute e2e latency
+    np.random.seed(seed)
+    start = workload.arrivals
+    finish = []
+    good = []
+    for i in range(len(workload)):
+        m_id = name2model_id[workload.requests[i].model_name]
+        g_id = request_gids[i]
+
+        if g_id is None:
+            finish.append(None)
+            good.append(False)
+        else:
+            e2e_latency = (np.random.exponential(group_waiting_time[g_id]) +
+                group_total_latencies[g_id])
+            finish.append(start[i] + e2e_latency)
+            good.append(e2e_latency <= workload.requests[i].slo)
+
+    # Compute stats
+    stats = workload.compute_stats(start, finish, good, warmup,
+                                   compute_tail_latency=False)
     return stats, placement

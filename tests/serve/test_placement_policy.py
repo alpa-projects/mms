@@ -5,8 +5,8 @@ import numpy as np
 
 from alpa_serve.simulator.controller import Controller
 from alpa_serve.placement_policy import (ModelData, ClusterEnv,
-    SelectiveReplicationILP, SelectiveReplicationGreedy,
-    ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
+    SelectiveReplicationGreedy, SelectiveReplicationSearch,
+    ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ParallelConfig, load_test_prof_result
 from alpa.util import GB
 
@@ -30,7 +30,8 @@ class PlacementPolicyTest(unittest.TestCase):
             ModelData("m3", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
         ]
 
-        for policy in [SelectiveReplicationGreedy(), SelectiveReplicationILP()]:
+        for policy in [SelectiveReplicationGreedy(),
+                       SelectiveReplicationSearch(verbose=1)]:
             placement, _ = policy.solve_placement(
                 model_datas, cluster_env)
 
@@ -48,7 +49,7 @@ class PlacementPolicyTest(unittest.TestCase):
             ModelData("m3", 1, 5, 1, load_test_prof_result("test-2GB-100ms")),
         ]
 
-        for policy in [ModelParallelismILP(), ModelParallelismGreedy(group_size=2)]:
+        for policy in [ModelParallelismGreedy(group_size=2)]:
             placement, _ = policy.solve_placement(
                 model_datas, cluster_env)
 
@@ -76,7 +77,7 @@ class PlacementPolicyTest(unittest.TestCase):
             assert placement.group_models[0] == [0, 1, 2, 3]
 
     def test_placement_api(self):
-        for policy in [SelectiveReplicationGreedy(), ModelParallelismILP()]:
+        for policy in [SelectiveReplicationGreedy(), ModelParallelismGreedy()]:
             controller = Controller()
             controller.register_model.remote("m0", EchoModel)
             controller.register_model.remote("m1", EchoModel)

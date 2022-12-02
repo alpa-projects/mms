@@ -9,6 +9,7 @@ from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
+    SelectiveReplicationSearch,
     ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.trace import Trace
@@ -45,7 +46,7 @@ def get_equal_model_serving_case(case, prof_database=None):
     if rate_distribution == "uniform":
         rates = [total_rate / num_models] * num_models
     elif rate_distribution == "power_law":
-        q = 1/2
+        q = 3/5
         s = (1 - q ** num_models) / (1 - q)
         base = total_rate / s
         rates = [base * (q ** i) for i in range(num_models)]
@@ -54,6 +55,7 @@ def get_equal_model_serving_case(case, prof_database=None):
     else:
         raise ValueError(f"Invalid rate distribution: {rate_distribution}")
 
+    train_workload = None
     if arrival_process == "gamma":
         arrival_processes = [
             GammaProcess(rates[i], arrival_process_kwargs["cv"])
@@ -67,8 +69,14 @@ def get_equal_model_serving_case(case, prof_database=None):
     elif arrival_process == "azure_v2":
         azure_v2_trace_dir = arrival_process_kwargs["trace_dir"]
         azure_v2_trace = Trace("azure_v2", azure_v2_trace_dir)
-        train_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="vanilla",
-                                                    start_time='0.0.0', end_time='1.0.0', replication_factor=arrival_process_kwargs["rate_scale"])
+        train_replays = azure_v2_trace.replay(model_names,
+                                              model_mapping_strategy="stripe",
+                                              arrival_distribution="gamma",
+                                              start_time='5.0.0',
+                                              end_time='6.0.0',
+                                              interval_seconds=5400,
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
         test_replays = azure_v2_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
@@ -77,12 +85,13 @@ def get_equal_model_serving_case(case, prof_database=None):
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        ws = []
+        for model_name, slo in zip(model_names, slos):
+            ws.append(train_replays[model_name].to_workload(slo))
+        train_workload = Workload.merge(*ws)
+        
         for m in test_replays:
             test_replays[m].report_stats()
-
-        train_workload = Workload.empty()
-        for model_name, slo in zip(model_names, slos):
-            train_workload += train_replays[model_name].to_workload(slo)
         arrival_processes = [test_replays[model_name] for model_name in model_names]
     else:
         raise ValueError("Invalid arrival process: {arrival_process}")
@@ -99,14 +108,14 @@ def get_equal_model_serving_case(case, prof_database=None):
                                           prof_database))
 
     def generate_workload(start=0):
-        w = Workload.empty()
+        ws = []
         for i in range(num_models):
             if "azure" in arrival_process:
-                w += arrival_processes[i].to_workload(slos[i])
+                ws.append(arrival_processes[i].to_workload(slos[i]))
             else:
-                w += arrival_processes[i].generate_workload(model_names[i], start,
-                                                            duration, slo=slos[i], seed=i)
-        return w
+                ws.append(arrival_processes[i].generate_workload(
+                    model_names[i], start, duration, slo=slos[i], seed=i))
+        return Workload.merge(*ws)
 
     def place_models(controller):
         num_models = len(model_names)
@@ -119,6 +128,8 @@ def get_equal_model_serving_case(case, prof_database=None):
             policy = SelectiveReplicationILP(verbose=1)
         elif policy_name == "sr-greedy":
             policy = SelectiveReplicationGreedy(verbose=1)
+        elif policy_name == "sr-search":
+            policy = SelectiveReplicationSearch(verbose=1)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
         elif policy_name == "mp-search":
@@ -129,10 +140,7 @@ def get_equal_model_serving_case(case, prof_database=None):
         else:
             raise ValueError(f"Invalid placement policy: {policy_name}")
 
-        if "azure" in arrival_process:
-            placement = policy.place_models(controller, cluster_env, model_datas, train_workload)
-        else:
-            placement = policy.place_models(controller, cluster_env, model_datas)
+        placement = policy.place_models(controller, cluster_env, model_datas, train_workload)
 
         return placement
 
@@ -184,7 +192,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
             stats, placement = run_res
 
         Workload.print_stats(stats)
-        goodput = stats.average_goodput
+        goodput = stats.goodput
 
         res = (placement, round(goodput, 3), mode)
         values = (exp_name,) + tuple(case) + res

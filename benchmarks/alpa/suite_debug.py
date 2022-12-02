@@ -1,5 +1,6 @@
 from alpa_serve.simulator.controller import Controller
 from alpa_serve.simulator.workload import Workload, PoissonProcess
+from alpa_serve.placement_policy.base_policy import ModelPlacement
 from alpa_serve.profiling import ParallelConfig, ProfilingDatabase
 from alpa_serve.util import ServingCase
 
@@ -38,6 +39,9 @@ def debug_case(per_model_rate, duration, placement):
             controller.create_mesh_group_manager.remote(group_id, [1, 1])
             controller.create_replica.remote(
                 "b", group_id, [ParallelConfig(1, 1, 1)])
+
+            model_placement = ModelPlacement(
+                [ParallelConfig(1,1,1), ParallelConfig(1,1,1)], [[0], [1]])
         elif placement == "replicate_2x":
             group_id = 0
             controller.create_mesh_group_manager.remote(group_id, [1, 1])
@@ -52,6 +56,9 @@ def debug_case(per_model_rate, duration, placement):
                 "a", group_id, [ParallelConfig(1, 1, 1)])
             controller.create_replica.remote(
                 "b", group_id, [ParallelConfig(1, 1, 1)])
+
+            model_placement = ModelPlacement(
+                [ParallelConfig(1,1,1), ParallelConfig(1,1,1)], [[0,1], [0,1]])
         elif placement == "pipeline_2x":
             group_id = 0
             controller.create_mesh_group_manager.remote(group_id, [1, 2])
@@ -59,6 +66,8 @@ def debug_case(per_model_rate, duration, placement):
                 "a", group_id, [ParallelConfig(1, 1, 2)])
             controller.create_replica.remote(
                 "b", group_id, [ParallelConfig(1, 1, 2)])
+
+            model_placement = ModelPlacement([ParallelConfig(1,1,2)], [[0, 1]])
         elif placement == "pipeline_8x":
             group_id = 0
             controller.create_mesh_group_manager.remote(group_id, [1, 8])
@@ -66,16 +75,19 @@ def debug_case(per_model_rate, duration, placement):
                 "a", group_id, [ParallelConfig(1, 1, 8)])
             controller.create_replica.remote(
                 "b", group_id, [ParallelConfig(1, 1, 8)])
+
+            model_placement = ModelPlacement([ParallelConfig(1,1,8)], [[0, 1]])
         else:
             raise ValueError(f"Invalid placement: {placement}")
 
         controller.sync()
+        return model_placement
 
     return ServingCase(register_models, generate_workload, place_models)
 
 
 suite_debug["debug_replicate"] = debug_case(4, 60, "replicate")
 suite_debug["debug_replicate_2x"] = debug_case(4, 60, "replicate_2x")
-suite_debug["debug_pipeline"] = debug_case(4, 60, "pipeline_2x")
+suite_debug["debug_pipeline_2x"] = debug_case(4, 60, "pipeline_2x")
 suite_debug["debug_replicate_overloaded"] = debug_case(30, 30, "replicate")
 suite_debug["debug_pipeline_overloaded"] = debug_case(30, 30, "pipeline_2x")

@@ -23,12 +23,21 @@ class Request:
     submit_time: float = None   # This will be filled later
 
 
-StatsResult = namedtuple("StatsResult", (
-    "per_model_stats", "average_goodput", "total_num_requests", "total_request_rate"))
-
 PerModelStatsResult = namedtuple("PerModelStatsResult",
         ("name", "num_requests", "goodput", "throughput",
          "latency_mean", "latency_std", "latency_p90", "latency_p99"))
+
+PerDeviceStatsResult = namedtuple("PerDeviceStatsResult", ("num_requests",))
+
+
+@dataclasses.dataclass
+class StatsResult:
+    per_model_stats: List[PerModelStatsResult]
+    per_device_stats: Optional[List[PerDeviceStatsResult]]
+    goodput: float
+    latency_mean: float
+    num_requests: int
+    request_rate: float
 
 
 class ArrivalProcess(ABC):
@@ -123,12 +132,21 @@ class GammaProcess(ArrivalProcess):
     def generate_arrivals(self, start: float, duration: float, seed: int = 0):
         np.random.seed(seed)
 
+        batch_size = int(self.rate_ * duration * 1.5)
+        intervals = np.random.gamma(self.shape, self.scale, size=batch_size)
+        pt = 0
+
         ticks = []
         cur = start
         end = start + duration
         while cur < end:
-            cur += np.random.gamma(self.shape, self.scale)
+            cur += intervals[pt]
             ticks.append(cur)
+
+            pt += 1
+            if pt >= batch_size:
+                intervals = np.random.gamma(self.shape, self.scale, size=batch_size)
+                pt = 0
         return ticks
 
     def generate_workload(self, model_name: str, start: float,
@@ -256,7 +274,8 @@ class Workload:
             self.cv = 0
 
     def compute_stats(self, start: Sequence[float], finish: Sequence[float],
-                      good: Sequence[bool], warmup: float):
+                      good: Sequence[bool], warmup: float,
+                      compute_tail_latency: bool = True):
         """Compute the statistics of serving results."""
         # Skip the first and last `warmup` seconds
         ct = 1
@@ -281,8 +300,8 @@ class Workload:
         total_start = 1e20
         total_end = 0
         for name in names:
-            indices = model_indices[name]
-            tmp_good = good[indices]
+            indices = np.asarray(model_indices[name], dtype=np.int32)
+            tmp_good = np.asarray(good[indices], dtype=bool)
             tmp_start = start[indices][tmp_good]
             tmp_finish = finish[indices][tmp_good]
             tmp_num_good = np.sum(tmp_good)
@@ -296,9 +315,12 @@ class Workload:
                 throughput = 0
                 latency = [0]
 
-            sorted_latency = np.sort(latency)
-            latency_p90 = sorted_latency[int(0.90 * len(sorted_latency))]
-            latency_p99 = sorted_latency[int(0.99 * len(sorted_latency))]
+            if compute_tail_latency:
+                sorted_latency = np.sort(latency)
+                latency_p90 = sorted_latency[int(0.90 * len(sorted_latency))]
+                latency_p99 = sorted_latency[int(0.99 * len(sorted_latency))]
+            else:
+                latency_p90 = latency_p99 = None
 
             stats.append(PerModelStatsResult(
                 name, len(indices), goodput, throughput,
@@ -313,8 +335,10 @@ class Workload:
                 total_end = max(total_end, start[indices[-1]])
 
         total_request_rate = num_total_requests / (total_end - total_start)
-        return StatsResult(stats, num_good / num_total_requests,
-                           num_total_requests, total_request_rate)
+        latency_mean = np.average([s.latency_mean for s in stats],
+                                  weights=[s.num_requests for s in stats])
+        return StatsResult(stats, None, num_good / num_total_requests,
+                           latency_mean, num_total_requests, total_request_rate)
 
     @staticmethod
     def print_stats(stats: StatsResult):
@@ -322,15 +346,18 @@ class Workload:
         print("--- per model ---")
         for stat in stats.per_model_stats:
             print(f"model: {stat.name}, #req: {stat.num_requests}")
-            print(f"goodput: {stat.goodput*100:.2f} %")
-            print(f"throughput: {stat.throughput:.2f} q/s")
+            print(f"goodput: {stat.goodput*100:.2f} %, "
+                  f"throughput: {stat.throughput:.2f} q/s")
             print(f"latency mean: {stat.latency_mean*1e3:.2f} ms, "
                   f"std: {stat.latency_std*1e3:.2f} ms, "
                   f"p90: {stat.latency_p90*1e3:.2f} ms")
+        if stats.per_device_stats:
+            print(f"per device #req: {[x.num_requests for x in stats.per_device_stats]}")
         print("--- overall ---")
-        print(f"total #req: {stats.total_num_requests}, "
-              f"rate: {stats.total_request_rate:.2f} q/s")
-        print(f"average goodput: {stats.average_goodput*100:.2f} %")
+        print(f"total #req: {stats.num_requests}, "
+              f"rate: {stats.request_rate:.2f} q/s")
+        print(f"average goodput: {stats.goodput*100:.2f} %, "
+              f"latency mean: {stats.latency_mean*1e3:.2f} ms")
 
     @classmethod
     def empty(cls):
@@ -360,12 +387,11 @@ class Workload:
 
     def __getitem__(self, key):
         if isinstance(key, slice):
-            indices = range(*key.indices(len(self.arrivals)))
-            arrivals = [self.arrivals[i] for i in indices]
-            requests = [self.requests[i] for i in indices]
+            arrivals = self.arrivals.__getitem__(key)
+            requests = self.requests.__getitem__(key)
             return Workload(arrivals, requests)
         else:
-            raise NotImplementedError
+            raise NotImplementedError()
 
     def __add__(self, other):
         return Workload.merge(self, other)
@@ -387,4 +413,4 @@ if __name__ == "__main__":
     print(w2)
 
     w3 = w1 + w2
-
+    print(w3[::2])
