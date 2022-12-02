@@ -59,8 +59,10 @@ if __name__ == "__main__":
 
     num_devices_list = [8, 16, 24, 32, 48, 64, 96, 128]
     num_models_list = [4, 8, 16, 32, 64, 80, 96]
-    rate_scales = [1, 2, 4, 8, 16] # real trace only
-    cv_scales = [1, 2, 4, 8, 16] # real trace only
+    rate_list = [16, 32, 48, 64, 80] # synthetic trace only
+    cv_list = [1, 2, 4, 8]           # synthetic trace only
+    rate_scales = [1, 2, 4, 8, 16]   # real trace only
+    cv_scales = [1, 2, 4, 8, 16]     # real trace only
     slo_scales = [0.5, 1, 2, 4]
 
     if args.output.endswith(".tsv"):
@@ -117,8 +119,8 @@ if __name__ == "__main__":
                         fixed_slo_scale, duration, policy_name))
                 else:
                     new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models,
-                                              "cv_scale": fixed_cv_scale,
-                                              "trace_dir": args.trace_dir}
+                                                  "cv_scale": fixed_cv_scale,
+                                                  "trace_dir": args.trace_dir}
                     cases.append(EqualModelCase(
                         fixed_num_devices, mem_budget, model_type, num_models,
                         total_rate, rate_distribution,
@@ -146,41 +148,72 @@ if __name__ == "__main__":
                               mode=args.mode, parallel=args.parallel)
 
     #### goodput vs rate/rate_scale #####
-    if "goodput_vs_rate" in experiments and not args.synthetic:
-        print("=== Running goodput vs. rate_scale ===")
-        cases = []
-        for rate_scale in rate_scales:
-            for policy_name in policies:
-                arrival_process_kwargs = {"rate_scale": rate_scale,
-                                        "cv_scale": fixed_cv_scale,
-                                        "trace_dir": args.trace_dir}
-                cases.append(EqualModelCase(
-                    fixed_num_devices, mem_budget, model_type, fixed_num_models,
-                    total_rate, rate_distribution,
-                    arrival_process, arrival_process_kwargs,
-                    fixed_slo_scale, duration, policy_name))
+    if "goodput_vs_rate" in experiments:
+        if args.synthetic:
+            print("=== Running goodput vs. rate ===")
+            cases = []
+            for new_rate in rate_list:
+                for policy_name in policies:
+                    cases.append(EqualModelCase(
+                        fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                        new_rate, rate_distribution,
+                        arrival_process, arrival_process_kwargs,
+                        fixed_slo_scale, duration, policy_name))
 
-        run_equal_model_cases(cases, exp_name="goodput_vs_rate_scale",
-                            output_file=output_file,
-                            mode=args.mode, parallel=args.parallel)
+            run_equal_model_cases(cases, exp_name="goodput_vs_rate",
+                                output_file=output_file,
+                                mode=args.mode, parallel=args.parallel)
+        else:
+            print("=== Running goodput vs. rate_scale ===")
+            cases = []
+            for rate_scale in rate_scales:
+                for policy_name in policies:
+                    arrival_process_kwargs = {"rate_scale": rate_scale,
+                                            "cv_scale": fixed_cv_scale,
+                                            "trace_dir": args.trace_dir}
+                    cases.append(EqualModelCase(
+                        fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                        total_rate, rate_distribution,
+                        arrival_process, arrival_process_kwargs,
+                        fixed_slo_scale, duration, policy_name))
 
-    #### goodput vs cv_scale #####
-    if "goodput_vs_cv" in experiments and not args.synthetic:
-        print("=== Running goodput vs. cv_scale ===")
-        cases = []
-        for cv_scale in cv_scales:
-            for policy_name in policies:
-                arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
-                                          "cv_scale": cv_scale,
-                                          "trace_dir": args.trace_dir}
-                cases.append(EqualModelCase(
-                    fixed_num_devices, mem_budget, model_type, fixed_num_models,
-                    total_rate, rate_distribution,
-                    arrival_process, arrival_process_kwargs,
-                    fixed_slo_scale, duration, policy_name))
+            run_equal_model_cases(cases, exp_name="goodput_vs_rate_scale",
+                                output_file=output_file,
+                                mode=args.mode, parallel=args.parallel)
 
-        run_equal_model_cases(cases, exp_name="goodput_vs_cv_scale",
-                              output_file=output_file,
-                              mode=args.mode, parallel=args.parallel)
+    #### goodput vs cv/cv_scale #####
+    if "goodput_vs_cv" in experiments:
+        if args.synthetic:
+            print("=== Running goodput vs. cv ===")
+            cases = []
+            for new_cv in cv_list:
+                for policy_name in policies:
+                    arrival_process_kwargs = {"cv": new_cv}
+                    cases.append(EqualModelCase(
+                        fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                        total_rate, rate_distribution,
+                        arrival_process, arrival_process_kwargs,
+                        fixed_slo_scale, duration, policy_name))
+
+            run_equal_model_cases(cases, exp_name="goodput_vs_cv",
+                                output_file=output_file,
+                                mode=args.mode, parallel=args.parallel)
+        else:
+            print("=== Running goodput vs. cv_scale ===")
+            cases = []
+            for cv_scale in cv_scales:
+                for policy_name in policies:
+                    arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
+                                              "cv_scale": cv_scale,
+                                              "trace_dir": args.trace_dir}
+                    cases.append(EqualModelCase(
+                        fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                        total_rate, rate_distribution,
+                        arrival_process, arrival_process_kwargs,
+                        fixed_slo_scale, duration, policy_name))
+
+            run_equal_model_cases(cases, exp_name="goodput_vs_cv_scale",
+                                output_file=output_file,
+                                mode=args.mode, parallel=args.parallel)
 
     # TODO(Hao): num_models vs. num_devices.
