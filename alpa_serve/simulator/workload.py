@@ -301,7 +301,7 @@ class Workload:
         total_end = 0
         for name in names:
             indices = np.asarray(model_indices[name], dtype=np.int32)
-            tmp_good = np.asarray(good[indices], dtype=np.bool)
+            tmp_good = np.asarray(good[indices], dtype=bool)
             tmp_start = start[indices][tmp_good]
             tmp_finish = finish[indices][tmp_good]
             tmp_num_good = np.sum(tmp_good)
