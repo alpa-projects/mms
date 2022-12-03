@@ -12,9 +12,9 @@ import ray
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelPlacement, ModelData, ClusterEnv,
-    get_scores)
+    PlacementEvaluator, replica_placement_beam_search)
 from alpa_serve.simulator.workload import Workload, GammaProcess
-from alpa_serve.util import eps
+from alpa_serve.util import eps, inf
 
 
 def compute_single_throughput(model_data, max_bs):
@@ -207,89 +207,35 @@ class SelectiveReplicationSearch(BasePlacementPolicy):
         self.max_bs = 1
         self.beam_size = 1
         self.seed = 1234
-        self.duration = 100
-        self.approximate = False
-        self.parallel = True
+        self.simulation_duration = 100
 
-        if self.parallel:
+        self.evaluator_method = "fast_simulator"
+        self.parallel_evaluator = False
+
+        if self.parallel_evaluator:
             ray.init(address="auto", ignore_reinit_error=True)
 
     def solve_placement(self,
                         model_datas: List[ModelData],
                         cluster_env: ClusterEnv,
                         train_workload: Workload = None):
-        tic = time.time()
-
         # Generate workloads
         if train_workload is None:
-            w = Workload.empty()
+            ws = []
             for i, data in enumerate(model_datas):
-                w += GammaProcess(data.rate, data.cv).generate_workload(
-                    data.name, 0, duration=self.duration,
-                    slo=data.slo, seed=self.seed + i)
-            train_workload = w
+                ws.append(GammaProcess(data.rate, data.cv).generate_workload(
+                    data.name, 0, duration=self.simulation_duration,
+                    slo=data.slo, seed=self.seed + i))
+            train_workload = Workload.merge(*ws)
 
-        # Load constants
-        num_models = len(model_datas)
-        num_devices = cluster_env.num_devices
-        mem_budget = cluster_env.mem_budget
+        # Run beam search
+        evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
+            self.evaluator_method, self.parallel_evaluator)
+        num_groups = cluster_env.num_devices
+        sol = ModelPlacement([ParallelConfig(1,1,1)] * num_groups, [[] for _ in range(num_groups)])
 
-        parallel_config = ParallelConfig(1, 1, 1)
-        weight_mem = [
-            max(x.profiling_result.para_dict[parallel_config].weight_mem)
-            for x in model_datas]
+        sol, debug_info = replica_placement_beam_search(
+            sol, model_datas, cluster_env, train_workload,
+            evaluator, self.beam_size, self.verbose)
 
-        # Beam search
-        beam = [ModelPlacement([parallel_config] * num_devices,
-                                [[] for _ in range(num_devices)])]
-        it = 0
-
-        best_score = -1
-        best_sol = None
-        visited = set()
-
-        while True:
-            # Expand one layer
-            next_sols = []
-            for sol in beam:
-                group_mem = [
-                    sum(weight_mem[m_id] for m_id in group_ms)
-                    for group_ms in sol.group_models
-                ]
-                for g_id in range(num_devices):
-                    for m_id in range(num_models):
-                        if (weight_mem[m_id] + group_mem[g_id] < mem_budget and
-                            m_id not in sol.group_models[g_id]):
-                            next_sol = sol.add_model(g_id, m_id).normalize()
-
-                            if next_sol.group_models not in visited:
-                                visited.add(next_sol.group_models)
-                                next_sols.append(next_sol)
-
-            if not next_sols:
-                break
-
-            # Pick the new top-k
-            next_scores = get_scores(next_sols, model_datas, cluster_env,
-                                     train_workload, self.approximate,
-                                     self.parallel)
-            next_indices = np.argsort(np.array(next_scores))[::-1][:self.beam_size]
-
-            beam = []
-            for idx in next_indices:
-                beam.append(next_sols[idx])
-
-                if next_scores[idx] > best_score:
-                    best_score = next_scores[idx]
-                    best_sol = next_sols[idx]
-
-            if self.verbose >= 1:
-                print(f"iter: {it}, best score: {best_score:.6f}, "
-                      f"iter score: {next_scores[next_indices[0]]:.6f}, "
-                      f"iter #sol: {len(next_sols)}, "
-                      f"elapsed: {time.time() - tic:.2f}, "
-                      f"best placement: {best_sol}, ")
-
-            it += 1
-
-        return best_sol, {}
+        return sol, debug_info

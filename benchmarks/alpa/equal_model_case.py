@@ -4,7 +4,8 @@ import os
 
 import ray
 
-from alpa_serve.simulator.controller import Controller, simulate_one_case
+from alpa_serve.simulator.controller import (Controller, simulate_one_case,
+    approximate_one_case)
 from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
@@ -191,7 +192,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
         else:
             stats, placement = run_res
 
-        Workload.print_stats(stats)
+        #Workload.print_stats(stats)
         goodput = stats.goodput
 
         res = (placement, round(goodput, 3), mode)
