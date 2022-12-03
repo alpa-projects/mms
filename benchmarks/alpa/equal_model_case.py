@@ -94,7 +94,7 @@ def get_equal_model_serving_case(case, prof_database=None):
 
         for m in test_replays:
             test_replays[m].report_stats()
-        report_group_stats(test_replays)
+        report_group_stats(list(test_replays.values()))
         arrival_processes = [test_replays[model_name] for model_name in model_names]
     else:
         raise ValueError("Invalid arrival process: {arrival_process}")

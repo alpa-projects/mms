@@ -111,7 +111,7 @@ if __name__ == "__main__":
             for policy_name in policies:
                 # Note(Hao): we need to scale the rate as well to keep the total traffic unchanged.
                 # when num_model = fix_num_models / 4, the total cluster rate is 1 q/s.
-                arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models * 4,
+                arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models * 8,
                                           "cv_scale": fixed_cv_scale,
                                           "trace_dir": args.trace_dir}
                 cases.append(EqualModelCase(
