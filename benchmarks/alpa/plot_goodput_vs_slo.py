@@ -48,21 +48,21 @@ def method2order(name):
 
 
 def read_data(filename):
-    # Dict[policy -> Dict[slo -> goodput]]
+    # Dict[policy -> Dict[slo_scale -> goodput]]
     data = defaultdict(lambda: defaultdict(dict))
 
     rate = cv = None
 
     for line in read_equal_model_case_tsv(filename):
-        policy, slo, goodput, total_rate, kwargs = (
-            line["policy_name"], line["slo"], line["goodput"],
+        policy, slo_scale, goodput, total_rate, kwargs = (
+            line["policy_name"], line["slo_scale"], line["goodput"],
             line["total_rate"], line["arrival_process_kwargs"])
 
         if rate is None:
             rate = total_rate
         cv = kwargs["cv"] if kwargs else 1
 
-        data[policy][slo] = goodput
+        data[policy][slo_scale] = goodput
 
     return data, {"total_rate": rate, "per_model_cv": cv}
 
@@ -90,12 +90,11 @@ def plot_goodput_vs_slo(data, title, output, show):
         y_max = max(y_max, *ys)
 
     ax.set_ylim(bottom=0, top=max(y_max * 1.05, 100))
-    ax.set_xlim(left=0.045, right=1)
+    ax.set_xlim(left=0.3, right=16)
     ax.set_ylabel("Goodput (%)")
-    ax.set_xlabel("SLO (second)")
+    ax.set_xlabel("SLO scale (x)")
     ax.set_xscale("log")
-    # xticks = [0.05, 0.1, 0.2, 0.4, 0.8]
-    xticks = [0.05, 0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8]
+    xticks = [0.3, 0.5, 1, 2, 4, 8, 16]
     ax.set_xticks(xticks)
     ax.set_xticklabels(xticks)
     ax.set_xticks([], minor=True)

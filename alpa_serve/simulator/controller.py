@@ -6,10 +6,13 @@ This file simulates `alpa_serve/controller.py`.
 import asyncio
 import math
 from collections import defaultdict
+import dataclasses
 from functools import partial
+import time
 from typing import Callable, List, Dict, Optional, Tuple
 
 import numpy as np
+import numba
 
 from alpa_serve.controller import CreateInfo, ModelInfo, GroupInfo, build_logger
 from alpa_serve.profiling import ProfilingResult
@@ -18,7 +21,7 @@ from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
     main_loop, sleep, run_event_loop)
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import Workload, StatsResult, PerDeviceStatsResult
-from alpa_serve.util import ServingCase
+from alpa_serve.util import ServingCase, inf
 from alpa.util import to_str_round
 
 
@@ -151,7 +154,7 @@ class Controller:
                 raise ValueError(f"Model {name} is already registered")
 
         self.model_info[name] = ModelInfo(
-            CreateInfo(model_def, init_args, init_kwargs), [])
+            CreateInfo(model_def, init_args, init_kwargs), [], 0)
 
     def create_replica(self,
                        name: str,
@@ -278,7 +281,7 @@ def simulate_one_case(case: ServingCase, warmup=10, debug=False):
 
 
 class DummyController:
-    """A dummy controller used for approximation with queueing theory."""
+    """A dummy controller used for approximation."""
 
     def __init__(self):
         self.name2profiling = {}
@@ -299,122 +302,121 @@ class DummyController:
     def create_replica(self, *args, **kwargs):
         pass
 
-    def sync(self, *args, **kwargs):
+    def sync(self):
         pass
-
-
-def kingman_formula(arrival_rate, arrival_CV, service_rate):
-    p = arrival_rate / service_rate
-    if p > 1:
-        return 100
-    assert 0 <= p <= 1
-    return p / (1 - p) * (arrival_CV ** 2) / 2 * (1 / service_rate)
 
 
 def approximate_one_case(case: ServingCase,
                          seed: int = 0,
                          warmup: int = 10,
-                         debug: bool = False):
-    """Use kingman's formula to approximate a case."""
-    from alpa_serve.placement_policy.base_policy import ModelData
-
+                         debug: bool = False,
+                         only_measure_goodput: bool = False):
+    """A fast simulator that only simulates one stage for a pipeline."""
+    tic = time.time()
     register_models, generate_workload, place_models = case
 
-    # Launch the controller
-    controller = DummyController()
-    register_models(controller)
-    placement = place_models(controller)
-
-    model_names, prof_ress = zip(*controller.name2profiling.items())
-    model_datas = [ModelData(model_names[i], None, None, None, prof_ress[i])
-                   for i in range(len(model_names))]
-
-    # Generate workload
     workload = generate_workload()
+
+    if workload.enable_simulator_cache and workload.cached_data:
+        model_ids, slos, model_names, prof_ress = workload.cached_data
+        placement = place_models(None)
+    else:
+        # Launch the controller
+        controller = DummyController()
+        register_models(controller)
+        placement = place_models(controller)
+        # Note: assume the model registration order is the same as the model id order in group_models
+        model_names, prof_ress = zip(*controller.name2profiling.items())
+
+        name2model_id = {m: i for i, m in enumerate(model_names)}
+        model_ids = np.array([name2model_id[r.model_name] for r in workload.requests], dtype=np.int32)
+        slos = np.array([r.slo for r in workload.requests], dtype=np.float32)
+
+        if workload.enable_simulator_cache:
+            workload.cached_data = (model_ids, slos, model_names, prof_ress)
 
     # Load constants
     group_configs, group_models = placement.group_configs, placement.group_models
-    name2model_id = {m.name: i for i, m in enumerate(model_datas)}
+
     num_groups = len(group_configs)
-    max_bs = 1
-    model_id2group_ids = defaultdict(list)
+    num_models = len(model_names)
+    num_requests = len(workload)
+    num_replicas = [0] * num_models
+    m_id2g_id = np.full((num_models, num_groups), -1, dtype=np.int32)
     for g_id, m_ids in enumerate(group_models):
         for m_id in m_ids:
-            model_id2group_ids[m_id].append(g_id)
+            m_id2g_id[m_id][num_replicas[m_id]] = g_id
+            num_replicas[m_id] += 1
 
-    # Run load balance
-    group_throughputs = [
-        1 / max(model_datas[0].profiling_result.para_dict[c].latency[max_bs])
-        for c in group_configs]
-    group_total_latencies = [
-        sum(model_datas[0].profiling_result.para_dict[c].latency[max_bs])
-        for c in group_configs]
-    group_counters = [0] * num_groups
-    group_arrivals = [[] for _ in range(num_groups)]
+    max_bs = 1
+    group_max_latency = np.empty((num_models, num_groups), dtype=np.float32)
+    group_sum_latency = np.empty((num_models, num_groups), dtype=np.float32)
+    for m_id in range(num_models):
+        for g_id in range(num_groups):
+            c = group_configs[g_id]
+            if c in prof_ress[m_id].para_dict:
+                latency = prof_ress[m_id].para_dict[c].latency[max_bs]
+                group_max_latency[m_id][g_id] = max(latency)
+                group_sum_latency[m_id][g_id] = sum(latency)
+            else:
+                group_max_latency[m_id][g_id] = group_sum_latency[m_id][g_id] = inf
 
-    request_gids = []
-    for i in range(len(workload)):
-        model_id = name2model_id[workload.requests[i].model_name]
-        group_ids = model_id2group_ids[model_id]
-
-        # Pick the group with least requests
-        min_group_id = None
-        min_group_value = 1e20
-        for g_id in group_ids:
-            if group_counters[g_id] / group_throughputs[g_id] < min_group_value:
-                min_group_value = group_counters[g_id] / group_throughputs[g_id]
-                min_group_id = g_id
-
-        request_gids.append(min_group_id)
-        if min_group_id is not None:
-            group_arrivals[min_group_id].append(workload.arrivals[i])
-            group_counters[min_group_id] += 1
-
-    if debug:
-        print(f"group_throughputs: {group_throughputs}, "
-              f"group_counters: {group_counters}, "
-              f"group_total_latencies: {group_total_latencies}")
-
-    # Compute mean waiting time
-    group_waiting_time = []
-    for i in range(num_groups):
-        arrivals = np.array(group_arrivals[i])
-        if len(arrivals) > 1:
-            intervals = arrivals[1:] - arrivals[:-1]
-            rate = 1 / np.mean(intervals)
-            cv = np.std(intervals) * rate
-        else:
-            rate = 0
-            cv = 0
-
-        if debug:
-            print(f"rate: {rate:.2f}, cv: {cv:.2f}")
-
-        waiting_time = kingman_formula(rate, cv, group_throughputs[i])
-        group_waiting_time.append(waiting_time)
-
-    if debug:
-        print(f"group_waiting_time: {group_waiting_time}")
-
-    # Compute e2e latency
-    np.random.seed(seed)
+    # Simulate
     start = workload.arrivals
-    finish = []
-    good = []
-    for i in range(len(workload)):
-        m_id = name2model_id[workload.requests[i].model_name]
-        g_id = request_gids[i]
+    finish = np.empty(num_requests, dtype=np.float32)
+    good = np.empty(num_requests, dtype=bool)
+    tstamps = workload.arrivals
 
-        if g_id is None:
-            finish.append(None)
-            good.append(False)
-        else:
-            e2e_latency = (np.random.exponential(group_waiting_time[g_id]) +
-                group_total_latencies[g_id])
-            finish.append(start[i] + e2e_latency)
-            good.append(e2e_latency <= workload.requests[i].slo)
+    overall_goodput, overall_latency_mean = simulate_requests(
+        finish, good, tstamps, model_ids, slos, m_id2g_id,
+        group_max_latency, group_sum_latency, num_requests, warmup)
 
-    # Compute stats
-    stats = workload.compute_stats(start, finish, good, warmup,
-                                   compute_tail_latency=False)
+    if only_measure_goodput:
+        stats = StatsResult([], [], overall_goodput, overall_latency_mean, num_requests,
+                            num_requests / (tstamps[-1] - tstamps[0]))
+    else:
+        stats = workload.compute_stats(start, finish, good, warmup)
+
     return stats, placement
+
+
+@numba.jit(nopython=True)
+def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
+                      group_max_latency, group_sum_latency, num_requests, warmup):
+    group_clocks = np.zeros(len(group_max_latency[0]), dtype=np.float32)
+    fixed_overhead = 0.009
+
+    for i in range(num_requests):
+        tstamp, m_id, slo = tstamps[i], model_ids[i], slos[i]
+
+        # Select group id
+        g_id = -1
+        min_group_clock = inf
+        for j in m_id2g_id[m_id]:
+            if j < 0:
+                break
+
+            if group_clocks[j] < min_group_clock:
+                min_group_clock = group_clocks[j]
+                g_id = j
+
+        if g_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
+
+        start_time = max(group_clocks[g_id], tstamp)
+        finish_time = start_time + group_sum_latency[m_id][g_id] + fixed_overhead
+
+        if finish_time - tstamp <= slo:
+            finish[i] = finish_time
+            good[i] = True
+            group_clocks[g_id] = start_time + group_max_latency[m_id][g_id]
+        else:
+            finish[i] = tstamp
+            good[i] = False
+
+    skip = int(warmup / (tstamps[-1] - tstamps[0]) * num_requests)
+    overall_goodput = np.mean(good[skip:-skip])
+    overall_latency_mean = np.mean(finish - tstamps)
+    return overall_goodput, overall_latency_mean

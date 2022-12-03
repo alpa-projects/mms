@@ -12,7 +12,7 @@ from alpa_serve.profiling import ProfilingResult, ParallelConfig
 from alpa_serve.simulator.controller import simulate_one_case, approximate_one_case
 from alpa_serve.simulator.executable import Executable
 from alpa_serve.simulator.workload import Workload
-from alpa_serve.util import ServingCase
+from alpa_serve.util import ServingCase, inf
 
 
 @dataclasses.dataclass
@@ -102,52 +102,153 @@ class BasePlacementPolicy:
         controller.sync()
 
 
-def get_scores(sols: List[ModelPlacement], model_datas: List[ModelData],
-               cluster_env: ClusterEnv, workload: Workload, approximate: bool,
-               parallel: bool):
-    """Get goodput of placements through simulation."""
-    if parallel:
-        get_score_one_sol_ = ray.remote(num_cpus=1)(get_score_one_sol).remote
+class PlacementEvaluator:
+    """Evaluate the scores of model placements via the simulator or other
+    approximations."""
 
-        model_datas = ray.put(model_datas)
-        cluster_env = ray.put(cluster_env)
-        workload = ray.put(workload)
+    def __init__(self,
+                 model_datas: List[ModelData],
+                 cluster_env: ClusterEnv,
+                 workload: Workload,
+                 method: str,
+                 parallel: bool):
+        self.parallel = parallel
 
-        scores = [get_score_one_sol_(sol, model_datas, cluster_env,
-                                     workload, approximate)
-                  for sol in sols]
-        scores = ray.get(scores)
-    else:
-        scores = [get_score_one_sol(sol, model_datas, cluster_env,
-                                    workload, approximate)
-                  for sol in sols]
-    return scores
-
-
-def get_score_one_sol(sol: ModelPlacement,
-                      model_datas: List[ModelData],
-                      cluster_env: ClusterEnv,
-                      workload: Workload,
-                      approximate: bool):
-    def register_models(controller):
-        for i, data in enumerate(model_datas):
-            controller.register_model.remote(
-                data.name, partial(Executable, data.profiling_result))
-            if not approximate:
-                controller.logger.setLevel(logging.ERROR)
-
-    def generate_workload(start=0):
-        return workload
-
-    def place_models(controller):
-        if approximate:
-            return sol
+        if parallel:
+            self.model_datas = ray.put(model_datas)
+            self.cluster_env = ray.put(cluster_env)
+            self.workload = ray.put(workload)
+            self.method = ray.put(method)
+            self.get_score_one_sol = ray.remote(num_cpus=1)(
+                self.get_goodput_simulation).remote
         else:
-            base_policy = BasePlacementPolicy()
-            base_policy.place_models_impl(controller, cluster_env, model_datas, sol)
+            self.model_datas = model_datas
+            self.cluster_env = cluster_env
+            self.workload = workload
+            workload.enable_simulator_cache = True
+            self.method = method
+            self.get_score_one_sol = self.get_goodput_simulation
 
-    serving_case = ServingCase(register_models, generate_workload, place_models)
-    run_func = approximate_one_case if approximate else simulate_one_case
-    stats, _ = run_func(serving_case)
-    num_replicas = sum(len(x) for x in sol.group_models)
-    return stats.goodput - stats.latency_mean / 10000 + num_replicas / 1000000
+    def get_scores(self, sols: List[ModelPlacement]):
+        scores = [self.get_score_one_sol(sol, self.model_datas,
+            self.cluster_env, self.workload, self.method) for sol in sols]
+
+        if self.parallel:
+            scores = ray.get(scores)
+
+        return scores
+
+    @staticmethod
+    def get_goodput_simulation(sol: ModelPlacement,
+                               model_datas: List[ModelData],
+                               cluster_env: ClusterEnv,
+                               workload: Workload,
+                               method: str):
+        if method == "fast_simulator":
+            fast_simulator = True
+        else:
+            fast_simulator = False
+
+        def register_models(controller):
+            for i, data in enumerate(model_datas):
+                controller.register_model.remote(
+                    data.name, partial(Executable, data.profiling_result))
+
+                if not fast_simulator:
+                    controller.logger.setLevel(logging.ERROR)
+
+        def generate_workload(start=0):
+            return workload
+
+        def place_models(controller):
+            if fast_simulator:
+                return sol
+            else:
+                base_policy = BasePlacementPolicy()
+                base_policy.place_models_impl(controller, cluster_env, model_datas, sol)
+
+        serving_case = ServingCase(register_models, generate_workload, place_models)
+        if fast_simulator:
+            stats, _ = approximate_one_case(serving_case, only_measure_goodput=True)
+        else:
+            stats, _ = simulate_one_case(serving_case)
+        num_replicas = sum(len(x) for x in sol.group_models)
+        return stats.goodput - stats.latency_mean / 10000 + num_replicas / 1000000
+
+
+def replica_placement_beam_search(init_sol: ModelPlacement,
+                                  model_datas: List[ModelData],
+                                  cluster_env: ClusterEnv,
+                                  workload: Workload,
+                                  evaluator: PlacementEvaluator,
+                                  beam_size: int,
+                                  verbose: int):
+    """Use beam search to place replicas on groups."""
+    tic = time.time()
+
+    # Load constants
+    num_models = len(model_datas)
+    num_groups = len(init_sol.group_configs)
+    mem_budget = cluster_env.mem_budget
+    group_configs = init_sol.group_configs
+
+    weight_mem = {}  # Dict[parallel_config -> [model_idx -> weight_mem]]
+    for parallel_config in init_sol.group_configs:
+        weight_mem[parallel_config] = [
+            max(x.profiling_result.para_dict[parallel_config].weight_mem)
+            if parallel_config in x.profiling_result.para_dict
+            else inf
+            for x in model_datas]
+
+    # Beam search
+    beam = [init_sol]
+    it = 0
+
+    best_score = -1
+    best_sol = init_sol
+    visited = set()
+
+    while True:
+        # Expand one layer
+        next_sols = []
+        for sol in beam:
+            group_mem = [
+                sum(weight_mem[p][m_id] for m_id in group_ms)
+                for p, group_ms in zip(sol.group_configs, sol.group_models)
+            ]
+            for g_id in range(num_groups):
+                p = sol.group_configs[g_id]
+                for m_id in range(num_models):
+                    if (weight_mem[p][m_id] + group_mem[g_id] < mem_budget and
+                        m_id not in sol.group_models[g_id]):
+                        next_sol = sol.add_model(g_id, m_id).normalize()
+
+                        if next_sol.group_models not in visited:
+                            visited.add(next_sol.group_models)
+                            next_sols.append(next_sol)
+
+        if not next_sols:
+            break
+
+        # Pick the new top-k
+        next_scores = evaluator.get_scores(next_sols)
+        next_indices = np.argsort(np.array(next_scores))[::-1][:beam_size]
+
+        beam = []
+        for idx in next_indices:
+            beam.append(next_sols[idx])
+
+            if next_scores[idx] > best_score:
+                best_score = next_scores[idx]
+                best_sol = next_sols[idx]
+
+        if verbose >= 1:
+            print(f"iter: {it}, best score: {best_score:.6f}, "
+                  f"iter score: {next_scores[next_indices[0]]:.6f}, "
+                  f"iter #sol: {len(next_sols)}, "
+                  f"elapsed: {time.time() - tic:.2f}, "
+                  f"best placement: {best_sol}, ")
+
+        it += 1
+
+    return best_sol, {}

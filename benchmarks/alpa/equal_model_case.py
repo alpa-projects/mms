@@ -4,7 +4,8 @@ import os
 
 import ray
 
-from alpa_serve.simulator.controller import Controller, simulate_one_case
+from alpa_serve.simulator.controller import (Controller, simulate_one_case,
+    approximate_one_case)
 from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
@@ -25,8 +26,8 @@ EqualModelCase = namedtuple("EqualModelCase", [
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name"])
 
-default_slos = {"bert-1.3b": 0.5, "bert-2.6b": 0.8, "bert-6.7b": 1.2,
-                "moe-1.3b": 0.1, "moe-2.4b": 0.15, "moe-7.1b": 0.2}
+default_slos = {"bert-1.3b": 0.100, "bert-2.6b": 0.145, "bert-6.7b": 0.234,
+                "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041}
 
 def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
@@ -152,7 +153,7 @@ def get_equal_model_serving_case(case, prof_database=None):
 
 def simulate_one_equal_model_case(case, prof_database=None):
     serving_case = get_equal_model_serving_case(case, prof_database)
-    stats, placement = simulate_one_case(serving_case)
+    stats, placement = approximate_one_case(serving_case)
     return stats, placement
 
 
@@ -194,7 +195,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
         else:
             stats, placement = run_res
 
-        Workload.print_stats(stats)
+        #Workload.print_stats(stats)
         goodput = stats.goodput
 
         res = (placement, round(goodput, 3), mode)

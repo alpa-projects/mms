@@ -56,6 +56,7 @@ class CreateInfo:
 class ModelInfo:
     create_info: CreateInfo
     group_ids: List[int]
+    group_pt: int
 
 
 @dataclasses.dataclass
@@ -254,7 +255,7 @@ class Controller:
                     raise ValueError(f"Model {name} is already registered")
 
             self.model_info[name] = ModelInfo(
-                CreateInfo(model_def, init_args, init_kwargs), [])
+                CreateInfo(model_def, init_args, init_kwargs), [], 0)
 
     async def create_replica(self,
                              name: str,

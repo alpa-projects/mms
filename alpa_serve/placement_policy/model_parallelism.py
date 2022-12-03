@@ -14,7 +14,7 @@ import ray
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelData, ClusterEnv, ModelPlacement,
-    get_scores)
+    PlacementEvaluator, replica_placement_beam_search)
 from alpa_serve.simulator.controller import simulate_one_case
 from alpa_serve.simulator.executable import Executable
 from alpa_serve.simulator.workload import Workload, GammaProcess
@@ -299,10 +299,13 @@ class ModelParallelismSearch(BasePlacementPolicy):
         self.duration = simulation_duration
         self.n_iter = n_iter
         self.seed = 1234
-        self.beam_size = 4
-        self.initial_approximate = False
+        self.beam_size = 1
 
-        self.parallel = True
+        self.evaluator_method = "fast_simulator"
+        self.parallel_evaluator = False
+
+        if self.parallel_evaluator:
+            ray.init(address="auto", ignore_reinit_error=True)
 
     def solve_placement(self,
                         model_datas: List[ModelData],
@@ -310,18 +313,24 @@ class ModelParallelismSearch(BasePlacementPolicy):
                         train_workload: Workload = None):
         # Generate workloads
         if train_workload is None:
-            w = Workload.empty()
+            ws = []
             for i, data in enumerate(model_datas):
-                w += GammaProcess(data.rate, data.cv).generate_workload(
+                ws.append(GammaProcess(data.rate, data.cv).generate_workload(
                     data.name, 0, duration=self.duration,
-                    slo=data.slo, seed=self.seed + i)
-            train_workload = w
+                    slo=data.slo, seed=self.seed + i))
+            train_workload = Workload.merge(*ws)
+
+        evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
+            self.evaluator_method, self.parallel_evaluator)
 
         # Get initial solutions
         initial_sols = self.enumerate_group_configs(cluster_env)
         for i in range(len(initial_sols)):
-            initial_sols[i] = self.greedy_placement(
-                initial_sols[i], model_datas, cluster_env, train_workload)
+            initial_sols[i] = replica_placement_beam_search(
+                initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
+                self.beam_size, self.verbose)[0]
+            #initial_sols[i] = self.greedy_placement(
+            #     initial_sols[i], model_datas, cluster_env, train_workload)
 
         # Iterative search
         cur_sols = initial_sols
@@ -331,9 +340,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
         it = 0
         tic = time.time()
         while it < self.n_iter:
-            scores = get_scores(cur_sols, model_datas, cluster_env,
-                                train_workload, approximate=False,
-                                parallel=self.parallel)
+            scores = evaluator.get_scores(cur_sols)
 
             tmp_best_idx = np.argmax(scores)
 
@@ -380,83 +387,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 sols.append(ModelPlacement([ParallelConfig(1, op, pp)] * num_groups,
                                            [[] for _ in range(num_groups)]))
         return sols
-
-    def initial_placement(self, sol: ModelPlacement,
-                          model_datas: List[ModelData],
-                          cluster_env: ClusterEnv,
-                          train_workload: Workload):
-        tic = time.time()
-
-        # Load constants
-        num_models = len(model_datas)
-        num_groups = len(sol.group_configs)
-        mem_budget = cluster_env.mem_budget
-        group_configs = sol.group_configs
-        inf = 1e20
-
-        weight_mem = {}  # Dict[parallel_config -> [model_idx -> weight_mem]]
-        for parallel_config in sol.group_configs:
-            weight_mem[parallel_config] = [
-                max(x.profiling_result.para_dict[parallel_config].weight_mem)
-                if parallel_config in x.profiling_result.para_dict
-                else inf
-                for x in model_datas]
-
-        # Beam search
-        beam = [sol]
-        it = 0
-
-        best_score = -1
-        best_sol = None
-        visited = set()
-
-        while True:
-            # Expand one layer
-            next_sols = []
-            for sol in beam:
-                group_mem = [
-                    sum(weight_mem[p][m_id] for m_id in group_ms)
-                    for p, group_ms in zip(sol.group_configs, sol.group_models)
-                ]
-                for g_id in range(num_groups):
-                    p = sol.group_configs[g_id]
-                    for m_id in range(num_models):
-                        if (weight_mem[p][m_id] + group_mem[g_id] < mem_budget and
-                            m_id not in sol.group_models[g_id]):
-                            next_sol = sol.add_model(g_id, m_id).normalize()
-
-                            if next_sol.group_models not in visited:
-                                visited.add(next_sol.group_models)
-                                next_sols.append(next_sol)
-
-            if not next_sols:
-                break
-
-            # Pick the new top-k
-            next_scores = get_scores(next_sols, model_datas, cluster_env,
-                                     train_workload, self.initial_approximate,
-                                     self.parallel)
-            next_indices = np.argsort(np.array(next_scores))[::-1][:self.beam_size]
-
-            beam = []
-            for idx in next_indices:
-                beam.append(next_sols[idx])
-
-                if next_scores[idx] > best_score:
-                    best_score = next_scores[idx]
-                    best_sol = next_sols[idx]
-
-            if self.verbose >= 1:
-                print(f"iter: {it}, best score: {best_score:.6f}, "
-                      f"iter score: {next_scores[next_indices[0]]:.6f}, "
-                      f"iter #sol: {len(next_sols)}, "
-                      f"elapsed: {time.time() - tic:.2f}, "
-                      f"best placement: {best_sol}, ")
-
-            it += 1
-
-        return best_sol
-
 
     def greedy_placement(self, sol: ModelPlacement,
                          model_datas: List[ModelData],

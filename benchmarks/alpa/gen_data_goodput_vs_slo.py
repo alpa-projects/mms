@@ -17,12 +17,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-greedy", "mp-search", "mp-greedy-4"]
+    policies = ["sr-search", "mp-search"]
     num_devices = 8
     mem_budget = 10 * GB
     model_type = "bert-1.3b"
     num_models = 16
-    total_rate = 64
+    total_rate = 60
     if args.trace == "synthetic":
         # choices: {"gamma", "uniform_mmpp"}
         arrival_process = "gamma"
@@ -35,17 +35,17 @@ if __name__ == "__main__":
         rate_distribution = None
         arrival_process_kwargs = None
 
-    slos = [0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 2.0, 4.0]
+    slo_scales = [0.5, 1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7.5, 10]
     duration = 200
 
     cases = []
-    for slo in slos:
+    for slo_scale in slo_scales:
         for policy_name in policies:
             cases.append(EqualModelCase(
                 num_devices, mem_budget, model_type, num_models,
                 total_rate, rate_distribution,
                 arrival_process, arrival_process_kwargs,
-                slo, duration, policy_name))
+                slo_scale, duration, policy_name))
 
     run_equal_model_cases(cases,
                           exp_name=args.exp_name,

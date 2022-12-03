@@ -265,6 +265,9 @@ class Workload:
         self.arrivals = np.array(arrivals)
         self.requests = requests
 
+        self.enable_simulator_cache = False
+        self.cached_data = None
+
         if len(self.arrivals) > 1:
             intervals = self.arrivals[1:] - self.arrivals[:-1]
             self.rate = 1 / np.mean(intervals)

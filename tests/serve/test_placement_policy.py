@@ -74,7 +74,7 @@ class PlacementPolicyTest(unittest.TestCase):
 
             assert len(placement.group_configs) == 1
             assert placement.group_configs[0].pp == 4
-            assert placement.group_models[0] == [0, 1, 2, 3]
+            assert list(placement.group_models[0]) == [0, 1, 2, 3]
 
     def test_placement_api(self):
         for policy in [SelectiveReplicationGreedy(), ModelParallelismGreedy()]:
