@@ -37,7 +37,7 @@ if __name__ == "__main__":
     fixed_num_models = 32
     fixed_rate_scale = 1
     fixed_cv_scale = 1
-    fixed_slo_scale = 1
+    fixed_slo_scale = 5
 
     # workload config
     if args.synthetic:
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     cv_list = [1, 2, 4, 8]           # synthetic trace only
     rate_scales = [1, 2, 4, 8, 16]   # real trace only
     cv_scales = [1, 2, 4, 8, 16]     # real trace only
-    slo_scales = [0.5, 1, 2, 4]
+    slo_scales = [2.5, 5, 10, 20]
 
     if args.output.endswith(".tsv"):
         output_file_name = args.output

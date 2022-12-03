@@ -16,6 +16,7 @@ ServingCase = namedtuple("ServingCase",
 
 GB = 1 << 30
 eps = 1e-5
+inf = 1e20
 
 
 def build_logger(name="alpa_serve"):
