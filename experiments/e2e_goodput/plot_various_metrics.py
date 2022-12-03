@@ -14,6 +14,7 @@ from benchmarks.alpa.general_model_case import read_general_model_case_tsv
 show_name_dict = {
     "sr-greedy":   "Selective Replication (greedy)",
     "sr-ilp":      "Selective Replication (ilp)",
+    "sr-search":   "Selective Replication (search)",
 
     "mp-ilp":      "Model Parallelism (ilp)",
     "mp-search":   "Model Parallelism (search)",

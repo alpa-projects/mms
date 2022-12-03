@@ -28,7 +28,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-greedy", "mp-search"]
+    policies = ["sr-search", "mp-search"]
     mem_budget = 16 * GB
     model_type = "bert-2.6b"
 
@@ -223,10 +223,25 @@ if __name__ == "__main__":
     if "num_devices_vs_num_models" in experiments:
         print("=== Running #devices vs. #models ===")
         cases = []
+
+        # We need more data points to generate a meaningful curve.
+        num_devices_list = [i for i in range(2, 65, 4)]
+        num_models_list = [i for i in range(8, 97, 2)]
+
         for num_models in num_models_list:
             for num_devices in num_devices_list:
+                if "1.3b" in model_type or "2.6b" in model_type:
+                    if num_devices * 2 >= num_models:
+                        print(f"Skip the case num_devices = {num_devices} and num_models = {num_models} "
+                              f"because the goodput will likely be 100%.")
+                        continue
+                model_size = float(model_type.split("-")[-1][:-1]) * 2
+                if mem_budget / GB * num_devices < model_size * num_models * 2 / 3:
+                    print(f"Skip the case num_devices = {num_devices} and num_models = {num_models} "
+                          f"because the goodput will be less than 66%.")
+
                 for policy_name in policies:
-                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models,
+                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models * 4,
                                               "cv_scale": fixed_cv_scale,
                                               "trace_dir": args.trace_dir}
                     cases.append(EqualModelCase(
