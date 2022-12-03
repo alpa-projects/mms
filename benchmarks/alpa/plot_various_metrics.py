@@ -6,43 +6,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
-
-show_name_dict = {
-    "sr-greedy":   "Selective Replication (greedy)",
-    "sr-ilp":      "Selective Replication (ilp)",
-
-    "mp-ilp":      "Model Parallelism (ilp)",
-    "mp-search":   "Model Parallelism (search)",
-    "mp-greedy-2": "Pipeline Parallelism (#stage=2)",
-    "mp-greedy-4": "Pipeline Parallelism (#stage=4)",
-    "mp-greedy-8": "Pipeline Parallelism (#stage=8)",
-}
-
-def show_name(name):
-    return show_name_dict.get(name, name)
-
-
-method2color_dict = {
-}
-
-ct = 0
-def method2color(name):
-    global ct
-    if name not in method2color_dict:
-        method2color_dict[name] = f"C{ct}"
-        ct += 1
-    return method2color_dict[name]
-
-
-method_order_list = [
-    "sr-greedy", "sr-ilp",
-
-    "mp-ilp", "mp-search",
-    "mp-greedy-2", "mp-greedy-4", "mp-greedy-8",
-]
-
-def method2order(name):
-    return method_order_list.index(name)
+from benchmarks.alpa.plot_goodput_vs_slo import show_name, method2color, method2order
 
 
 def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show):
@@ -51,6 +15,9 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
 
     methods = list(data.keys())
     methods.sort(key=lambda x: method2order(x))
+
+    if len(data) == 0:
+        return
 
     curves = []
     legends = []
@@ -144,7 +111,7 @@ def plot_goodput_vs_slo(lines, threshold, show):
             continue
 
         policy, x, goodput =  (
-            line["policy_name"], line["slo"], line["goodput"])
+            line["policy_name"], line["slo_scale"], line["goodput"])
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, True, "SLO (s)",

@@ -20,7 +20,8 @@ from alpa_serve.simulator.cluster import VirtualMesh
 from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
     main_loop, sleep, run_event_loop)
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
-from alpa_serve.simulator.workload import Workload, StatsResult, PerDeviceStatsResult
+from alpa_serve.simulator.workload import (Workload, StatsResult,
+    PerDeviceStatsResult, DEFAULT_WARMUP)
 from alpa_serve.util import ServingCase, inf
 from alpa.util import to_str_round
 
@@ -258,7 +259,7 @@ async def run_workload(client, workload, warmup):
     return client.compute_stats(workload, warmup=warmup)
 
 
-def simulate_one_case(case: ServingCase, warmup=10, debug=False):
+def simulate_one_case(case: ServingCase, warmup=DEFAULT_WARMUP, debug=False):
     """Simulate a serving case."""
     register_models, generate_workload, place_models = case
 
@@ -308,7 +309,7 @@ class DummyController:
 
 def approximate_one_case(case: ServingCase,
                          seed: int = 0,
-                         warmup: int = 10,
+                         warmup: int = DEFAULT_WARMUP,
                          debug: bool = False,
                          only_measure_goodput: bool = False):
     """A fast simulator that only simulates one stage for a pipeline."""

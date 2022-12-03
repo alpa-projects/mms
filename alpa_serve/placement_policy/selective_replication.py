@@ -201,13 +201,15 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
 
 class SelectiveReplicationSearch(BasePlacementPolicy):
 
-    def __init__(self, verbose: int = 0):
+    def __init__(self,
+                 simulation_duration: int = 1000,
+                 verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.max_bs = 1
-        self.beam_size = 1
         self.seed = 1234
-        self.simulation_duration = 100
+        self.beam_size = 4
+        self.simulation_duration = simulation_duration
 
         self.evaluator_method = "fast_simulator"
         self.parallel_evaluator = False

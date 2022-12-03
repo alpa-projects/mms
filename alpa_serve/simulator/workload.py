@@ -12,6 +12,9 @@ from alpa_serve.simulator.util import MMPPSampler
 from alpa.util import to_str_round
 
 
+DEFAULT_WARMUP = 10
+
+
 @dataclasses.dataclass
 class Request:
     """A single request."""
@@ -281,13 +284,11 @@ class Workload:
                       compute_tail_latency: bool = True):
         """Compute the statistics of serving results."""
         # Skip the first and last `warmup` seconds
-        ct = 1
-        while ct < len(start) and start[ct] - start[0] < warmup:
-            ct += 1
-        start = np.asarray(start[ct:-ct])
-        finish = np.asarray(finish[ct:-ct])
-        good = np.asarray(good[ct:-ct])
-        workload = self[ct:-ct]
+        skip = int(warmup / (self.arrivals[-1] - self.arrivals[0]) * len(self.arrivals))
+        start = np.asarray(start[skip:-skip])
+        finish = np.asarray(finish[skip:-skip])
+        good = np.asarray(good[skip:-skip])
+        workload = self[skip:-skip]
 
         # Compute stats per model
         model_indices = defaultdict(list)

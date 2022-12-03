@@ -69,7 +69,7 @@ class BasePlacementPolicy:
             print(f"debug info: {debug_info}")
             print(f"solver time: {solver_time:.2f} s")
 
-        return placement
+        return placement.normalize()
 
     def place_models_impl(self, controller,
                           cluster_env: ClusterEnv,
