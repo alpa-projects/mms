@@ -150,7 +150,7 @@ def get_equal_model_serving_case(case, prof_database=None):
 
 def simulate_one_equal_model_case(case, prof_database=None):
     serving_case = get_equal_model_serving_case(case, prof_database)
-    stats, placement = simulate_one_case(serving_case)
+    stats, placement = approximate_one_case(serving_case)
     return stats, placement
 
 
