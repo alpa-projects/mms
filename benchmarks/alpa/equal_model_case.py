@@ -112,13 +112,14 @@ def get_equal_model_serving_case(case, prof_database=None):
                                           prof_database))
 
     def generate_workload(start=0):
+        base_seed = 0
         ws = []
         for i in range(num_models):
             if "azure" in arrival_process:
                 ws.append(arrival_processes[i].to_workload(slos[i]))
             else:
                 ws.append(arrival_processes[i].generate_workload(
-                    model_names[i], start, duration, slo=slos[i], seed=i))
+                    model_names[i], start, duration, slo=slos[i], seed=base_seed + i))
         return Workload.merge(*ws)
 
     def place_models(controller):

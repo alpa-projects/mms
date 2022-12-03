@@ -69,7 +69,7 @@ class BasePlacementPolicy:
             print(f"debug info: {debug_info}")
             print(f"solver time: {solver_time:.2f} s")
 
-        return placement
+        return placement.normalize()
 
     def place_models_impl(self, controller,
                           cluster_env: ClusterEnv,
@@ -169,7 +169,7 @@ class PlacementEvaluator:
 
         serving_case = ServingCase(register_models, generate_workload, place_models)
         if fast_simulator:
-            stats, _ = approximate_one_case(serving_case, only_measure_goodput=True)
+            stats, _ = approximate_one_case(serving_case, compute_per_model_stats=False)
         else:
             stats, _ = simulate_one_case(serving_case)
         num_replicas = sum(len(x) for x in sol.group_models)

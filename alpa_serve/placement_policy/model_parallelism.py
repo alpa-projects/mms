@@ -289,17 +289,17 @@ class ModelParallelismSearch(BasePlacementPolicy):
                  max_pp: int = 8,
                  max_op: int = 4,
                  n_iter: int = 1,
-                 simulation_duration: int = 100,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.max_bs = max_bs
         self.max_pp = max_pp
         self.max_op = max_op
-        self.duration = simulation_duration
         self.n_iter = n_iter
-        self.seed = 1234
-        self.beam_size = 1
+        self.seed = 0
+        self.beam_size = 4
+        self.simulation_min_duration = 100
+        self.simulation_min_samples = 30000
 
         self.evaluator_method = "fast_simulator"
         self.parallel_evaluator = False
@@ -313,10 +313,14 @@ class ModelParallelismSearch(BasePlacementPolicy):
                         train_workload: Workload = None):
         # Generate workloads
         if train_workload is None:
+            total_rate = sum(d.rate for d in model_datas)
+            duration = max(self.simulation_min_duration,
+                           self.simulation_min_samples / total_rate)
+
             ws = []
             for i, data in enumerate(model_datas):
                 ws.append(GammaProcess(data.rate, data.cv).generate_workload(
-                    data.name, 0, duration=self.duration,
+                    data.name, 0, duration=duration,
                     slo=data.slo, seed=self.seed + i))
             train_workload = Workload.merge(*ws)
 
