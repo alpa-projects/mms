@@ -251,6 +251,21 @@ class TraceReplay:
         return end_timestamp_seconds
 
 
+def report_group_stats(replays: List[TraceReplay]):
+    n_model = len(replays)
+    all_arrivals = np.concatenate([m.arrivals for m in replays])
+    arrivals = np.sort(all_arrivals)
+    n_arrival = all_arrivals.size
+    rate = n_arrival / replays[0].duration_seconds
+    intervals = arrivals[1:] - arrivals[:-1]
+    cv = np.std(intervals) / (np.mean(intervals) + 1e-5)
+    print(
+        f"Trace for a group of {n_model} models, duration: {replays[0].duration}, {replays[0].duration_seconds} (s), "
+        f"#arrivals: {n_arrival}, arrival distribution: {replays[0].arrival_distribution}, "
+        f"generation interval: {replays[0].interval_seconds}, "
+        f"Overall cluster rate: {rate:.2f}, cluster cv: {cv:.2f}.")
+
+
 class Trace:
     def __init__(self, trace_name, trace_dir):
         self.trace_name: str = trace_name

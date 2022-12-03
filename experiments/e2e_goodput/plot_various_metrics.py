@@ -51,7 +51,8 @@ def method2order(name):
 
 def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show):
     if len(data) == 0:
-        warnings.warn(f"No data to draw for {output}. Skipped.")
+        print(f"No data to draw for {output}. Skipped.")
+        return
 
     fig, ax = plt.subplots()
     figure_size = (5, 5)
@@ -193,6 +194,74 @@ def plot_goodput_vs_cv_scale(lines, threshold, show, folder):
                         args.show)
 
 
+def plot_num_devices_vs_num_models(lines, threshold, show, folder):
+    # Dict[policy -> Dict[cv_scale -> goodput]]
+    raw_data = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+    for line in lines:
+        if line["exp_name"] != "num_devices_vs_num_models":
+            continue
+        policy, y, x, goodput = (
+            line["policy_name"],
+            line["num_devices"],
+            line["num_models"],
+            line["goodput"]
+        )
+        raw_data[policy][x][y] = goodput
+
+    goodput_goal = threshold
+
+    output = "num_devices_vs_num_models"
+    # sort the data, for each num_model, find out the min(num_device) that gives 99% goodput.
+    data = defaultdict(lambda: defaultdict(dict))
+    for policy in raw_data:
+        for n_model in raw_data[policy]:
+            min_device = 1e5
+            for n_device in raw_data[policy][n_model]:
+                goodput = raw_data[policy][n_model][n_device]
+                if goodput >= goodput_goal:
+                    if n_device < min_device:
+                        min_device = n_device
+            data[policy][n_model] = min_device
+
+    print(data)
+    if len(data) == 0:
+        print(f"No data to draw for {output}. Skipped.")
+        return
+
+    fig, ax = plt.subplots()
+    figure_size = (5, 5)
+
+    methods = list(data.keys())
+    methods.sort(key=lambda x: method2order(x))
+
+    curves = []
+    legends = []
+    x_max = 0
+    y_max = 0
+    for method in methods:
+        curve = data[method]
+        xs, ys = zip(*curve.items())
+        ys = np.array(ys)
+        curve = ax.plot(xs, ys, color=method2color(method), marker='*')
+        curves.append(curve[0])
+        legends.append(show_name(method))
+        x_max = max(x_max, *xs)
+        y_max = max(y_max, *ys)
+    print(y_max)
+    ax.set_ylim(bottom=0, top=y_max + 4)
+    ax.set_ylabel("# devices")
+    ax.set_xlabel("# models")
+    ax.legend(curves, legends)
+    ax.set_title("#devices vs. #models")
+
+    if show:
+        plt.show()
+
+    fig.set_size_inches(figure_size)
+    fig.savefig(folder + "/" + output, bbox_inches='tight')
+    print(f"Output the plot to {output}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, required=True)
@@ -217,3 +286,4 @@ if __name__ == "__main__":
     plot_goodput_vs_slo(lines, threshold, args.show, folder)
     plot_goodput_vs_rate_scale(lines, threshold, args.show, folder)
     plot_goodput_vs_cv_scale(lines, threshold, args.show, folder)
+    plot_num_devices_vs_num_models(lines, threshold, args.show, folder)
