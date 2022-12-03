@@ -26,8 +26,8 @@ EqualModelCase = namedtuple("EqualModelCase", [
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name"])
 
-default_slos = {"bert-1.3b": 0.5, "bert-2.6b": 0.8, "bert-6.7b": 1.2,
-                "moe-1.3b": 0.1, "moe-2.4b": 0.15, "moe-7.1b": 0.2}
+default_slos = {"bert-1.3b": 0.100, "bert-2.6b": 0.145, "bert-6.7b": 0.234,
+                "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041}
 
 def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
