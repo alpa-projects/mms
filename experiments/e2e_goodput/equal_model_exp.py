@@ -17,7 +17,7 @@ if __name__ == "__main__":
     parser.add_argument("--exp-ids", type=str, default="all",
                         choices=["all", "goodput_vs_num_devices", "goodput_vs_num_models",
                               "goodput_vs_slo", "goodput_vs_rate", "goodput_vs_cv",
-                              "device_vs_model"])
+                              "num_devices_vs_num_models"])
     parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--rate-distribution", choices=["uniform", "power_law"],
                         default="uniform")
@@ -83,10 +83,10 @@ if __name__ == "__main__":
     # parse exp ids:
     if args.exp_ids == "all":
         experiments = ["goodput_vs_num_devices", "goodput_vs_num_models", "goodput_vs_slo",
-                       "goodput_vs_rate", "goodput_vs_cv", "device_vs_model"]
+                       "goodput_vs_rate", "goodput_vs_cv", "num_devices_vs_num_models"]
     else:
         assert args.exp_ids in ["goodput_vs_num_devices", "goodput_vs_num_models", "goodput_vs_slo",
-                       "goodput_vs_rate", "goodput_vs_cv", "device_vs_model"]
+                                "goodput_vs_rate", "goodput_vs_cv", "num_devices_vs_num_models"]
         experiments = [args.exp_ids]
 
 
@@ -112,7 +112,8 @@ if __name__ == "__main__":
         cases = []
         for num_models in num_models_list:
             for policy_name in policies:
-                # Note(Hao): we need to scale the rate as well to keep the per-model traffic unchanged.
+                # Note(Hao): we need to scale the rate as well to keep the total traffic unchanged.
+                # when num_model = fix_num_models / 4, the total cluster rate is 1 q/s.
                 if args.synthetic:
                     cases.append(EqualModelCase(
                         fixed_num_devices, mem_budget, model_type, num_models,
@@ -120,7 +121,7 @@ if __name__ == "__main__":
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
                 else:
-                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models,
+                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models * 4,
                                                   "cv_scale": fixed_cv_scale,
                                                   "trace_dir": args.trace_dir}
                     cases.append(EqualModelCase(
@@ -179,9 +180,9 @@ if __name__ == "__main__":
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
 
-            run_equal_model_cases(cases, exp_name="goodput_vs_rate_scale",
-                                output_file=output_file,
-                                mode=args.mode, parallel=args.parallel)
+        run_equal_model_cases(cases, exp_name="goodput_vs_rate_scale",
+                              output_file=output_file,
+                              mode=args.mode, parallel=args.parallel)
 
     #### goodput vs cv/cv_scale #####
     if "goodput_vs_cv" in experiments:
@@ -218,4 +219,22 @@ if __name__ == "__main__":
                                 output_file=output_file,
                                 mode=args.mode, parallel=args.parallel)
 
-    # TODO(Hao): num_models vs. num_devices.
+    ### model vs devices ###
+    if "num_devices_vs_num_models" in experiments:
+        print("=== Running #devices vs. #models ===")
+        cases = []
+        for num_models in num_models_list:
+            for num_devices in num_devices_list:
+                for policy_name in policies:
+                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models,
+                                              "cv_scale": fixed_cv_scale,
+                                              "trace_dir": args.trace_dir}
+                    cases.append(EqualModelCase(
+                        num_devices, mem_budget, model_type, num_models,
+                        total_rate, rate_distribution,
+                        arrival_process, new_arrival_process_kwargs,
+                        fixed_slo_scale, duration, policy_name))
+
+        run_equal_model_cases(cases, exp_name="num_devices_vs_num_models",
+                              output_file=output_file,
+                              mode=args.mode, parallel=args.parallel)

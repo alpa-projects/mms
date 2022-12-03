@@ -170,7 +170,7 @@ class Controller:
         create_info = model_info.create_info.append_init_args(
             append_init_args, append_init_kwargs)
 
-        self.logger.info(f"Create replica of {name} on group {group_id}")
+        self.logger.debug(f"Create replica of {name} on group {group_id}")
         model_info.group_ids.append(group_id)
         manager.create_replica.remote(name, create_info)
 

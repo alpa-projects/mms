@@ -13,7 +13,7 @@ from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationSearch,
     ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
-from alpa_serve.trace import Trace
+from alpa_serve.trace import Trace, report_group_stats
 from alpa_serve.util import GB, write_tsv, ServingCase
 
 from benchmarks.alpa.util import get_model_def
@@ -90,9 +90,12 @@ def get_equal_model_serving_case(case, prof_database=None):
         for model_name, slo in zip(model_names, slos):
             ws.append(train_replays[model_name].to_workload(slo))
         train_workload = Workload.merge(*ws)
-        
+
+        # for debugging:
+
         for m in test_replays:
             test_replays[m].report_stats()
+        report_group_stats(list(test_replays.values()))
         arrival_processes = [test_replays[model_name] for model_name in model_names]
     else:
         raise ValueError("Invalid arrival process: {arrival_process}")
