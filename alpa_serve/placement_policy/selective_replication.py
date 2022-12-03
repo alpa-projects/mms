@@ -202,7 +202,7 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
 class SelectiveReplicationSearch(BasePlacementPolicy):
 
     def __init__(self,
-                 simulation_duration: int = 1000,
+                 simulation_duration: int = 100,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
 
