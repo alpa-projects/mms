@@ -33,7 +33,7 @@ if __name__ == "__main__":
     model_type = "bert-2.6b"
 
     # default configuration
-    fixed_num_devices = 32
+    fixed_num_devices = 8
     fixed_num_models = 32
     fixed_rate_scale = 1
     fixed_cv_scale = 1
@@ -58,8 +58,8 @@ if __name__ == "__main__":
                                 "trace_dir": args.trace_dir}
 
     num_devices_list = [4, 8, 12, 16, 20, 24, 32, 40, 48, 56, 64]
-    num_models_list = [8, 16, 32, 64, 80, 96, 128]
-    # num_models_list = [i for i in range(16, 33, 2)]
+    # num_models_list = [8, 16, 32, 64, 80, 96, 128]
+    num_models_list = [i for i in range(16, 33, 2)]
     rate_scales = [1, 2, 4, 8, 16]
     cv_scales = [1, 2, 4, 8, 16]
     slo_scales = [0.5, 1, 2, 4]
