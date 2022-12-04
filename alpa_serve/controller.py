@@ -19,7 +19,6 @@ from starlette.datastructures import QueryParams
 from starlette.middleware.cors import CORSMiddleware
 import uvicorn
 
-from alpa.api import init as alpa_init, shutdown as alpa_shutdown
 from alpa_serve.http_util import (HTTPRequestWrapper, receive_http_body,
                                   Response, set_socket_reuse_port, ASGIHandler,
                                   build_starlette_request, new_port,
@@ -70,6 +69,8 @@ class GroupInfo:
 class GroupManager:
 
     def __init__(self, virtual_mesh_shape: Optional[Tuple[int]] = None):
+        from alpa.api import init as alpa_init, shutdown as alpa_shutdown
+
         if virtual_mesh_shape:
             alpa_init(cluster="ray",
                       num_nodes=virtual_mesh_shape[0],

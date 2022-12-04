@@ -2,13 +2,17 @@ from collections import namedtuple
 import logging
 import time
 
-from alpa import (PipeshardParallel,
-                  get_global_virtual_physical_mesh,
-                  AutoShardingOption, ManualStageOption,
-                  parallelize)
-import jax
-import jax.numpy as jnp
-from jax.tree_util import tree_flatten, tree_unflatten, tree_leaves, tree_map
+try:
+    from alpa import (PipeshardParallel,
+                      get_global_virtual_physical_mesh,
+                      AutoShardingOption, ManualStageOption,
+                      parallelize)
+    import jax
+    import jax.numpy as jnp
+    from jax.tree_util import tree_flatten, tree_unflatten, tree_leaves, tree_map
+except (ImportError, ModuleNotFoundError):
+    print("Alpa is not found. Run in simulator-only mode.")
+
 import numpy as np
 
 
