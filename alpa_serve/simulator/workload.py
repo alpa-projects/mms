@@ -6,7 +6,6 @@ import random
 from typing import Any, List, Sequence, Dict, Optional
 
 import numpy as np
-from scipy.stats import pareto
 
 from alpa_serve.simulator.util import MMPPSampler
 from alpa_serve.util import to_str_round
@@ -233,6 +232,8 @@ class ParetoProcess:
         self.loc = loc
 
     def generate_arrivals(self, start: float, duration: float, seed: int = 0):
+        from scipy.stats import pareto
+
         rs = np.random.RandomState(seed)
         ticks = []
         cur = start

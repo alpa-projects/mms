@@ -7,8 +7,6 @@ import time
 from typing import List
 
 import numpy as np
-import pulp
-from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
 import ray
 
 from alpa_serve.profiling import ParallelConfig
@@ -74,6 +72,9 @@ class ModelParallelismILP(BasePlacementPolicy):
                         model_datas: List[ModelData],
                         cluster_env: ClusterEnv,
                         train_workload: Workload = None):
+        import pulp
+        from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
+
         tic = time.time()
 
         # Load constants
