@@ -6,7 +6,6 @@ import random
 from typing import Any, List, Sequence, Dict, Optional
 
 import numpy as np
-from scipy.stats import pareto
 
 from alpa_serve.simulator.util import MMPPSampler
 from alpa_serve.util import to_str_round
@@ -36,7 +35,7 @@ PerDeviceStatsResult = namedtuple("PerDeviceStatsResult", ("num_requests",))
 @dataclasses.dataclass
 class StatsResult:
     per_model_stats: List[PerModelStatsResult]
-    per_device_stats: Optional[List[PerDeviceStatsResult]]
+    group_num_requests: List[int]
     goodput: float
     latency_mean: float
     num_requests: int
@@ -233,6 +232,8 @@ class ParetoProcess:
         self.loc = loc
 
     def generate_arrivals(self, start: float, duration: float, seed: int = 0):
+        from scipy.stats import pareto
+
         rs = np.random.RandomState(seed)
         ticks = []
         cur = start
@@ -340,11 +341,8 @@ class Workload:
                 total_start = min(total_start, start[indices[0]])
                 total_end = max(total_end, start[indices[-1]])
 
-        total_request_rate = num_total_requests / (total_end - total_start)
-        latency_mean = np.average([s.latency_mean for s in stats],
-                                  weights=[s.num_requests for s in stats])
-        return StatsResult(stats, None, num_good / num_total_requests,
-                           latency_mean, num_total_requests, total_request_rate)
+        return StatsResult(stats, None, np.mean(good), np.mean(finish - start),
+                           len(start), len(start) / (start[-1] - start[0]))
 
     @staticmethod
     def print_stats(stats: StatsResult):
@@ -358,8 +356,8 @@ class Workload:
                 print(f"latency mean: {stat.latency_mean*1e3:.2f} ms, "
                       f"std: {stat.latency_std*1e3:.2f} ms, "
                       f"p90: {stat.latency_p90*1e3:.2f} ms")
-        if stats.per_device_stats:
-            print(f"per device #req: {[x.num_requests for x in stats.per_device_stats]}")
+        if stats.group_num_requests is not None:
+            print(f"per group #req: {stats.group_num_requests}")
         print("--- overall ---")
         print(f"total #req: {stats.num_requests}, "
               f"rate: {stats.request_rate:.2f} q/s")

@@ -197,6 +197,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
             stats, placement = run_res
 
         #Workload.print_stats(stats)
+        print(f"group #req: {stats.group_num_requests}")
         goodput = stats.goodput
 
         res = (placement, round(goodput, 3), mode)

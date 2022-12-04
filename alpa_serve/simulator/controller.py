@@ -273,10 +273,8 @@ def simulate_one_case(case: ServingCase, warmup=DEFAULT_WARMUP, debug=False):
 
     # Run workloads
     stats = run_event_loop(run_workload(client, workload, warmup))
-    stats.per_device_stats = tuple(
-        PerDeviceStatsResult(x.num_total_requests)
-        for x in controller.group_info.values()
-    )
+    stats.group_num_requests = tuple(
+        x.num_total_requests for x in controller.group_info.values())
     return stats, placement
 
 
@@ -366,17 +364,21 @@ def approximate_one_case(case: ServingCase,
     good = np.empty(num_requests, dtype=bool)
     tstamps = workload.arrivals
 
-    simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
-                      group_max_latency, group_sum_latency, num_requests)
+    group_num_requests = simulate_requests(
+        finish, good, tstamps, model_ids, slos, m_id2g_id,
+        group_max_latency, group_sum_latency, num_requests)
 
     stats = workload.compute_stats(start, finish, good, warmup, compute_per_model_stats)
+    stats.group_num_requests = group_num_requests
     return stats, placement
 
 
 @numba.jit(nopython=True)
 def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
                       group_max_latency, group_sum_latency, num_requests):
-    group_clocks = np.zeros(len(group_max_latency[0]), dtype=np.float32)
+    num_groups = len(group_max_latency[0])
+    group_clocks = np.zeros(num_groups, dtype=np.float32)
+    group_num_requests = np.zeros(num_groups, dtype=np.int32)
     fixed_overhead = 0.009
 
     for i in range(num_requests):
@@ -404,6 +406,9 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
             finish[i] = finish_time
             good[i] = True
             group_clocks[g_id] = start_time + group_max_latency[m_id][g_id]
+            group_num_requests[g_id] += 1
         else:
             finish[i] = tstamp
             good[i] = False
+
+    return group_num_requests
