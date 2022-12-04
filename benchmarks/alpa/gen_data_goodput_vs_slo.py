@@ -17,7 +17,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-search", "mp-greedy-4", "mp-search"]
+    # policies = ["sr-search", "mp-search"]
+    policies = ["mp-search"]
     num_devices = 8
     mem_budget = 10 * GB
     model_type = "bert-1.3b"
@@ -35,7 +36,8 @@ if __name__ == "__main__":
         rate_distribution = None
         arrival_process_kwargs = None
 
-    slo_scales = [0.5, 1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7.5, 10]
+    # slo_scales = [0.5, 1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7.5, 10]
+    slo_scales = [3]
     duration = 200
 
     cases = []
