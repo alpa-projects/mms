@@ -297,14 +297,16 @@ class ModelParallelismSearch(BasePlacementPolicy):
         self.max_op = max_op
         self.n_iter = n_iter
         self.seed = 0
-        self.beam_size = 4
+        self.beam_size = 3
         self.simulation_min_duration = 100
         self.simulation_min_samples = 30000
 
         self.evaluator_method = "fast_simulator"
         self.parallel_evaluator = False
+        self.parallel_initial_placement = True
 
-        if self.parallel_evaluator:
+        if ((self.parallel_evaluator or self.parallel_initial_placement)
+            and not ray.is_initialized()):
             ray.init(address="auto", ignore_reinit_error=True)
 
     def solve_placement(self,
@@ -329,12 +331,19 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
         # Get initial solutions
         initial_sols = self.enumerate_group_configs(cluster_env)
-        for i in range(len(initial_sols)):
-            initial_sols[i] = replica_placement_beam_search(
-                initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
-                self.beam_size, self.verbose)[0]
-            #initial_sols[i] = self.greedy_placement(
-            #     initial_sols[i], model_datas, cluster_env, train_workload)
+
+        if self.parallel_initial_placement:
+            func = ray.remote(replica_placement_beam_search).remote
+            for i in range(len(initial_sols)):
+                initial_sols[i] = func(
+                    initial_sols[i], model_datas, cluster_env, train_workload, None,
+                    self.beam_size, self.verbose)
+            initial_sols = ray.get(initial_sols)
+        else:
+            for i in range(len(initial_sols)):
+                initial_sols[i] = replica_placement_beam_search(
+                    initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
+                    self.beam_size, self.verbose)
 
         # Iterative search
         cur_sols = initial_sols
@@ -395,7 +404,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
     def greedy_placement(self, sol: ModelPlacement,
                          model_datas: List[ModelData],
                          cluster_env: ClusterEnv,
-                         train_workload: Workload):
+                         train_workload: Workload,
+                         _, __, ___):
         num_models = len(model_datas)
         mem_budget = cluster_env.mem_budget
         group_configs = sol.group_configs

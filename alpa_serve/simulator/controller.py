@@ -354,11 +354,10 @@ def approximate_one_case(case: ServingCase,
     group_sum_latency = np.empty((num_models, num_groups), dtype=np.float32)
     for m_id in range(num_models):
         for g_id in range(num_groups):
-            c = group_configs[g_id]
-            if c in prof_ress[m_id].para_dict:
-                latency = prof_ress[m_id].para_dict[c].latency[max_bs]
-                group_max_latency[m_id][g_id] = max(latency)
-                group_sum_latency[m_id][g_id] = sum(latency)
+            value = prof_ress[m_id].para_dict.get(group_configs[g_id], None)
+            if value:
+                group_max_latency[m_id][g_id] = max(value.latency[max_bs])
+                group_sum_latency[m_id][g_id] = sum(value.latency[max_bs])
             else:
                 group_max_latency[m_id][g_id] = group_sum_latency[m_id][g_id] = inf
 
@@ -368,9 +367,8 @@ def approximate_one_case(case: ServingCase,
     good = np.empty(num_requests, dtype=bool)
     tstamps = workload.arrivals
 
-    simulate_requests(
-        finish, good, tstamps, model_ids, slos, m_id2g_id,
-        group_max_latency, group_sum_latency, num_requests, warmup)
+    simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
+                      group_max_latency, group_sum_latency, num_requests)
 
     stats = workload.compute_stats(start, finish, good, warmup, compute_per_model_stats)
     return stats, placement
@@ -378,7 +376,7 @@ def approximate_one_case(case: ServingCase,
 
 @numba.jit(nopython=True)
 def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
-                      group_max_latency, group_sum_latency, num_requests, warmup):
+                      group_max_latency, group_sum_latency, num_requests):
     group_clocks = np.zeros(len(group_max_latency[0]), dtype=np.float32)
     fixed_overhead = 0.009
 
