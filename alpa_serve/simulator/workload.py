@@ -133,6 +133,8 @@ class GammaProcess(ArrivalProcess):
         np.random.seed(seed)
 
         batch_size = int(self.rate_ * duration * 1.5)
+        if batch_size == 0:
+            return self.generate_arrivals_slow(start, duration, seed)
         intervals = np.random.gamma(self.shape, self.scale, size=batch_size)
         pt = 0
 
@@ -147,6 +149,19 @@ class GammaProcess(ArrivalProcess):
             if pt >= batch_size:
                 intervals = np.random.gamma(self.shape, self.scale, size=batch_size)
                 pt = 0
+        return ticks
+
+    def generate_arrivals_slow(self, start: float, duration: float, seed: int =0):
+        """Still trying to generate when the fast version fails."""
+        np.random.seed(seed)
+
+        ticks = []
+        cur = start
+        end = start + duration
+        while cur < end:
+            cur += np.random.gamma(self.shape, self.scale)
+            if cur < end:
+                ticks.append(cur)
         return ticks
 
     def generate_workload(self, model_name: str, start: float,

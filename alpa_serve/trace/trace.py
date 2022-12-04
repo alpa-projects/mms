@@ -121,7 +121,8 @@ def load_trace(path: str) -> OrderedDict:
     tic = time.time()
     with open(path, "rb") as handle:
         tracelines = pickle.load(handle)
-    print(f"Reading takes: {time.time() - tic}s.")
+    if DEBUG:
+        print(f"Reading takes: {time.time() - tic}s.")
 
     # Do some check and report stats:
     num_functions = len(tracelines.keys())
@@ -407,7 +408,6 @@ class Trace:
                     model_histogram[m] = function_histogram[f]
                 else:
                     model_histogram[m] += function_histogram[f]
-
             # 2. re-histogram based on `interval_seconds`
             histogram_dataset = OrderedDict()
             assert interval_seconds % 60 == 0, "Please set `interval_seconds` as a multiple of 60"
@@ -453,16 +453,16 @@ class Trace:
                 for m in model_arrivals:
                     model_arrivals[m] = (model_arrivals[m] - start_timestamp_seconds) / time_scale_factor + start_timestamp_seconds
                     replays[m] = TraceReplay(m,
-                                        model_arrivals[m],
-                                        self.trace_name,
-                                        start_time,
-                                        end_time,
-                                        end_timestamp_seconds - start_timestamp_seconds,
-                                        arrival_distribution,
-                                        rate_scale_factor=rate_scale_factor,
-                                        cv_scale_factor=cv_scale_factor,
-                                        time_scale_factor=time_scale_factor,
-                                        replication_factor=replication_factor)
+                                             model_arrivals[m],
+                                             self.trace_name,
+                                             start_time,
+                                             end_time,
+                                             end_timestamp_seconds - start_timestamp_seconds,
+                                             arrival_distribution,
+                                             rate_scale_factor=rate_scale_factor,
+                                             cv_scale_factor=cv_scale_factor,
+                                             time_scale_factor=time_scale_factor,
+                                             replication_factor=replication_factor)
                 return replays
 
             # 2. bucketing arrivals based on `interval_seconds` and start/end time.
@@ -498,9 +498,6 @@ class Trace:
                     continue
                 start = i * interval_seconds + start_timestamp_seconds
                 arrivals.extend(distribution.generate_arrivals(start, interval_seconds, seed))
-                # if DEBUG:
-                #     arrivals.extend(distribution.generate_arrivals(0, 1.0e9, seed))
-                #     self.visualize_inter_arrival(np.array(arrivals), "test")
                 arrival_distribution_params.append(distribution.params())
                 seed += 1
             replays[m] = TraceReplay(m,
