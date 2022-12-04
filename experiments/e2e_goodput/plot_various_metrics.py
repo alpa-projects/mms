@@ -165,7 +165,6 @@ def plot_num_devices_vs_num_models(lines, threshold, show, folder):
             if min_device == 1e3:
                 data[policy][n_model] = n_model // 2
 
-    print(data)
     if len(data) == 0:
         print(f"No data to draw for {output}. Skipped.")
         return
