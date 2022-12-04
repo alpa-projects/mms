@@ -214,7 +214,7 @@ class SelectiveReplicationSearch(BasePlacementPolicy):
         self.evaluator_method = "fast_simulator"
         self.parallel_evaluator = False
 
-        if self.parallel_evaluator:
+        if self.parallel_evaluator and not ray.is_initialized():
             ray.init(address="auto", ignore_reinit_error=True)
 
     def solve_placement(self,

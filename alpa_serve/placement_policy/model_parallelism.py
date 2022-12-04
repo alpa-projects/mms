@@ -305,7 +305,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
         self.parallel_evaluator = False
         self.parallel_initial_placement = True
 
-        if self.parallel_evaluator or self.parallel_initial_placement:
+        if ((self.parallel_evaluator or self.parallel_initial_placement)
+            and not ray.is_initialized()):
             ray.init(address="auto", ignore_reinit_error=True)
 
     def solve_placement(self,
