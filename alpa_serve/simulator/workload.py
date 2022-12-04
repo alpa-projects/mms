@@ -341,11 +341,8 @@ class Workload:
                 total_start = min(total_start, start[indices[0]])
                 total_end = max(total_end, start[indices[-1]])
 
-        total_request_rate = num_total_requests / (total_end - total_start)
-        latency_mean = np.average([s.latency_mean for s in stats],
-                                  weights=[s.num_requests for s in stats])
-        return StatsResult(stats, None, num_good / num_total_requests,
-                           latency_mean, num_total_requests, total_request_rate)
+        return StatsResult(stats, None, np.mean(good), np.mean(finish - start),
+                           len(start), len(start) / (start[-1] - start[0]))
 
     @staticmethod
     def print_stats(stats: StatsResult):

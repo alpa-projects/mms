@@ -273,10 +273,8 @@ def simulate_one_case(case: ServingCase, warmup=DEFAULT_WARMUP, debug=False):
 
     # Run workloads
     stats = run_event_loop(run_workload(client, workload, warmup))
-    stats.per_device_stats = tuple(
-        PerDeviceStatsResult(x.num_total_requests)
-        for x in controller.group_info.values()
-    )
+    stats.group_num_requests = tuple(
+        x.num_total_requests for x in controller.group_info.values())
     return stats, placement
 
 
@@ -372,7 +370,6 @@ def approximate_one_case(case: ServingCase,
 
     stats = workload.compute_stats(start, finish, good, warmup, compute_per_model_stats)
     stats.group_num_requests = group_num_requests
-
     return stats, placement
 
 

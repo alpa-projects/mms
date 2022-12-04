@@ -6,6 +6,7 @@ import math
 from typing import Sequence, Any
 
 import ray
+import numpy as np
 
 
 # A general serving case.
@@ -91,9 +92,9 @@ def to_str_round(x: Any, decimal: int = 6):
         return "[" + tmp_str + "]"
     if isinstance(x, dict):
         return str({k: to_str_round(v, decimal=decimal) for k, v in x.items()})
-    if isinstance(x, int):
+    if isinstance(x, (int, np.int32, np.int64)):
         return str(x)
-    if isinstance(x, float):
+    if isinstance(x, (float, np.float32, np.float64)):
         format_str = f"%.{decimal}f"
         return format_str % x
     if x is None:
