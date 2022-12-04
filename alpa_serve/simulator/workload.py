@@ -135,7 +135,7 @@ class GammaProcess(ArrivalProcess):
     def generate_arrivals(self, start: float, duration: float, seed: int = 0):
         np.random.seed(seed)
 
-        batch_size = int(self.rate_ * duration * 1.2)
+        batch_size = max(int(self.rate_ * duration * 1.2), 1)
         intervals = np.random.gamma(self.shape, self.scale, size=batch_size)
         pt = 0
 
@@ -296,10 +296,9 @@ class Workload:
                                len(start), len(start) / (start[-1] - start[0]))
 
         # Compute stats per model
-        workload = self[skip:-skip]
         model_indices = defaultdict(list)
-        for i in range(len(workload)):
-            model_indices[workload.requests[i].model_name].append(i)
+        for i in range(skip, len(self.arrivals) - skip):
+            model_indices[self.requests[i].model_name].append(i - skip)
 
         names = list(model_indices.keys())
         names.sort()

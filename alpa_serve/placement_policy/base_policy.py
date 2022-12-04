@@ -186,6 +186,10 @@ def replica_placement_beam_search(init_sol: ModelPlacement,
     """Use beam search to place replicas on groups."""
     tic = time.time()
 
+    if evaluator is None:
+        evaluator = PlacementEvaluator(model_datas, cluster_env, workload,
+            "fast_simulator", False)
+
     # Load constants
     num_models = len(model_datas)
     num_groups = len(init_sol.group_configs)
@@ -213,13 +217,13 @@ def replica_placement_beam_search(init_sol: ModelPlacement,
         next_sols = []
         for sol in beam:
             group_mem = [
-                sum(weight_mem[p][m_id] for m_id in group_ms)
-                for p, group_ms in zip(sol.group_configs, sol.group_models)
+                sum(weight_mem[c][m_id] for m_id in group_ms)
+                for c, group_ms in zip(sol.group_configs, sol.group_models)
             ]
             for g_id in range(num_groups):
-                p = sol.group_configs[g_id]
+                c = sol.group_configs[g_id]
                 for m_id in range(num_models):
-                    if (weight_mem[p][m_id] + group_mem[g_id] < mem_budget and
+                    if (weight_mem[c][m_id] + group_mem[g_id] < mem_budget and
                         m_id not in sol.group_models[g_id]):
                         next_sol = sol.add_model(g_id, m_id).normalize()
 
@@ -232,7 +236,7 @@ def replica_placement_beam_search(init_sol: ModelPlacement,
 
         # Pick the new top-k
         next_scores = evaluator.get_scores(next_sols)
-        next_indices = np.argsort(np.array(next_scores))[::-1][:beam_size]
+        next_indices = np.argsort(next_scores)[::-1][:beam_size]
 
         beam = []
         for idx in next_indices:
@@ -251,4 +255,4 @@ def replica_placement_beam_search(init_sol: ModelPlacement,
 
         it += 1
 
-    return best_sol, {}
+    return best_sol
