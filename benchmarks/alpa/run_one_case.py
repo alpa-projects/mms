@@ -11,8 +11,7 @@ from alpa_serve.controller import run_controller
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.simulator.workload import Workload, DEFAULT_WARMUP
 from alpa_serve.simulator.controller import run_workload
-from alpa_serve.util import ServingCase
-from alpa.util import to_str_round
+from alpa_serve.util import ServingCase, to_str_round
 
 from benchmarks.alpa.suite_debug import suite_debug
 

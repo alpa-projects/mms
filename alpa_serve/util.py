@@ -67,7 +67,7 @@ def write_tsv(heads: Sequence[str],
         print(line)
 
 
-def get_factors(n):
+def get_factors(n: int):
     step = 2 if n % 2 else 1
     ret = list(
         set(
@@ -79,3 +79,23 @@ def get_factors(n):
     )
     ret.sort()
     return ret
+
+
+
+def to_str_round(x: Any, decimal: int = 6):
+    """Print a python object but round all floating point numbers."""
+    if isinstance(x, str):
+        return x
+    if isinstance(x, (list, tuple, np.ndarray)):
+        tmp_str = ", ".join([to_str_round(y, decimal=decimal) for y in x])
+        return "[" + tmp_str + "]"
+    if isinstance(x, dict):
+        return str({k: to_str_round(v, decimal=decimal) for k, v in x.items()})
+    if isinstance(x, int):
+        return str(x)
+    if isinstance(x, float):
+        format_str = f"%.{decimal}f"
+        return format_str % x
+    if x is None:
+        return str(x)
+    raise ValueError("Invalid value: " + str(x))

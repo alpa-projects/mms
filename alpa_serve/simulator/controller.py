@@ -22,8 +22,7 @@ from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import (Workload, StatsResult,
     PerDeviceStatsResult, DEFAULT_WARMUP)
-from alpa_serve.util import ServingCase, inf
-from alpa.util import to_str_round
+from alpa_serve.util import ServingCase, inf, to_str_round
 
 
 class GroupManager:

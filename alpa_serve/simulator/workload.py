@@ -9,7 +9,7 @@ import numpy as np
 from scipy.stats import pareto
 
 from alpa_serve.simulator.util import MMPPSampler
-from alpa.util import to_str_round
+from alpa_serve.util import to_str_round
 
 
 DEFAULT_WARMUP = 10
