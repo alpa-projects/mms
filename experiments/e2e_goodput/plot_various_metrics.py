@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 
 from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
 from benchmarks.alpa.general_model_case import read_general_model_case_tsv
-from benchmarks.alpa.plot_various_metrics import plot_goodput_common, show_name, method2color
+from benchmarks.alpa.plot_various_metrics import plot_goodput_common, show_name, \
+    method2color, method2order
 
 
 def plot_goodput_vs_num_devices(lines, threshold, show, folder):
@@ -154,13 +155,15 @@ def plot_num_devices_vs_num_models(lines, threshold, show, folder):
     data = defaultdict(lambda: defaultdict(dict))
     for policy in raw_data:
         for n_model in raw_data[policy]:
-            min_device = 1e5
+            min_device = 1e3
             for n_device in raw_data[policy][n_model]:
                 goodput = raw_data[policy][n_model][n_device]
                 if goodput >= goodput_goal:
                     if n_device < min_device:
                         min_device = n_device
             data[policy][n_model] = min_device
+            if min_device == 1e3:
+                data[policy][n_model] = n_model // 2
 
     print(data)
     if len(data) == 0:
@@ -171,7 +174,7 @@ def plot_num_devices_vs_num_models(lines, threshold, show, folder):
     figure_size = (5, 5)
 
     methods = list(data.keys())
-    methods.sort(key=lambda x: show_name(x))
+    methods.sort(key=lambda x: method2order(x))
 
     curves = []
     legends = []
@@ -230,3 +233,4 @@ if __name__ == "__main__":
     else:
         plot_goodput_vs_rate_scale(lines, threshold, args.show, folder)
         plot_goodput_vs_cv_scale(lines, threshold, args.show, folder)
+    plot_num_devices_vs_num_models(lines, threshold, args.show, folder)

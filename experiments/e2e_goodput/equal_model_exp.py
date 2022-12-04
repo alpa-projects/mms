@@ -231,7 +231,7 @@ if __name__ == "__main__":
         for num_models in num_models_list:
             for num_devices in num_devices_list:
                 if "1.3b" in model_type or "2.6b" in model_type:
-                    if num_devices * 2 >= num_models:
+                    if num_devices * 2 > num_models:
                         print(f"Skip the case num_devices = {num_devices} and num_models = {num_models} "
                               f"because the goodput will likely be 100%.")
                         continue
