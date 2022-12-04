@@ -17,7 +17,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-search", "mp-search"]
+    policies = ["sr-search", "mp-greedy-4", "mp-search"]
     num_devices = 8
     mem_budget = 10 * GB
     model_type = "bert-1.3b"

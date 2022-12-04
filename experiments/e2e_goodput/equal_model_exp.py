@@ -180,9 +180,9 @@ if __name__ == "__main__":
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
 
-        run_equal_model_cases(cases, exp_name="goodput_vs_rate_scale",
-                              output_file=output_file,
-                              mode=args.mode, parallel=args.parallel)
+            run_equal_model_cases(cases, exp_name="goodput_vs_rate_scale",
+                                  output_file=output_file,
+                                  mode=args.mode, parallel=args.parallel)
 
     #### goodput vs cv/cv_scale #####
     if "goodput_vs_cv" in experiments:

@@ -9,10 +9,9 @@ import ray
 
 from alpa_serve.controller import run_controller
 from alpa_serve.profiling import ProfilingDatabase
-from alpa_serve.simulator.workload import Workload
+from alpa_serve.simulator.workload import Workload, DEFAULT_WARMUP
 from alpa_serve.simulator.controller import run_workload
-from alpa_serve.util import ServingCase
-from alpa.util import to_str_round
+from alpa_serve.util import ServingCase, to_str_round
 
 from benchmarks.alpa.suite_debug import suite_debug
 
@@ -85,7 +84,7 @@ class Client:
         self.futures = self.executor = self.res_dict = None
 
 
-def run_one_case(case: ServingCase, warmup=10, debug=False, port=20001):
+def run_one_case(case: ServingCase, warmup=DEFAULT_WARMUP, debug=False, port=20001):
     register_models, generate_workload, place_models = case
 
     # Launch the controller

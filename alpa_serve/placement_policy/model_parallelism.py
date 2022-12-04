@@ -7,14 +7,13 @@ import time
 from typing import List
 
 import numpy as np
-import pulp
-from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
 import ray
 
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelData, ClusterEnv, ModelPlacement,
-    PlacementEvaluator, replica_placement_beam_search)
+    PlacementEvaluator, gen_train_workload,
+    replica_placement_fast_greedy, replica_placement_beam_search)
 from alpa_serve.simulator.controller import simulate_one_case
 from alpa_serve.simulator.executable import Executable
 from alpa_serve.simulator.workload import Workload, GammaProcess
@@ -74,6 +73,9 @@ class ModelParallelismILP(BasePlacementPolicy):
                         model_datas: List[ModelData],
                         cluster_env: ClusterEnv,
                         train_workload: Workload = None):
+        import pulp
+        from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
+
         tic = time.time()
 
         # Load constants
@@ -203,83 +205,28 @@ class ModelParallelismGreedy(BasePlacementPolicy):
     def __init__(self, group_size: int = 2, verbose: int = 0):
         super().__init__(verbose=verbose)
 
-        self.max_bs = 1
         self.group_size = group_size
 
     def solve_placement(self,
                         model_datas: List[ModelData],
                         cluster_env: ClusterEnv,
                         train_workload: Workload = None):
-        # Load constants
-        num_devices = cluster_env.num_devices
-        num_models = len(model_datas)
-        mem_budget = cluster_env.mem_budget
+        # Generate workloads
+        if train_workload is None:
+            train_workload = gen_train_workload(model_datas)
 
-        if num_devices % self.group_size != 0:
-            return ModelPlacement([], []), None
+        # Run greedy placement
+        evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
+                                       "fast_simulator", False)
+        assert cluster_env.num_devices % self.group_size == 0
+        num_groups = cluster_env.num_devices // self.group_size
+        sol = ModelPlacement([ParallelConfig(1,1,self.group_size)] * num_groups,
+                             [[] for _ in range(num_groups)])
 
-        assert num_devices % self.group_size == 0
-        num_groups = num_devices // self.group_size
-
-        parallel_config = ParallelConfig(1, 1, self.group_size)
-        weight_mem = [
-            max(x.profiling_result.para_dict[parallel_config].weight_mem)
-            for x in model_datas]
-        single_throughput = [
-            compute_capability(x, parallel_config, self.max_bs)
-            for x in model_datas]
-        rate = [x.rate for x in model_datas]
-
-        if max(single_throughput) <= 1e-5:
-            single_throughput = [1e-5] * len(single_throughput)
-
-        # Status variables
-        burst_tolerance = np.zeros(num_models)
-        used_mem = np.zeros(num_groups)
-        model_set = [set() for _ in range(num_groups)]
-
-        # Optimization loop
-        modified = True
-        ct = 0
-        while modified:
-            modified = False
-            model_ids = np.argsort(burst_tolerance)
-            group_ids = np.argsort(used_mem)
-
-            # Greedly pick one model and a list of groups
-            candidates = []
-            for m_id in model_ids:
-                for start_idx, g_id in enumerate(group_ids):
-                    if (m_id not in model_set[g_id] and
-                        weight_mem[m_id] + used_mem[g_id] <= mem_budget):
-                        modified = True
-                        if len(candidates):
-                            if abs(used_mem[g_id] - used_mem[candidates[0]]) < eps:
-                                candidates.append(g_id)
-                        else:
-                            candidates.append(g_id)
-
-                if candidates:
-                    break
-
-            if modified:
-                # Randomly pick one group
-                ct += 1
-                g_id = candidates[ct % len(candidates)]
-
-                used_mem[g_id] += weight_mem[m_id]
-                model_set[g_id].add(m_id)
-                burst_tolerance[m_id] += single_throughput[m_id] / (rate[m_id] + eps)
-
-        # Parse solution
-        group_configs = []
-        group_models = []
-        for i in range(num_groups):
-            group_configs.append(parallel_config)
-            group_models.append(list(model_set[i]))
-
-        return (ModelPlacement(group_configs, group_models),
-                {"objective": min(burst_tolerance)})
+        sol = replica_placement_fast_greedy(
+            sol, model_datas, cluster_env, train_workload,
+            evaluator, self.verbose)
+        return sol, None
 
 
 class ModelParallelismSearch(BasePlacementPolicy):
@@ -289,22 +236,24 @@ class ModelParallelismSearch(BasePlacementPolicy):
                  max_pp: int = 8,
                  max_op: int = 4,
                  n_iter: int = 1,
-                 simulation_duration: int = 100,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.max_bs = max_bs
         self.max_pp = max_pp
         self.max_op = max_op
-        self.duration = simulation_duration
         self.n_iter = n_iter
-        self.seed = 1234
-        self.beam_size = 1
+        self.seed = 0
+        self.beam_size = 3
+        self.simulation_min_duration = 100
+        self.simulation_min_samples = 30000
 
         self.evaluator_method = "fast_simulator"
         self.parallel_evaluator = False
+        self.parallel_initial_placement = False
 
-        if self.parallel_evaluator:
+        if ((self.parallel_evaluator or self.parallel_initial_placement)
+            and not ray.is_initialized()):
             ray.init(address="auto", ignore_reinit_error=True)
 
     def solve_placement(self,
@@ -313,24 +262,26 @@ class ModelParallelismSearch(BasePlacementPolicy):
                         train_workload: Workload = None):
         # Generate workloads
         if train_workload is None:
-            ws = []
-            for i, data in enumerate(model_datas):
-                ws.append(GammaProcess(data.rate, data.cv).generate_workload(
-                    data.name, 0, duration=self.duration,
-                    slo=data.slo, seed=self.seed + i))
-            train_workload = Workload.merge(*ws)
+            train_workload = gen_train_workload(model_datas)
 
         evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
             self.evaluator_method, self.parallel_evaluator)
 
         # Get initial solutions
         initial_sols = self.enumerate_group_configs(cluster_env)
-        for i in range(len(initial_sols)):
-            initial_sols[i] = replica_placement_beam_search(
-                initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
-                self.beam_size, self.verbose)[0]
-            #initial_sols[i] = self.greedy_placement(
-            #     initial_sols[i], model_datas, cluster_env, train_workload)
+
+        if self.parallel_initial_placement:
+            func = ray.remote(replica_placement_fast_greedy).remote
+            for i in range(len(initial_sols)):
+                initial_sols[i] = func(
+                    initial_sols[i], model_datas, cluster_env, train_workload, None,
+                    self.verbose)
+            initial_sols = ray.get(initial_sols)
+        else:
+            for i in range(len(initial_sols)):
+                initial_sols[i] = replica_placement_fast_greedy(
+                    initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
+                     self.verbose)
 
         # Iterative search
         cur_sols = initial_sols
@@ -387,82 +338,3 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 sols.append(ModelPlacement([ParallelConfig(1, op, pp)] * num_groups,
                                            [[] for _ in range(num_groups)]))
         return sols
-
-    def greedy_placement(self, sol: ModelPlacement,
-                         model_datas: List[ModelData],
-                         cluster_env: ClusterEnv,
-                         train_workload: Workload):
-        num_models = len(model_datas)
-        mem_budget = cluster_env.mem_budget
-        group_configs = sol.group_configs
-        inf = 1e20
-
-        num_groups = len(group_configs)
-
-        weight_mem = {}  # Dict[parallel_config -> [model_idx -> weight_mem]]
-        for parallel_config in sol.group_configs:
-            weight_mem[parallel_config] = [
-                max(x.profiling_result.para_dict[parallel_config].weight_mem)
-                if parallel_config in x.profiling_result.para_dict
-                else inf
-                for x in model_datas]
-
-        single_throughput = {}  # Dict[parallel_config -> [model_idx -> capability]]
-        for parallel_config in sol.group_configs:
-            tmp_throughput = [
-                compute_capability(x, parallel_config, self.max_bs)
-                for x in model_datas]
-            if max(tmp_throughput) <= 1e-5:
-                single_throughput[parallel_config] = [1e-5] * len(tmp_throughput)
-            else:
-                single_throughput[parallel_config] = tmp_throughput
-
-        rate = [x.rate for x in model_datas]
-
-        # Status variables
-        burst_tolerance = np.zeros(num_models)
-        used_mem = np.zeros(num_groups)
-        model_set = [set() for _ in range(num_groups)]
-
-        # Optimization loop
-        modified = True
-        ct = 0
-        while modified:
-            modified = False
-            model_ids = np.argsort(burst_tolerance)
-            group_ids = np.argsort(used_mem)
-
-            # Greedly pick one model and a list of groups
-            candidates = []
-            for m_id in model_ids:
-                for start_idx, g_id in enumerate(group_ids):
-                    parallel_config = group_configs[g_id]
-                    if (m_id not in model_set[g_id] and
-                        weight_mem[parallel_config][m_id] + used_mem[g_id] <= mem_budget):
-                        modified = True
-                        if len(candidates):
-                            if abs(used_mem[g_id] - used_mem[candidates[0]]) < eps:
-                                candidates.append(g_id)
-                        else:
-                            candidates.append(g_id)
-
-                if candidates:
-                    break
-
-            if modified:
-                # Randomly pick one group
-                ct += 1
-                g_id = candidates[ct % len(candidates)]
-                parallel_config = group_configs[g_id]
-
-                used_mem[g_id] += weight_mem[parallel_config][m_id]
-                model_set[g_id].add(m_id)
-                burst_tolerance[m_id] += (
-                    single_throughput[parallel_config][m_id] / (rate[m_id] + eps))
-
-        # Parse solution
-        group_models = []
-        for i in range(num_groups):
-            group_models.append(list(model_set[i]))
-
-        return ModelPlacement(group_configs, group_models)

@@ -5,16 +5,15 @@ import time
 from typing import List
 
 import numpy as np
-import pulp
-from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
 import ray
 
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelPlacement, ModelData, ClusterEnv,
-    PlacementEvaluator, replica_placement_beam_search)
-from alpa_serve.simulator.workload import Workload, GammaProcess
-from alpa_serve.util import eps, inf
+    PlacementEvaluator, gen_train_workload,
+    replica_placement_fast_greedy, replica_placement_beam_search)
+from alpa_serve.simulator.workload import Workload
+from alpa_serve.util import eps, inf, to_str_round
 
 
 def compute_single_throughput(model_data, max_bs):
@@ -44,6 +43,9 @@ class SelectiveReplicationILP(BasePlacementPolicy):
                         model_datas: List[ModelData],
                         cluster_env: ClusterEnv,
                         train_workload: Workload = None):
+        import pulp
+        from pulp import LpVariable, LpProblem, LpMaximize, lpSum, LpStatus
+
         tic = time.time()
 
         # Load constants
@@ -126,94 +128,33 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
     def __init__(self, verbose: int = 0):
         super().__init__(verbose=verbose)
 
-        self.max_bs = 1
-
     def solve_placement(self,
                         model_datas: List[ModelData],
                         cluster_env: ClusterEnv,
                         train_workload: Workload = None):
-        # Load constants
-        num_devices = cluster_env.num_devices
-        num_models = len(model_datas)
-        mem_budget = cluster_env.mem_budget
+        # Generate workloads
+        if train_workload is None:
+            train_workload = gen_train_workload(model_datas)
 
-        parallel_config = ParallelConfig(1, 1, 1)
-        weight_mem = [
-            max(x.profiling_result.para_dict[parallel_config].weight_mem)
-            for x in model_datas]
-        single_throughput = [compute_single_throughput(x, self.max_bs) for x in model_datas]
-        rate = [x.rate for x in model_datas]
+        # Run greedy placement
+        evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
+                                       "fast_simulator", False)
+        num_groups = cluster_env.num_devices
+        sol = ModelPlacement([ParallelConfig(1,1,1)] * num_groups, [[] for _ in range(num_groups)])
 
-        # Status variables
-        burst_tolerance = np.zeros(num_models)
-        used_mem = np.zeros(num_devices)
-        model_set = [set() for _ in range(num_devices)]
-        num_replicas = [0] * num_models
-
-        # Optimization loop
-        modified = True
-        ct = 0
-        while modified:
-            modified = False
-            model_ids = np.argsort(burst_tolerance)
-            device_ids = np.argsort(used_mem)
-
-            ## compute load
-            #loads = [sum(rate[m_id]/num_replicas[m_id] for m_id in ms) for ms in model_set]
-            #print(loads)
-
-            # Greedily pick one model and a list of devices
-            candidates = []
-            for m_id in model_ids:
-                for start_idx, d_id in enumerate(device_ids):
-                    if (m_id not in model_set[d_id] and
-                        weight_mem[m_id] + used_mem[d_id] <= mem_budget):
-                        modified = True
-                        if len(candidates):
-                            if abs(used_mem[d_id] - used_mem[candidates[0]]) < eps:
-                                candidates.append(d_id)
-                        else:
-                            candidates.append(d_id)
-
-                if candidates:
-                    break
-
-            if modified:
-                # Randomly pick one device
-                ct += 1
-                d_id = candidates[ct % len(candidates)]
-
-                used_mem[d_id] += weight_mem[m_id]
-                model_set[d_id].add(m_id)
-                burst_tolerance[m_id] += single_throughput[m_id] / (rate[m_id] + eps)
-                num_replicas[m_id] += 1
-
-        # Parse solution
-        group_configs = []
-        group_models = []
-        for i in range(num_devices):
-            group_configs.append(parallel_config)
-            group_models.append(list(model_set[i]))
-
-        return (ModelPlacement(group_configs, group_models),
-                {"objective": min(burst_tolerance)})
+        sol = replica_placement_fast_greedy(
+            sol, model_datas, cluster_env, train_workload,
+            evaluator, self.verbose)
+        return sol, None
 
 
 class SelectiveReplicationSearch(BasePlacementPolicy):
 
-    def __init__(self, verbose: int = 0):
+    def __init__(self,
+                 verbose: int = 0):
         super().__init__(verbose=verbose)
 
-        self.max_bs = 1
-        self.beam_size = 1
-        self.seed = 1234
-        self.simulation_duration = 100
-
-        self.evaluator_method = "fast_simulator"
-        self.parallel_evaluator = False
-
-        if self.parallel_evaluator:
-            ray.init(address="auto", ignore_reinit_error=True)
+        self.beam_size = 3
 
     def solve_placement(self,
                         model_datas: List[ModelData],
@@ -221,21 +162,15 @@ class SelectiveReplicationSearch(BasePlacementPolicy):
                         train_workload: Workload = None):
         # Generate workloads
         if train_workload is None:
-            ws = []
-            for i, data in enumerate(model_datas):
-                ws.append(GammaProcess(data.rate, data.cv).generate_workload(
-                    data.name, 0, duration=self.simulation_duration,
-                    slo=data.slo, seed=self.seed + i))
-            train_workload = Workload.merge(*ws)
+            train_workload = gen_train_workload(model_datas)
 
         # Run beam search
         evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
-            self.evaluator_method, self.parallel_evaluator)
+                                       "fast_simulator", False)
         num_groups = cluster_env.num_devices
         sol = ModelPlacement([ParallelConfig(1,1,1)] * num_groups, [[] for _ in range(num_groups)])
 
-        sol, debug_info = replica_placement_beam_search(
+        sol = replica_placement_beam_search(
             sol, model_datas, cluster_env, train_workload,
             evaluator, self.beam_size, self.verbose)
-
-        return sol, debug_info
+        return sol, None

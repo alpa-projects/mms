@@ -6,10 +6,12 @@ import random
 from typing import Any, List, Sequence, Dict, Optional
 
 import numpy as np
-from scipy.stats import pareto
 
 from alpa_serve.simulator.util import MMPPSampler
-from alpa.util import to_str_round
+from alpa_serve.util import to_str_round
+
+
+DEFAULT_WARMUP = 10
 
 
 @dataclasses.dataclass
@@ -33,7 +35,7 @@ PerDeviceStatsResult = namedtuple("PerDeviceStatsResult", ("num_requests",))
 @dataclasses.dataclass
 class StatsResult:
     per_model_stats: List[PerModelStatsResult]
-    per_device_stats: Optional[List[PerDeviceStatsResult]]
+    group_num_requests: List[int]
     goodput: float
     latency_mean: float
     num_requests: int
@@ -132,21 +134,23 @@ class GammaProcess(ArrivalProcess):
     def generate_arrivals(self, start: float, duration: float, seed: int = 0):
         np.random.seed(seed)
 
-        batch_size = int(self.rate_ * duration * 1.5)
+        batch_size = max(int(self.rate_ * duration * 1.2), 1)
         intervals = np.random.gamma(self.shape, self.scale, size=batch_size)
         pt = 0
 
         ticks = []
-        cur = start
+        cur = start + intervals[0]
         end = start + duration
         while cur < end:
-            cur += intervals[pt]
             ticks.append(cur)
 
             pt += 1
             if pt >= batch_size:
                 intervals = np.random.gamma(self.shape, self.scale, size=batch_size)
                 pt = 0
+
+            cur += intervals[pt]
+
         return ticks
 
     def generate_workload(self, model_name: str, start: float,
@@ -228,6 +232,8 @@ class ParetoProcess:
         self.loc = loc
 
     def generate_arrivals(self, start: float, duration: float, seed: int = 0):
+        from scipy.stats import pareto
+
         rs = np.random.RandomState(seed)
         ticks = []
         cur = start
@@ -278,21 +284,22 @@ class Workload:
 
     def compute_stats(self, start: Sequence[float], finish: Sequence[float],
                       good: Sequence[bool], warmup: float,
-                      compute_tail_latency: bool = True):
+                      compute_per_model_stats: bool = True):
         """Compute the statistics of serving results."""
         # Skip the first and last `warmup` seconds
-        ct = 1
-        while ct < len(start) and start[ct] - start[0] < warmup:
-            ct += 1
-        start = np.asarray(start[ct:-ct])
-        finish = np.asarray(finish[ct:-ct])
-        good = np.asarray(good[ct:-ct])
-        workload = self[ct:-ct]
+        skip = int(warmup / (self.arrivals[-1] - self.arrivals[0]) * len(self.arrivals))
+        start = start[skip:-skip]
+        finish = finish[skip:-skip]
+        good = good[skip:-skip]
+
+        if not compute_per_model_stats:
+            return StatsResult(None, None, np.mean(good), np.mean(finish - start),
+                               len(start), len(start) / (start[-1] - start[0]))
 
         # Compute stats per model
         model_indices = defaultdict(list)
-        for i in range(len(workload)):
-            model_indices[workload.requests[i].model_name].append(i)
+        for i in range(skip, len(self.arrivals) - skip):
+            model_indices[self.requests[i].model_name].append(i - skip)
 
         names = list(model_indices.keys())
         names.sort()
@@ -318,12 +325,9 @@ class Workload:
                 throughput = 0
                 latency = [0]
 
-            if compute_tail_latency:
-                sorted_latency = np.sort(latency)
-                latency_p90 = sorted_latency[int(0.90 * len(sorted_latency))]
-                latency_p99 = sorted_latency[int(0.99 * len(sorted_latency))]
-            else:
-                latency_p90 = latency_p99 = None
+            sorted_latency = np.sort(latency)
+            latency_p90 = sorted_latency[int(0.90 * len(sorted_latency))]
+            latency_p99 = sorted_latency[int(0.99 * len(sorted_latency))]
 
             stats.append(PerModelStatsResult(
                 name, len(indices), goodput, throughput,
@@ -337,25 +341,23 @@ class Workload:
                 total_start = min(total_start, start[indices[0]])
                 total_end = max(total_end, start[indices[-1]])
 
-        total_request_rate = num_total_requests / (total_end - total_start)
-        latency_mean = np.average([s.latency_mean for s in stats],
-                                  weights=[s.num_requests for s in stats])
-        return StatsResult(stats, None, num_good / num_total_requests,
-                           latency_mean, num_total_requests, total_request_rate)
+        return StatsResult(stats, None, np.mean(good), np.mean(finish - start),
+                           len(start), len(start) / (start[-1] - start[0]))
 
     @staticmethod
     def print_stats(stats: StatsResult):
         """Print the statistics of serving results."""
-        print("--- per model ---")
-        for stat in stats.per_model_stats:
-            print(f"model: {stat.name}, #req: {stat.num_requests}")
-            print(f"goodput: {stat.goodput*100:.2f} %, "
-                  f"throughput: {stat.throughput:.2f} q/s")
-            print(f"latency mean: {stat.latency_mean*1e3:.2f} ms, "
-                  f"std: {stat.latency_std*1e3:.2f} ms, "
-                  f"p90: {stat.latency_p90*1e3:.2f} ms")
-        if stats.per_device_stats:
-            print(f"per device #req: {[x.num_requests for x in stats.per_device_stats]}")
+        if stats.per_model_stats:
+            print("--- per model ---")
+            for stat in stats.per_model_stats:
+                print(f"model: {stat.name}, #req: {stat.num_requests}")
+                print(f"goodput: {stat.goodput*100:.2f} %, "
+                      f"throughput: {stat.throughput:.2f} q/s")
+                print(f"latency mean: {stat.latency_mean*1e3:.2f} ms, "
+                      f"std: {stat.latency_std*1e3:.2f} ms, "
+                      f"p90: {stat.latency_p90*1e3:.2f} ms")
+        if stats.group_num_requests is not None:
+            print(f"per group #req: {stats.group_num_requests}")
         print("--- overall ---")
         print(f"total #req: {stats.num_requests}, "
               f"rate: {stats.request_rate:.2f} q/s")

@@ -9,13 +9,16 @@ from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
 
 show_name_dict = {
     "sr-greedy":   "Selective Replication (greedy)",
+    "sr-search":   "Selective Replication (search)",
     "sr-ilp":      "Selective Replication (ilp)",
 
-    "mp-ilp":      "Model Parallelism (ilp)",
-    "mp-search":   "Model Parallelism (search)",
-    "mp-greedy-2": "Pipeline Parallelism (#stage=2)",
-    "mp-greedy-4": "Pipeline Parallelism (#stage=4)",
-    "mp-greedy-8": "Pipeline Parallelism (#stage=8)",
+    "mp-ilp":         "Model Parallelism (ilp)",
+    "mp-search":      "Model Parallelism (search)",
+    "mp-search-100":  "Model Parallelism (search 100s)",
+    "mp-search-1000": "Model Parallelism (search 1000s)",
+    "mp-greedy-2":    "Pipeline Parallelism (#stage=2)",
+    "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",
+    "mp-greedy-8":    "Pipeline Parallelism (#stage=8)",
 }
 
 def show_name(name):
@@ -35,9 +38,10 @@ def method2color(name):
 
 
 method_order_list = [
-    "sr-greedy", "sr-ilp",
+    "sr-greedy", "sr-search", "sr-ilp",
 
     "mp-ilp", "mp-search",
+    "mp-search-100", "mp-search-1000",
     "mp-greedy-2", "mp-greedy-4", "mp-greedy-8",
 ]
 
@@ -45,7 +49,12 @@ def method2order(name):
     return method_order_list.index(name)
 
 
+
 def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show):
+    if len(data) == 0:
+        print(f"No data to draw for {output}. Skipped.")
+        return
+
     fig, ax = plt.subplots()
     figure_size = (5, 5)
 
@@ -60,7 +69,6 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
     for method in methods:
         curve = data[method]
         xs, ys = zip(*curve.items())
-
 
         ys = np.array(ys) * 100
         curve = ax.plot(xs, ys, color=method2color(method), marker='*')
@@ -144,7 +152,7 @@ def plot_goodput_vs_slo(lines, threshold, show):
             continue
 
         policy, x, goodput =  (
-            line["policy_name"], line["slo"], line["goodput"])
+            line["policy_name"], line["slo_scale"], line["goodput"])
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, True, "SLO (s)",
