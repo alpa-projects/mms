@@ -6,18 +6,60 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
-from benchmarks.alpa.plot_goodput_vs_slo import show_name, method2color, method2order
+
+show_name_dict = {
+    "sr-greedy":   "Selective Replication (greedy)",
+    "sr-search":   "Selective Replication (search)",
+    "sr-ilp":      "Selective Replication (ilp)",
+
+    "mp-ilp":         "Model Parallelism (ilp)",
+    "mp-search":      "Model Parallelism (search)",
+    "mp-search-100":  "Model Parallelism (search 100s)",
+    "mp-search-1000": "Model Parallelism (search 1000s)",
+    "mp-greedy-2":    "Pipeline Parallelism (#stage=2)",
+    "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",
+    "mp-greedy-8":    "Pipeline Parallelism (#stage=8)",
+}
+
+def show_name(name):
+    return show_name_dict.get(name, name)
+
+
+method2color_dict = {
+}
+
+ct = 0
+def method2color(name):
+    global ct
+    if name not in method2color_dict:
+        method2color_dict[name] = f"C{ct}"
+        ct += 1
+    return method2color_dict[name]
+
+
+method_order_list = [
+    "sr-greedy", "sr-search", "sr-ilp",
+
+    "mp-ilp", "mp-search",
+    "mp-search-100", "mp-search-1000",
+    "mp-greedy-2", "mp-greedy-4", "mp-greedy-8",
+]
+
+def method2order(name):
+    return method_order_list.index(name)
+
 
 
 def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show):
+    if len(data) == 0:
+        print(f"No data to draw for {output}. Skipped.")
+        return
+
     fig, ax = plt.subplots()
     figure_size = (5, 5)
 
     methods = list(data.keys())
     methods.sort(key=lambda x: method2order(x))
-
-    if len(data) == 0:
-        return
 
     curves = []
     legends = []
@@ -27,7 +69,6 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
     for method in methods:
         curve = data[method]
         xs, ys = zip(*curve.items())
-
 
         ys = np.array(ys) * 100
         curve = ax.plot(xs, ys, color=method2color(method), marker='*')
