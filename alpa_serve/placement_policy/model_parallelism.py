@@ -14,7 +14,8 @@ from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelData, ClusterEnv, ModelPlacement,
     PlacementEvaluator, gen_train_workload,
-    replica_placement_fast_greedy, replica_placement_beam_search)
+    replica_placement_fast_greedy, replica_placement_beam_search,
+	replica_placement_on_last_group)
 from alpa_serve.simulator.controller import simulate_one_case
 from alpa_serve.simulator.executable import Executable
 from alpa_serve.simulator.workload import Workload, GammaProcess
@@ -282,12 +283,12 @@ class ModelParallelismSearch(BasePlacementPolicy):
             initial_sols = ray.get(initial_sols)
         else:
             for i in range(len(initial_sols)):
-                #initial_sols[i] = replica_placement_fast_greedy(
-                #    initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
-                #     self.verbose)
-                initial_sols[i] = replica_placement_beam_search(
+                initial_sols[i] = replica_placement_fast_greedy(
                     initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
-                     self.beam_size, self.verbose)
+                     self.verbose)
+                #initial_sols[i] = replica_placement_beam_search(
+                #    initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
+                #     self.beam_size, self.verbose)
 
         # Iterative search
         cur_sols = initial_sols
@@ -363,29 +364,21 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 # solve from sols[cur_num - last_group_size]
                 print("last_group_size ", last_group_size)
                 for pp in get_factors(last_group_size):
-                    pre_sol = copy.deepcopy(sols[cur_num - last_group_size])
+                    pre_sol = sols[cur_num - last_group_size].copy()
                     op = last_group_size // pp
                     if pp > self.max_pp or op > self.max_op:
                         continue
                     pre_sol.group_configs.append(ParallelConfig(1, op, pp))
-                    pre_sol.group_models = [list(x) for x in pre_sol.group_models]
                     pre_sol.group_models.append([])
 
-                    new_sol = replica_placement_fast_greedy(
-                                  pre_sol, model_datas, cluster_env, train_workload,
-                                  evaluator, self.verbose)
-                    new_score = evaluator.get_scores([new_sol])
-                    if new_score[0] > best_score:
-                        best_score = new_score[0]
-                        assert len(sols) == cur_num or len(sols) == cur_num + 1
-                        if len(sols) == cur_num:
-                            sols.append(new_sol)
-                        else:
-                            sols[cur_num] = new_sol
-
-                    new_sol = replica_placement_beam_search(
+                    new_sol = replica_placement_on_last_group(
+                    #new_sol = replica_placement_beam_search(
                                   pre_sol, model_datas, cluster_env, train_workload,
                                   evaluator, self.beam_size, self.verbose)
+                    #new_sol = replica_placement_fast_greedy(
+                    #              pre_sol, model_datas, cluster_env, train_workload,
+                    #              evaluator, self.verbose)
+ 
                     new_score = evaluator.get_scores([new_sol])
                     if new_score[0] > best_score:
                         best_score = new_score[0]

@@ -419,6 +419,107 @@ def replica_placement_beam_search(init_sol: ModelPlacement,
     return best_sol
 
 
+def replica_placement_on_last_group(init_sol: ModelPlacement,
+                                    model_datas: List[ModelData],
+                                    cluster_env: ClusterEnv,
+                                    workload: Workload,
+                                    evaluator: PlacementEvaluator,
+                                    beam_size: int,
+                                    verbose: int):
+    """Use beam search to place replicas on the last group."""
+    tic = time.time()
+
+    if evaluator is None:
+        evaluator = PlacementEvaluator(model_datas, cluster_env, workload,
+            "fast_simulator", False)
+
+    # Load constants
+    num_models = len(model_datas)
+    num_groups = len(init_sol.group_configs)
+    mem_budget = cluster_env.mem_budget
+    group_configs = init_sol.group_configs
+
+    weight_mem = {}  # Dict[parallel_config -> [model_idx -> weight_mem]]
+    for parallel_config in init_sol.group_configs:
+        weight_mem[parallel_config] = [
+            max(x.profiling_result.para_dict[parallel_config].weight_mem)
+            if parallel_config in x.profiling_result.para_dict
+            else inf
+            for x in model_datas]
+
+    # Beam search
+    beam = [init_sol]
+    it = 0
+
+    best_score = -1
+    best_sol = init_sol
+    visited = set()
+
+    while True:
+        # Expand one layer
+        next_sols = []
+        for sol in beam:
+            group_mem = [
+                sum(weight_mem[c][m_id] for m_id in group_ms)
+                for c, group_ms in zip(sol.group_configs, sol.group_models)
+            ]
+            g_id = num_groups - 1
+            c = sol.group_configs[g_id]
+            for m_id in range(num_models):
+                if (weight_mem[c][m_id] + group_mem[g_id] < mem_budget and
+                    m_id not in sol.group_models[g_id]):
+                    next_sol = sol.add_model(g_id, m_id)
+                    next_sol_norm = next_sol.normalize()
+
+                    if next_sol_norm.group_models not in visited:
+                        visited.add(next_sol_norm.group_models)
+                        next_sols.append(next_sol)
+ 
+                        # swap model m_id with a model in previous groups
+                        for m_id_1 in range(len(next_sol.group_models[-1])):
+                            if next_sol.group_models[-1][m_id_1] == m_id:
+                                break
+                        for g_id_2 in range(num_groups - 1):
+                            for m_id_2 in range(len(next_sol.group_models[g_id_2])):
+                                if (next_sol.group_models[g_id][m_id_1]
+                                        in next_sol.group_models[g_id_2] or
+                                    next_sol.group_models[g_id_2][m_id_2]
+                                        in next_sol.group_models[g_id]):
+                                    continue
+                                group_models = [list(x) for x in next_sol.group_models]
+                                group_models[g_id][m_id_1], group_models[g_id_2][m_id_2] = (
+                                group_models[g_id_2][m_id_2], group_models[g_id][m_id_1])
+                                swap_sol = ModelPlacement(next_sol.group_configs, group_models)
+                                swap_sol_norm = swap_sol.normalize()
+                                if swap_sol_norm.group_models not in visited:
+                                    visited.add(swap_sol_norm.group_models)
+                                    next_sols.append(swap_sol)
+
+        if not next_sols:
+            break
+
+        # Pick the new top-k
+        next_scores = evaluator.get_scores(next_sols)
+        next_indices = np.argsort(next_scores)[::-1][:beam_size]
+
+        beam = []
+        for idx in next_indices:
+            beam.append(next_sols[idx])
+            if next_scores[idx] > best_score:
+                best_score = next_scores[idx]
+                best_sol = next_sols[idx]
+
+        if verbose >= 1:
+            print(f"iter: {it}, best score: {best_score:.4f}, "
+                  f"iter score: {next_scores[next_indices[0]]:.4f}, "
+                  f"iter #sol: {len(next_sols)}, "
+                  f"elapsed: {time.time() - tic:.2f}, "
+                  f"best placement: {best_sol}, ")
+        it += 1
+
+    return best_sol
+
+
 def swap_two_models(sol: ModelPlacement):
     group_models = sol.group_models
     g_id_1 = np.random.choice(len(group_models))
@@ -428,6 +529,19 @@ def swap_two_models(sol: ModelPlacement):
     if (group_models[g_id_1][m_id_1] in group_models[g_id_2] or
         group_models[g_id_2][m_id_2] in group_models[g_id_1]):
         return sol
+    group_models = [list(x) for x in sol.group_models]
+    group_models[g_id_1][m_id_1], group_models[g_id_2][m_id_2] = (
+        group_models[g_id_2][m_id_2], group_models[g_id_1][m_id_1])
+    return ModelPlacement(sol.group_configs, group_models)
+
+
+def swap_two_models_from_two_groups(sol: ModelPlacement, g_id_1, g_id_2):
+    group_models = sol.group_models
+    m_id_1 = np.random.choice(len(group_models[g_id_1]))
+    m_id_2 = np.random.choice(len(group_models[g_id_2]))
+    if (group_models[g_id_1][m_id_1] in group_models[g_id_2] or
+        group_models[g_id_2][m_id_2] in group_models[g_id_1]):
+        return False, sol
     group_models = [list(x) for x in sol.group_models]
     group_models[g_id_1][m_id_1], group_models[g_id_2][m_id_2] = (
         group_models[g_id_2][m_id_2], group_models[g_id_1][m_id_1])
