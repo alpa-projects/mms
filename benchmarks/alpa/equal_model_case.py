@@ -47,12 +47,10 @@ def get_equal_model_serving_case(case, prof_database=None):
     if rate_distribution == "uniform":
         rates = [total_rate / num_models] * num_models
     elif rate_distribution == "power_law":
-        alpha = 1
-        s = sum(x**(-alpha) for x in range(num_models))
+        alpha = 0.5
+        s = sum((x+1)**(-alpha) for x in range(num_models))
         base = total_rate / s
-        rates = [base * (x ** (-alpha)) for i in range(num_models)]
-        print(rates)
-        exit()
+        rates = [base * ((x+1) ** (-alpha)) for x in range(num_models)]
     elif rate_distribution is None:
         pass
     else:
