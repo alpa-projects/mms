@@ -20,16 +20,16 @@ if __name__ == "__main__":
     # policies = ["sr-search", "mp-search"]
     policies = ["mp-search"]
     num_devices = 16
-    mem_budget = 10 * GB
-    model_type = "bert-1.3b"
-    num_models = 16
-    total_rate = 120
+    mem_budget = 12 * GB
+    model_type = "bert-2.6b"
+    num_models = 24
+    total_rate = 80
     if args.trace == "synthetic":
         # choices: {"gamma", "uniform_mmpp"}
         arrival_process = "gamma"
         # choices: {"uniform", "power_law", "triangle_decay"}
-        rate_distribution = "triangle_decay"
-        arrival_process_kwargs = {"cv": 6}
+        rate_distribution = "power_law"
+        arrival_process_kwargs = {"cv": 4}
     elif args.trace == "azure_v2":
         # choices: {"azure_v2"}
         arrival_process = "azure_v2"

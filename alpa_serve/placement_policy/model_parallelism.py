@@ -15,7 +15,7 @@ from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelData, ClusterEnv, ModelPlacement,
     PlacementEvaluator, gen_train_workload,
     replica_placement_fast_greedy, replica_placement_beam_search,
-	replica_placement_on_last_group)
+    replica_placement_on_last_group, evolutionary_search)
 from alpa_serve.simulator.controller import simulate_one_case
 from alpa_serve.simulator.executable import Executable
 from alpa_serve.simulator.workload import Workload, GammaProcess
@@ -271,8 +271,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
         # Get initial solutions
         initial_sols = self.enumerate_group_configs(cluster_env)
-        initial_sols = self.greedy_group_configs(
-                model_datas, cluster_env, train_workload, evaluator)
+        #initial_sols = self.greedy_group_configs(
+        #        model_datas, cluster_env, train_workload, evaluator)
 
         if self.parallel_initial_placement:
             func = ray.remote(replica_placement_fast_greedy).remote
@@ -324,6 +324,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
             # TODO: mutate solution
             it += 1
 
+        best_sol = evolutionary_search([best_sol], model_datas, evaluator, self.verbose)
         return best_sol, {}
 
     def enumerate_group_configs(self, cluster_env):
@@ -350,42 +351,45 @@ class ModelParallelismSearch(BasePlacementPolicy):
                              model_datas: List[ModelData],
                              cluster_env: ClusterEnv,
                              train_workload: Workload,
-                             evaluator: PlacementEvaluator):
+                             evaluator: PlacementEvaluator,
+                             beam_size = 3):
 
-        sols = [ModelPlacement([], [])]
+        assert beam_size >= 1, "beam size should >= 1."
 
         num_devices = cluster_env.num_devices
         num_devices_per_node = cluster_env.num_devices_per_node
 
+        beam_sols = [[ModelPlacement([], [])]]
+
         for cur_num in range(1, num_devices + 1):
-            # solve sols[cur_num]
-            best_score = 0
+            ## solve sols[cur_num]
+            next_sols = []
             for last_group_size in range(1, (cur_num - 1) % num_devices_per_node + 1 + 1):
-                # solve from sols[cur_num - last_group_size]
-                print("last_group_size ", last_group_size)
+                ## solve from sols[cur_num - last_group_size]
+                # print("last_group_size ", last_group_size)
                 for pp in get_factors(last_group_size):
-                    pre_sol = sols[cur_num - last_group_size].copy()
                     op = last_group_size // pp
                     if pp > self.max_pp or op > self.max_op:
                         continue
-                    pre_sol.group_configs.append(ParallelConfig(1, op, pp))
-                    pre_sol.group_models.append([])
 
-                    new_sol = replica_placement_on_last_group(
-                    #new_sol = replica_placement_beam_search(
-                                  pre_sol, model_datas, cluster_env, train_workload,
-                                  evaluator, self.beam_size, self.verbose)
-                    #new_sol = replica_placement_fast_greedy(
-                    #              pre_sol, model_datas, cluster_env, train_workload,
-                    #              evaluator, self.verbose)
+                    for sol in beam_sols[cur_num - last_group_size]:
+                        pre_sol = sol.copy()
+                        pre_sol.group_configs.append(ParallelConfig(1, op, pp))
+                        pre_sol.group_models.append([])
+
+                        #new_sol = replica_placement_on_last_group(
+                        #new_sol = replica_placement_beam_search(
+                        #              pre_sol, model_datas, cluster_env, train_workload,
+                        #              evaluator, self.beam_size, self.verbose)
+                        new_sol = replica_placement_fast_greedy(
+                                      pre_sol, model_datas, cluster_env, train_workload,
+                                      evaluator, self.verbose)
  
-                    new_score = evaluator.get_scores([new_sol])
-                    if new_score[0] > best_score:
-                        best_score = new_score[0]
-                        assert len(sols) == cur_num or len(sols) == cur_num + 1
-                        if len(sols) == cur_num:
-                            sols.append(new_sol)
-                        else:
-                            sols[cur_num] = new_sol
+                        next_sols.append(new_sol)
+            scores = evaluator.get_scores(next_sols)
+            next_indices = np.argsort(scores)[::-1][:beam_size]
+            beam_sols.append([])
+            for i in range(len(next_indices)):
+                beam_sols[cur_num].append(next_sols[next_indices[i]])
 
-        return [sols[num_devices]]
+        return beam_sols[num_devices]

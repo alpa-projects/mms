@@ -90,7 +90,7 @@ class BasePlacementPolicy:
             print(f"debug info: {debug_info}")
             print(f"solver time: {solver_time:.2f} s")
 
-        return placement
+        return placement.normalize()
 
     def place_models_impl(self, controller,
                           cluster_env: ClusterEnv,
@@ -595,11 +595,11 @@ def evolutionary_search(init_sols: List[ModelPlacement],
 
             # random mutation
             group_models = [list(x) for x in sol.group_models]
-            for g_id in range(len(sol.group_models)):
-                for m_id in range(len(sol.group_models[g_id])):
+            for g_id in range(len(group_models)):
+                for m_id in range(len(group_models[g_id])):
                     if np.random.uniform() < mutation_prob:
                         new_m_id = np.random.choice(num_models)
-                        if new_m_id not in sol.group_models[g_id]:
+                        if new_m_id not in group_models[g_id]:
                             group_models[g_id][m_id] = new_m_id
 
             new_sol = ModelPlacement(sol.group_configs, group_models)
