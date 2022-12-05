@@ -288,9 +288,10 @@ class Workload:
         """Compute the statistics of serving results."""
         # Skip the first and last `warmup` seconds
         skip = int(warmup / (self.arrivals[-1] - self.arrivals[0]) * len(self.arrivals))
-        start = start[skip:-skip]
-        finish = finish[skip:-skip]
-        good = good[skip:-skip]
+        if skip > 0:
+            start = start[skip:-skip]
+            finish = finish[skip:-skip]
+            good = good[skip:-skip]
 
         if not compute_per_model_stats:
             return StatsResult(None, None, np.mean(good), np.mean(finish - start),

@@ -18,6 +18,9 @@ if __name__ == "__main__":
                         choices=["all", "goodput_vs_num_devices", "goodput_vs_num_models",
                               "goodput_vs_slo", "goodput_vs_rate", "goodput_vs_cv",
                               "num_devices_vs_num_models"])
+    parser.add_argument("--skip-slow-exp", action="store_true")
+    parser.add_argument("--model-type", type=str, default="bert-2.6b",
+                        choices=["bert-1.3b", "bert-2.6b", "bert-6.7b"])
     parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--rate-distribution", choices=["uniform", "power_law"],
                         default="uniform")
@@ -28,16 +31,60 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-search", "mp-search"]
+    policies = ["sr-greedy", "mp-search"]
     mem_budget = 16 * GB
-    model_type = "bert-2.6b"
+    model_type = args.model_type
 
-    # default config
-    fixed_num_devices = 32
-    fixed_num_models = 32
-    fixed_rate_scale = 1
-    fixed_cv_scale = 1
-    fixed_slo_scale = 5
+    if model_type == "bert-1.3b":
+        # default config
+        fixed_num_devices = 16
+        fixed_num_models = 64
+        fixed_rate_scale = 4
+        fixed_cv_scale = 1
+        fixed_slo_scale = 5
+
+        # variables
+        num_devices_list = [4, 8, 12, 16, 20, 24, 32]
+        num_models_list = [32, 64, 80, 96, 108, 120]
+        rate_list = [16, 32, 48, 64, 80] # synthetic trace only
+        cv_list = [1, 2, 4, 8]           # synthetic trace only
+        rate_scales = [1, 2, 4, 8, 16]   # real trace only
+        cv_scales = [1, 2, 4, 8, 16]     # real trace only
+        slo_scales = [2.5, 5, 10, 20]
+    elif model_type == "bert-2.6b":
+        # default config
+        fixed_num_devices = 32
+        fixed_num_models = 64
+        fixed_rate_scale = 1
+        fixed_cv_scale = 1
+        fixed_slo_scale = 5
+
+        # variables
+        num_devices_list = [8, 16, 24, 32, 48, 64, 96]
+        num_models_list = [16, 32, 64, 80, 96, 128]
+        rate_list = [16, 32, 48, 64, 80] # synthetic trace only
+        cv_list = [1, 2, 4, 8]           # synthetic trace only
+        rate_scales = [1, 2, 4, 8, 16]   # real trace only
+        cv_scales = [1, 2, 4, 8, 16]     # real trace only
+        slo_scales = [2.5, 5, 10, 20]
+    elif model_type == "bert-6.7b":
+        # default config
+        fixed_num_devices = 32
+        fixed_num_models = 32
+        fixed_rate_scale = 1
+        fixed_cv_scale = 1
+        fixed_slo_scale = 5
+
+        # variables
+        num_devices_list = [16, 24, 32, 48, 64, 72, 96]
+        num_models_list = [16, 32, 48, 64, 80]
+        rate_list = [16, 32, 48, 64, 80] # synthetic trace only
+        cv_list = [1, 2, 4, 8]           # synthetic trace only
+        rate_scales = [1, 2, 4, 8, 16]   # real trace only
+        cv_scales = [1, 2, 4, 8, 16]     # real trace only
+        slo_scales = [2.5, 5, 10, 20]
+    else:
+        raise NotImplementedError("Unsupported model.")
 
     # workload config
     if args.synthetic:
@@ -48,24 +95,15 @@ if __name__ == "__main__":
         arrival_process = "gamma"
         arrival_process_kwargs = {"cv": args.cv}
     else:
-        # real trace does not need these config
+        # real trace does not need these configs
         rate_distribution = None
         total_rate = -1
         duration = -1
-
-        arrival_process = "azure_v2"
+        assert (args.trace_dir.endswith("azure_v1.pkl") or args.trace_dir.endswith("azure_v2.pkl"))
+        arrival_process = "azure_v2" if "azure_v2" in args.trace_dir else "azure_v1"
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
-                                "cv_scale": fixed_cv_scale,
-                                "trace_dir": args.trace_dir}
-
-    # variables
-    num_devices_list = [8, 16, 24, 32, 48, 64, 96, 128]
-    num_models_list = [4, 8, 16, 32, 64, 80, 96]
-    rate_list = [16, 32, 48, 64, 80] # synthetic trace only
-    cv_list = [1, 2, 4, 8]           # synthetic trace only
-    rate_scales = [1, 2, 4, 8, 16]   # real trace only
-    cv_scales = [1, 2, 4, 8, 16]     # real trace only
-    slo_scales = [2.5, 5, 10, 20]
+                                  "cv_scale": fixed_cv_scale,
+                                  "trace_dir": args.trace_dir}
 
     if args.output.endswith(".tsv"):
         output_file_name = args.output
@@ -83,12 +121,17 @@ if __name__ == "__main__":
     # parse exp ids:
     if args.exp_ids == "all":
         experiments = ["goodput_vs_num_devices", "goodput_vs_num_models", "goodput_vs_slo",
-                       "goodput_vs_rate", "goodput_vs_cv", "num_devices_vs_num_models"]
+                       "goodput_vs_rate ", "goodput_vs_cv", "num_devices_vs_num_models"]
     else:
         assert args.exp_ids in ["goodput_vs_num_devices", "goodput_vs_num_models", "goodput_vs_slo",
                                 "goodput_vs_rate", "goodput_vs_cv", "num_devices_vs_num_models"]
         experiments = [args.exp_ids]
 
+    if args.skip_slow_exp:
+        if "num_devices_vs_num_models" in experiments:
+            experiments.remove("num_devices_vs_num_models")
+
+    print(f"The following experiments will run: {experiments}")
 
     ##### goodput vs num_devices #####
     if "goodput_vs_num_devices" in experiments:
@@ -121,7 +164,7 @@ if __name__ == "__main__":
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
                 else:
-                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models * 4,
+                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models * fixed_rate_scale,
                                                   "cv_scale": fixed_cv_scale,
                                                   "trace_dir": args.trace_dir}
                     cases.append(EqualModelCase(
@@ -226,7 +269,7 @@ if __name__ == "__main__":
 
         # We need more data points to generate a meaningful curve.
         num_devices_list = [i for i in range(2, 65, 4)]
-        num_models_list = [i for i in range(8, 97, 2)]
+        num_models_list = [i for i in range(8, 97, 8)]
 
         for num_models in num_models_list:
             for num_devices in num_devices_list:
@@ -241,9 +284,9 @@ if __name__ == "__main__":
                           f"because the goodput will be less than 66%.")
 
                 for policy_name in policies:
-                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models * 4,
-                                              "cv_scale": fixed_cv_scale,
-                                              "trace_dir": args.trace_dir}
+                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models * fixed_rate_scale,
+                                                  "cv_scale": fixed_cv_scale,
+                                                  "trace_dir": args.trace_dir}
                     cases.append(EqualModelCase(
                         num_devices, mem_budget, model_type, num_models,
                         total_rate, rate_distribution,
