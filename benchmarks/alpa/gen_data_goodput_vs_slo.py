@@ -26,7 +26,7 @@ if __name__ == "__main__":
     if args.trace == "synthetic":
         # choices: {"gamma", "uniform_mmpp"}
         arrival_process = "gamma"
-        # choices: {"uniform", "power_law"}
+        # choices: {"uniform", "power_law", "triangle_decay"}
         rate_distribution = "power_law"
         arrival_process_kwargs = {"cv": 4}
     elif args.trace == "azure_v2":

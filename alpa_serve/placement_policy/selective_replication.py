@@ -145,6 +145,8 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
         sol = replica_placement_fast_greedy(
             sol, model_datas, cluster_env, train_workload,
             evaluator, self.verbose)
+
+        #sol = evolutionary_search([sol], model_datas, evaluator, self.verbose)
         return sol, None
 
 

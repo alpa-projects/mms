@@ -69,7 +69,7 @@ class GroupInfo:
 class GroupManager:
 
     def __init__(self, virtual_mesh_shape: Optional[Tuple[int]] = None):
-        from alpa.api import init as alpa_init, shutdown as alpa_shutdown
+        from alpa.api import init as alpa_init
 
         if virtual_mesh_shape:
             alpa_init(cluster="ray",
@@ -189,6 +189,8 @@ class GroupManager:
         return ret
 
     def shutdown(self):
+        from alpa.api import shutdown as alpa_shutdown
+
         del self.replicas
         alpa_shutdown()
 

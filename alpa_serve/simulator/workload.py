@@ -8,7 +8,7 @@ from typing import Any, List, Sequence, Dict, Optional
 import numpy as np
 
 from alpa_serve.simulator.util import MMPPSampler
-from alpa_serve.util import to_str_round
+from alpa_serve.util import to_str_round, eps
 
 
 DEFAULT_WARMUP = 10
@@ -276,7 +276,7 @@ class Workload:
 
         if len(self.arrivals) > 1:
             intervals = self.arrivals[1:] - self.arrivals[:-1]
-            self.rate = 1 / np.mean(intervals)
+            self.rate = 1 / (np.mean(intervals) + eps)
             self.cv = np.std(intervals) * self.rate
         else:
             self.rate = 0
@@ -287,11 +287,12 @@ class Workload:
                       compute_per_model_stats: bool = True):
         """Compute the statistics of serving results."""
         # Skip the first and last `warmup` seconds
-        skip = int(warmup / (self.arrivals[-1] - self.arrivals[0]) * len(self.arrivals))
-        if skip > 0:
-            start = start[skip:-skip]
-            finish = finish[skip:-skip]
-            good = good[skip:-skip]
+        if len(self.arrivals) > 1:
+            skip = int(warmup / (self.arrivals[-1] - self.arrivals[0]) * len(self.arrivals))
+            if skip > 0:
+                start = np.asarray(start[skip:-skip])
+                finish = np.asarray(finish[skip:-skip])
+                good = np.asarray(good[skip:-skip])
 
         if not compute_per_model_stats:
             return StatsResult(None, None, np.mean(good), np.mean(finish - start),
@@ -303,11 +304,9 @@ class Workload:
             model_indices[self.requests[i].model_name].append(i - skip)
 
         names = list(model_indices.keys())
-        names.sort()
+        names.sort(key=lambda name: len(model_indices[name]))
 
         stats = []
-        num_good = 0
-        num_total_requests = 0
         total_start = 1e20
         total_end = 0
         for name in names:
@@ -315,10 +314,9 @@ class Workload:
             tmp_good = np.asarray(good[indices], dtype=bool)
             tmp_start = start[indices][tmp_good]
             tmp_finish = finish[indices][tmp_good]
-            tmp_num_good = np.sum(tmp_good)
 
             # Compute stats
-            goodput = tmp_num_good / len(tmp_good)
+            goodput = np.mean(tmp_good)
             if goodput > 0:
                 throughput = len(tmp_start) / (tmp_finish[-1] - tmp_start[0])
                 latency = tmp_finish - tmp_start
@@ -335,9 +333,6 @@ class Workload:
                 np.mean(latency), np.std(latency),
                 latency_p90, latency_p99))
 
-            num_good += tmp_num_good
-            num_total_requests += len(indices)
-
             if len(indices) > 0:
                 total_start = min(total_start, start[indices[0]])
                 total_end = max(total_end, start[indices[-1]])
@@ -353,7 +348,8 @@ class Workload:
             for stat in stats.per_model_stats:
                 print(f"model: {stat.name}, #req: {stat.num_requests}")
                 print(f"goodput: {stat.goodput*100:.2f} %, "
-                      f"throughput: {stat.throughput:.2f} q/s")
+                      f"throughput: {stat.throughput:.2f} q/s, ")
+                      #f"#bad: {int(stat.num_requests * (1-stat.goodput))}")
                 print(f"latency mean: {stat.latency_mean*1e3:.2f} ms, "
                       f"std: {stat.latency_std*1e3:.2f} ms, "
                       f"p90: {stat.latency_p90*1e3:.2f} ms")
