@@ -17,12 +17,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-search", "mp-greedy-4", "mp-search"]
-    num_devices = 8
-    mem_budget = 10 * GB
-    model_type = "bert-1.3b"
-    num_models = 16
-    total_rate = 60
+    policies = ["sr-greedy", "mp-greedy-4", "mp-search"]
+    num_devices = 16
+    mem_budget = 14 * GB
+    model_type = "bert-2.6b"
+    num_models = 24
+    total_rate = 70
     if args.trace == "synthetic":
         # choices: {"gamma", "uniform_mmpp"}
         arrival_process = "gamma"
