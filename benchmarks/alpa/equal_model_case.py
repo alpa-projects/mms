@@ -2,6 +2,8 @@ import argparse
 from collections import namedtuple, defaultdict
 import os
 
+import numpy as np
+
 import ray
 
 from alpa_serve.simulator.controller import (Controller, simulate_one_case,
@@ -51,6 +53,20 @@ def get_equal_model_serving_case(case, prof_database=None):
         s = sum((x+1)**(-alpha) for x in range(num_models))
         base = total_rate / s
         rates = [base * ((x+1) ** (-alpha)) for x in range(num_models)]
+    elif rate_distribution == "triangle_decay":
+        q = 1/2
+        frac = [1]
+        cur_rate = q
+        cnt = int(1 / cur_rate)
+        while (len(frac) < num_models):
+            for i in range(cnt):
+                frac.append(cur_rate)
+                if len(frac) == num_models:
+                    break
+            cur_rate *= q
+            cnt = int(1 / cur_rate)
+        s = sum(np.array(frac))
+        rates = np.array(frac) / s * total_rate
     elif rate_distribution is None:
         pass
     else:

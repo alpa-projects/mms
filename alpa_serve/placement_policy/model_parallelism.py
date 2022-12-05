@@ -270,8 +270,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
         # Get initial solutions
         initial_sols = self.enumerate_group_configs(cluster_env)
-        #initial_sols = self.greedy_group_configs(
-        #        model_datas, cluster_env, train_workload, evaluator)
+        initial_sols = self.greedy_group_configs(
+                model_datas, cluster_env, train_workload, evaluator)
 
         if self.parallel_initial_placement:
             func = ray.remote(replica_placement_fast_greedy).remote
@@ -282,9 +282,12 @@ class ModelParallelismSearch(BasePlacementPolicy):
             initial_sols = ray.get(initial_sols)
         else:
             for i in range(len(initial_sols)):
-                initial_sols[i] = replica_placement_fast_greedy(
+                #initial_sols[i] = replica_placement_fast_greedy(
+                #    initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
+                #     self.verbose)
+                initial_sols[i] = replica_placement_beam_search(
                     initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
-                     self.verbose)
+                     self.beam_size, self.verbose)
 
         # Iterative search
         cur_sols = initial_sols
@@ -368,10 +371,21 @@ class ModelParallelismSearch(BasePlacementPolicy):
                     pre_sol.group_models = [list(x) for x in pre_sol.group_models]
                     pre_sol.group_models.append([])
 
+                    new_sol = replica_placement_fast_greedy(
+                                  pre_sol, model_datas, cluster_env, train_workload,
+                                  evaluator, self.verbose)
+                    new_score = evaluator.get_scores([new_sol])
+                    if new_score[0] > best_score:
+                        best_score = new_score[0]
+                        assert len(sols) == cur_num or len(sols) == cur_num + 1
+                        if len(sols) == cur_num:
+                            sols.append(new_sol)
+                        else:
+                            sols[cur_num] = new_sol
+
                     new_sol = replica_placement_beam_search(
                                   pre_sol, model_datas, cluster_env, train_workload,
                                   evaluator, self.beam_size, self.verbose)
-
                     new_score = evaluator.get_scores([new_sol])
                     if new_score[0] > best_score:
                         best_score = new_score[0]
