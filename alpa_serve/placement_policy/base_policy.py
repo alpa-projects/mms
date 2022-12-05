@@ -27,10 +27,7 @@ class ModelPlacement:
         return ModelPlacement(self.group_configs, group_models)
 
     def normalize(self):
-        group_models = []
-        for i in range(len(self.group_models)):
-            group_models.append(tuple(sorted(self.group_models[i])))
-        group_models = tuple(sorted(group_models))
+        group_models = tuple(sorted(tuple(sorted(x)) for x in self.group_models))
         return ModelPlacement(self.group_configs, group_models)
 
 
@@ -233,6 +230,7 @@ def gen_train_workload(model_datas: List[ModelData],
                        seed: int = 1234,
                        simulation_min_duration: float = 100,
                        simulation_min_samples: int = 30000):
+    """Generate a training workload for search."""
     total_rate = sum(d.rate for d in model_datas)
     duration = max(simulation_min_duration, simulation_min_samples / total_rate)
 
@@ -392,5 +390,92 @@ def replica_placement_beam_search(init_sol: ModelPlacement,
                   f"elapsed: {time.time() - tic:.2f}, "
                   f"best placement: {best_sol}, ")
         it += 1
+
+    return best_sol
+
+
+def swap_two_models(sol: ModelPlacement):
+    group_models = sol.group_models
+    g_id_1 = np.random.choice(len(group_models))
+    g_id_2 = np.random.choice(len(group_models))
+    m_id_1 = np.random.choice(len(group_models[g_id_1]))
+    m_id_2 = np.random.choice(len(group_models[g_id_2]))
+    if (group_models[g_id_1][m_id_1] in group_models[g_id_2] or
+        group_models[g_id_2][m_id_2] in group_models[g_id_1]):
+        return sol
+    group_models = [list(x) for x in sol.group_models]
+    group_models[g_id_1][m_id_1], group_models[g_id_2][m_id_2] = (
+        group_models[g_id_2][m_id_2], group_models[g_id_1][m_id_1])
+    return ModelPlacement(sol.group_configs, group_models)
+
+
+def mutate_one_model(sol: ModelPlacement, num_models: int):
+    group_models = sol.group_models
+    g_id = np.random.choice(len(group_models))
+    new_model_id = np.random.choice(num_models)
+    if new_model_id in group_models[g_id]:
+        return sol
+    m_id_1 = np.random.choice(len(group_models[g_id]))
+    group_models = [list(x) for x in sol.group_models]
+    group_models[g_id][m_id_1] = new_model_id
+    return ModelPlacement(sol.group_configs, group_models)
+
+
+def evolutionary_search(init_sols: List[ModelPlacement],
+                        model_datas: List[ModelData],
+                        evaluator: PlacementEvaluator,
+                        verbose: int):
+    tic = time.time()
+
+    # Constants
+    pop_size = 1024
+    mutation_prob = 0.04
+    num_iter = 200
+    num_models = len(model_datas)
+
+    # Search status
+    best_score = -1
+    best_sol = None
+    it = 0
+    visited = set()
+
+    # Iterative search
+    cur_sols = init_sols
+    while it < num_iter:
+        scores = np.asarray(evaluator.get_scores(cur_sols), dtype=np.float32)
+        weights = scores / np.sum(scores)
+
+        tmp_best_idx = np.argmax(scores)
+        if scores[tmp_best_idx] > best_score:
+            best_score = scores[tmp_best_idx]
+            best_sol = cur_sols[tmp_best_idx]
+
+        next_sols = []
+        while len(next_sols) < pop_size:
+            sol = cur_sols[np.random.choice(len(scores), p=weights)]
+
+            # random mutation
+            group_models = [list(x) for x in sol.group_models]
+            for g_id in range(len(sol.group_models)):
+                for m_id in range(len(sol.group_models[g_id])):
+                    if np.random.uniform() < mutation_prob:
+                        new_m_id = np.random.choice(num_models)
+                        if new_m_id not in sol.group_models[g_id]:
+                            group_models[g_id][m_id] = new_m_id
+
+            new_sol = ModelPlacement(sol.group_configs, group_models)
+            next_sols.append(new_sol)
+            visited.add(new_sol.normalize().group_models)
+
+        if verbose >= 1:
+            print(f"iter: {it}, best score: {best_score:.4f}, "
+                  f"iter score: {scores[tmp_best_idx]:.4f}, "
+                  f"iter #sol: {len(scores)}, "
+                  f"visited #sol: {len(visited)}, "
+                  f"elapsed: {time.time() - tic:.2f}, "
+                  f"best placement: {best_sol}, ")
+
+        it += 1
+        cur_sols = next_sols + [best_sol]
 
     return best_sol
