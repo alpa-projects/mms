@@ -1,5 +1,6 @@
 """Selective replication with model parallelism."""
 from collections import namedtuple
+import copy
 from functools import partial
 import logging
 import multiprocessing
@@ -269,6 +270,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
         # Get initial solutions
         initial_sols = self.enumerate_group_configs(cluster_env)
+        #initial_sols = self.greedy_group_configs(
+        #        model_datas, cluster_env, train_workload, evaluator)
 
         if self.parallel_initial_placement:
             func = ray.remote(replica_placement_fast_greedy).remote
@@ -339,18 +342,46 @@ class ModelParallelismSearch(BasePlacementPolicy):
                                            [[] for _ in range(num_groups)]))
         return sols
 
-    def greedy_group_configs():
-        sols = []
+    def greedy_group_configs(self,
+                             model_datas: List[ModelData],
+                             cluster_env: ClusterEnv,
+                             train_workload: Workload,
+                             evaluator: PlacementEvaluator):
+
+        sols = [ModelPlacement([], [])]
 
         num_devices = cluster_env.num_devices
         num_devices_per_node = cluster_env.num_devices_per_node
 
-        for cur_num in range(num_devices):
-            for last_group in range(cur_num % num_devices_per_node):
+        for cur_num in range(1, num_devices + 1):
+            # solve sols[cur_num]
+            best_score = 0
+            for last_group_size in range(1, (cur_num - 1) % num_devices_per_node + 1 + 1):
+                # solve from sols[cur_num - last_group_size]
+                print("last_group_size ", last_group_size)
+                for pp in get_factors(last_group_size):
+                    pre_sol = copy.deepcopy(sols[cur_num - last_group_size])
+                    op = last_group_size // pp
+                    if pp > self.max_pp or op > self.max_op:
+                        continue
+                    pre_sol.group_configs.append(ParallelConfig(1, op, pp))
+                    pre_sol.group_models = [list(x) for x in pre_sol.group_models]
+                    pre_sol.group_models.append([])
 
+                    new_sol = replica_placement_beam_search(
+                                  pre_sol, model_datas, cluster_env, train_workload,
+                                  evaluator, self.beam_size, self.verbose)
 
+                    new_score = evaluator.get_scores([new_sol])
+                    if new_score[0] > best_score:
+                        best_score = new_score[0]
+                        assert len(sols) == cur_num or len(sols) == cur_num + 1
+                        if len(sols) == cur_num:
+                            sols.append(new_sol)
+                        else:
+                            sols[cur_num] = new_sol
 
-        return sols
+        return [sols[num_devices]]
 
     def greedy_placement(self, sol: ModelPlacement,
                          model_datas: List[ModelData],
