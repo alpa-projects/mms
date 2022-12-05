@@ -51,8 +51,8 @@ class ModelPlacement:
             sum(weight_mem[c][m_id] for m_id in group_ms)
             for c, group_ms in zip(self.group_configs, self.group_models)
         ]
-
-        assert max(group_mem) <= cluster_env.mem_budget
+        assert all(mem <= cluster_env.mem_budget for mem in group_mem)
+        assert all(len(set(ms)) == len(ms) for ms in self.group_models)
 
 
 @dataclasses.dataclass
@@ -90,7 +90,8 @@ class BasePlacementPolicy:
             print(f"debug info: {debug_info}")
             print(f"solver time: {solver_time:.2f} s")
 
-        return placement.normalize()
+        placement.verify(model_datas, cluster_env)
+        return placement
 
     def place_models_impl(self, controller,
                           cluster_env: ClusterEnv,
