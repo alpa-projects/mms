@@ -8,7 +8,7 @@ from typing import Any, List, Sequence, Dict, Optional
 import numpy as np
 
 from alpa_serve.simulator.util import MMPPSampler
-from alpa_serve.util import to_str_round
+from alpa_serve.util import to_str_round, eps
 
 
 DEFAULT_WARMUP = 10
@@ -276,7 +276,7 @@ class Workload:
 
         if len(self.arrivals) > 1:
             intervals = self.arrivals[1:] - self.arrivals[:-1]
-            self.rate = 1 / np.mean(intervals)
+            self.rate = 1 / (np.mean(intervals) + eps)
             self.cv = np.std(intervals) * self.rate
         else:
             self.rate = 0

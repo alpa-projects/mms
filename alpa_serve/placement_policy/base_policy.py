@@ -27,8 +27,32 @@ class ModelPlacement:
         return ModelPlacement(self.group_configs, group_models)
 
     def normalize(self):
-        group_models = tuple(sorted(tuple(sorted(x)) for x in self.group_models))
-        return ModelPlacement(self.group_configs, group_models)
+        indices = list(range(len(self.group_configs)))
+        group_models = tuple(tuple(sorted(x)) for x in self.group_models)
+        indices.sort(key=lambda i: group_models[i])
+        group_configs = tuple(self.group_configs[i] for i in indices)
+        group_models = tuple(group_models[i] for i in indices)
+        return ModelPlacement(group_configs, group_models)
+
+    def copy(self):
+        group_models = list(list(x) for x in self.group_models)
+        return ModelPlacement(list(self.group_configs), group_models)
+
+    def verify(self, model_datas, cluster_env):
+        weight_mem = {}  # Dict[parallel_config -> [model_idx -> weight_mem]]
+        for parallel_config in self.group_configs:
+            weight_mem[parallel_config] = [
+                max(x.profiling_result.para_dict[parallel_config].weight_mem)
+                if parallel_config in x.profiling_result.para_dict
+                else inf
+                for x in model_datas]
+
+        group_mem = [
+            sum(weight_mem[c][m_id] for m_id in group_ms)
+            for c, group_ms in zip(self.group_configs, self.group_models)
+        ]
+
+        assert max(group_mem) <= cluster_env.mem_budget
 
 
 @dataclasses.dataclass
@@ -305,6 +329,7 @@ def replica_placement_fast_greedy(init_sol: ModelPlacement,
             break
 
         sol = sol.add_model(g_id, m_id).normalize()
+        #sol.verify(model_datas, cluster_env)
 
         if verbose >= 2:
             print(f"iter: {it}, score: {overall_goodput:.4f}, "
