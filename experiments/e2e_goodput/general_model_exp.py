@@ -26,7 +26,7 @@ if __name__ == "__main__":
                         default="power_law")
     parser.add_argument("--rate", type=float, default=64)
     parser.add_argument("--cv", type=float, default=4)
-    parser.add_argument('--duration', type=float, default=1200)
+    parser.add_argument('--duration', type=float, default=200)
     parser.add_argument("--model_type", type=str, default="all_transformers",
                         choices=["all_transformers", "mixed"])
 
