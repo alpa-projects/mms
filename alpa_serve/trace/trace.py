@@ -591,8 +591,9 @@ class Trace:
                             distributions[model].append(None)
                             continue
                         if arrival_rate > 5 * empirical_arrival_rate:
-                            warnings.warn(f"Estimation for model {model_index} is highly biased. "
-                                          f"Hard reset to empirical rate: {empirical_arrival_rate}.")
+                            if DEBUG:
+                                warnings.warn(f"Estimation for model {model_index} is highly biased. "
+                                              f"Hard reset to empirical rate: {empirical_arrival_rate}.")
                             arrival_rate = empirical_arrival_rate
                         arrival_rate *= rate_scale_factor
                         distributions[model].append(PoissonProcess(arrival_rate))
@@ -603,8 +604,9 @@ class Trace:
                                 distributions[model].append(None)
                                 continue
                             if arrival_rate > 5 * empirical_arrival_rate:
-                                warnings.warn(f"Estimation for model {model_index} is highly biased. "
-                                              f"Hard reset to empirical rate: {empirical_arrival_rate}.")
+                                if DEBUG:
+                                    warnings.warn(f"Estimation for model {model_index} is highly biased. "
+                                                  f"Hard reset to empirical rate: {empirical_arrival_rate}.")
                                 arrival_rate = empirical_arrival_rate
                             # scale them
                             arrival_rate *= rate_scale_factor

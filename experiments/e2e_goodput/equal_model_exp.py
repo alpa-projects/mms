@@ -83,6 +83,9 @@ if __name__ == "__main__":
         elif model_type == "bert-2.6b":
             fixed_num_devices = 16
             fixed_num_models = 48
+        else:
+            fixed_num_devices = 48
+            fixed_num_models = 48
         num_devices_list, num_models_list, slo_scales, \
         rate_list, cv_list, rate_scales, cv_scales = azure_v2_suite[model_type]
     else:
