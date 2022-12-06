@@ -283,31 +283,25 @@ class Workload:
             self.cv = 0
 
     def compute_stats(self, start: Sequence[float], finish: Sequence[float],
-                      good: Sequence[bool], warmup: float,
-                      compute_per_model_stats: bool = True):
+                      good: Sequence[bool], warmup: float):
         """Compute the statistics of serving results."""
         # Skip the first and last `warmup` seconds
         if len(self.arrivals) > 1:
             skip = int(warmup / (self.arrivals[-1] - self.arrivals[0]) * len(self.arrivals))
-            start = np.asarray(start[skip:-skip])
-            finish = np.asarray(finish[skip:-skip])
-            good = np.asarray(good[skip:-skip])
-
-        if not compute_per_model_stats:
-            return StatsResult(None, None, np.mean(good), np.mean(finish - start),
-                               len(start), len(start) / (start[-1] - start[0]))
+            start = start[skip:-skip]
+            finish = finish[skip:-skip]
+            good = good[skip:-skip]
+            requests = self.requests[skip:-skip]
 
         # Compute stats per model
         model_indices = defaultdict(list)
-        for i in range(skip, len(self.arrivals) - skip):
-            model_indices[self.requests[i].model_name].append(i - skip)
+        for i in range(len(requests)):
+            model_indices[requests[i].model_name].append(i)
 
         names = list(model_indices.keys())
         names.sort(key=lambda name: len(model_indices[name]))
 
         stats = []
-        total_start = 1e20
-        total_end = 0
         for name in names:
             indices = np.asarray(model_indices[name], dtype=np.int32)
             tmp_good = np.asarray(good[indices], dtype=bool)
@@ -317,7 +311,7 @@ class Workload:
             # Compute stats
             goodput = np.mean(tmp_good)
             if goodput > 0:
-                throughput = len(tmp_start) / (tmp_finish[-1] - tmp_start[0])
+                throughput = len(tmp_start) / (tmp_start[-1] - tmp_start[0])
                 latency = tmp_finish - tmp_start
             else:
                 throughput = 0
@@ -331,10 +325,6 @@ class Workload:
                 name, len(indices), goodput, throughput,
                 np.mean(latency), np.std(latency),
                 latency_p90, latency_p99))
-
-            if len(indices) > 0:
-                total_start = min(total_start, start[indices[0]])
-                total_end = max(total_end, start[indices[-1]])
 
         return StatsResult(stats, None, np.mean(good), np.mean(finish - start),
                            len(start), len(start) / (start[-1] - start[0]))

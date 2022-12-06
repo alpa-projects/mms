@@ -219,14 +219,16 @@ class ModelParallelismGreedy(BasePlacementPolicy):
         # Run greedy placement
         evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
                                        "fast_simulator", False)
+
         assert cluster_env.num_devices % self.group_size == 0
         num_groups = cluster_env.num_devices // self.group_size
         sol = ModelPlacement([ParallelConfig(1,1,self.group_size)] * num_groups,
                              [[] for _ in range(num_groups)])
-
         sol = replica_placement_fast_greedy(
             sol, model_datas, cluster_env, train_workload,
             evaluator, self.verbose)
+        #sol = evolutionary_search([sol], model_datas, cluster_env,
+        #                          evaluator, 200, self.verbose)
         return sol, None
 
 
@@ -246,8 +248,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
         self.n_iter = n_iter
         self.seed = 0
         self.beam_size = 3
-        self.simulation_min_duration = 100
-        self.simulation_min_samples = 30000
 
         self.evaluator_method = "fast_simulator"
         self.parallel_evaluator = False
@@ -323,7 +323,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
             # TODO: mutate solution
             it += 1
 
-        # best_sol = evolutionary_search([best_sol], model_datas, evaluator, self.verbose)
+        #best_sol = evolutionary_search([best_sol], model_datas, cluster_env,
+        #                               evaluator, 200, self.verbose)
         return best_sol, {}
 
     def enumerate_group_configs(self, cluster_env):
