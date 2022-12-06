@@ -203,10 +203,13 @@ class ModelParallelismILP(BasePlacementPolicy):
 
 class ModelParallelismGreedy(BasePlacementPolicy):
 
-    def __init__(self, group_size: int = 2, verbose: int = 0):
+    def __init__(self, group_size: int = 2,
+                 add_evo_search: bool = False,
+                 verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.group_size = group_size
+        self.add_evo_search = add_evo_search
 
     def solve_placement(self,
                         model_datas: List[ModelData],
@@ -227,8 +230,10 @@ class ModelParallelismGreedy(BasePlacementPolicy):
         sol = replica_placement_fast_greedy(
             sol, model_datas, cluster_env, train_workload,
             evaluator, self.verbose)
-        #sol = evolutionary_search([sol], model_datas, cluster_env,
-        #                          evaluator, 200, self.verbose)
+
+        if self.add_evo_search:
+            sol = evolutionary_search([sol], model_datas, cluster_env,
+                                      evaluator, 200, self.verbose)
         return sol, None
 
 
@@ -238,16 +243,17 @@ class ModelParallelismSearch(BasePlacementPolicy):
                  max_bs: int = 1,
                  max_pp: int = 8,
                  max_op: int = 4,
-                 n_iter: int = 1,
+                 add_evo_search: bool = False,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.max_bs = max_bs
         self.max_pp = max_pp
         self.max_op = max_op
-        self.n_iter = n_iter
+        self.n_iter = 1
         self.seed = 0
         self.beam_size = 3
+        self.add_evo_search = add_evo_search
 
         self.evaluator_method = "fast_simulator"
         self.parallel_evaluator = False
@@ -323,8 +329,10 @@ class ModelParallelismSearch(BasePlacementPolicy):
             # TODO: mutate solution
             it += 1
 
-        #best_sol = evolutionary_search([best_sol], model_datas, cluster_env,
-        #                               evaluator, 200, self.verbose)
+        if self.add_evo_search:
+            best_sol = evolutionary_search(
+                [best_sol], model_datas, cluster_env,
+                evaluator, 200, self.verbose)
         return best_sol, {}
 
     def enumerate_group_configs(self, cluster_env):
