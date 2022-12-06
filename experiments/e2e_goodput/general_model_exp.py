@@ -26,7 +26,7 @@ if __name__ == "__main__":
                         default="power_law")
     parser.add_argument("--rate", type=float, default=64)
     parser.add_argument("--cv", type=float, default=4)
-    parser.add_argument('--duration', type=float, default=200)
+    parser.add_argument('--duration', type=float, default=1200)
     parser.add_argument("--model_type", type=str, default="all_transformers",
                         choices=["all_transformers", "mixed"])
 
@@ -38,16 +38,20 @@ if __name__ == "__main__":
     model_type = args.model_type
     
     # default config
-    fixed_num_devices = 32
-    fixed_num_modelset = 10
+    if args.model_type == "mixed":
+        fixed_num_devices = 64
+        fixed_num_modelset = 10
+    else:
+        fixed_num_devices = 32
+        fixed_num_modelset = 10
+
     fixed_rate_scale = 1
     fixed_cv_scale = 1
     fixed_slo_scale = 5
 
     # multi-model config
     if args.model_type == "mixed":
-        # model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-7.1b"]
-        model_set = ["bert-1.3b", "bert-2.6b", "moe-1.3b", "moe-2.4b"]
+        model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-7.1b"]
     else:
         model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"]
     
