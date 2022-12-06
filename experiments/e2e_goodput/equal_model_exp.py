@@ -77,6 +77,9 @@ if __name__ == "__main__":
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
                                   "cv_scale": fixed_cv_scale,
                                   "trace_dir": args.trace_dir}
+        if model_type == "bert-1.3b":
+            fixed_num_devices = 8
+            fixed_num_models = 48
         num_devices_list, num_models_list, slo_scales, \
         rate_list, cv_list, rate_scales, cv_scales = azure_v2_suite[model_type]
     else:
@@ -137,7 +140,8 @@ if __name__ == "__main__":
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
                 else:
-                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models * fixed_rate_scale,
+                    scale_factor = num_models / fixed_num_models
+                    new_arrival_process_kwargs = {"rate_scale": scale_factor * fixed_rate_scale,
                                                   "cv_scale": fixed_cv_scale,
                                                   "trace_dir": args.trace_dir}
                     cases.append(EqualModelCase(

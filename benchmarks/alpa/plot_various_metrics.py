@@ -92,7 +92,7 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
         x_max = max(x_max, *xs)
         y_max = max(y_max, *ys)
 
-    ax.set_ylim(bottom=0, top=max(y_max * 1.05, 100))
+    ax.set_ylim(bottom=85, top=max(y_max * 1.05, 100))
     ax.set_ylabel("Goodput (%)")
     ax.set_xlabel(xlabel)
     ax.legend(curves, legends)
