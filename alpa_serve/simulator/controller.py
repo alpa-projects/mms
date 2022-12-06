@@ -22,7 +22,7 @@ from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import (Workload, StatsResult,
     PerDeviceStatsResult, PerModelStatsResult, DEFAULT_WARMUP)
-from alpa_serve.util import ServingCase, inf, to_str_round
+from alpa_serve.util import ServingCase, inf, eps, to_str_round
 
 
 class GroupManager:
@@ -372,11 +372,11 @@ def approximate_one_case(case: ServingCase,
     if fast_stats:
         # Note: no warmup
         interval = start[-1] - start[0]
-        per_model_stats = [PerModelStatsResult(model_names[i], model_num_requests[i],
-                                               model_num_good_requests[i] / model_num_requests[i],
-                                               model_num_requests[i] / interval,
-                                               0, 0, 0, 0)
-                           for i in range(num_models)]
+        per_model_stats = [PerModelStatsResult(
+            model_names[i], model_num_requests[i],
+            model_num_good_requests[i] / (model_num_requests[i] + eps),
+            model_num_requests[i] / interval,
+            0, 0, 0, 0) for i in range(num_models)]
         stats = StatsResult(per_model_stats, group_num_requests, np.mean(good),
                             np.mean(finish - start), len(start), len(start) / interval)
     else:

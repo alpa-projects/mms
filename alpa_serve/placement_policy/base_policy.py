@@ -201,7 +201,7 @@ class PlacementEvaluator:
 
         serving_case = ServingCase(register_models, generate_workload, place_models)
         if fast_simulator:
-            stats, _ = approximate_one_case(serving_case, compute_per_model_stats=False)
+            stats, _ = approximate_one_case(serving_case, fast_stats=True)
         else:
             stats, _ = simulate_one_case(serving_case)
         num_replicas = sum(len(x) for x in sol.group_models)
@@ -239,15 +239,10 @@ class PlacementEvaluator:
         serving_case = ServingCase(register_models, generate_workload, place_models)
 
         if fast_simulator:
-            stats, _ = approximate_one_case(serving_case)
+            stats, _ = approximate_one_case(serving_case, fast_stats=True)
         else:
             stats, _ = simulate_one_case(serving_case)
-
-        name2id = {m.name: m_id for m_id, m in enumerate(model_datas)}
-        model_goodput = np.empty(len(name2id), dtype=np.float32)
-        for m in stats.per_model_stats:
-            model_goodput[name2id[m.name]] = m.goodput
-
+        model_goodput = [x.goodput for x in stats.per_model_stats]
         return (stats.goodput, model_goodput, stats.group_num_requests)
 
 
@@ -330,7 +325,6 @@ def replica_placement_fast_greedy(init_sol: ModelPlacement,
             break
 
         sol = sol.add_model(g_id, m_id).normalize()
-        #sol.verify(model_datas, cluster_env)
 
         if verbose >= 2:
             print(f"iter: {it}, score: {overall_goodput:.4f}, "
@@ -563,15 +557,27 @@ def mutate_one_model(sol: ModelPlacement, num_models: int):
 
 def evolutionary_search(init_sols: List[ModelPlacement],
                         model_datas: List[ModelData],
+                        cluster_env: ClusterEnv,
                         evaluator: PlacementEvaluator,
+                        num_iter: int,
                         verbose: int):
     tic = time.time()
 
     # Constants
     pop_size = 1024
-    mutation_prob = 0.04
-    num_iter = 200
+    mutate_one_model_prob = 0.05
+    merge_group_prob = 0.10
+    split_group_prob = 0.10
     num_models = len(model_datas)
+
+    mem_budget = cluster_env.mem_budget
+    weight_mem = {}  # Dict[parallel_config -> [model_idx -> weight_mem]]
+    for m_id, x in enumerate(model_datas):
+        for c in x.profiling_result.para_dict:
+            if c not in weight_mem:
+                weight_mem[c] = [inf] * len(model_datas)
+            weight_mem[c][m_id] = max(x.profiling_result.para_dict[c].weight_mem)
+    rates = [m.rate for m in model_datas]
 
     # Search status
     best_score = -1
@@ -582,8 +588,10 @@ def evolutionary_search(init_sols: List[ModelPlacement],
     # Iterative search
     cur_sols = init_sols
     while it < num_iter:
-        scores = np.asarray(evaluator.get_scores(cur_sols), dtype=np.float32)
+        stats = evaluator.get_stats(cur_sols)
+        scores = np.array([x[0] for x in stats])
         weights = scores / np.sum(scores)
+        model_num_unserved_list = [None] * len(stats)
 
         tmp_best_idx = np.argmax(scores)
         if scores[tmp_best_idx] > best_score:
@@ -592,18 +600,36 @@ def evolutionary_search(init_sols: List[ModelPlacement],
 
         next_sols = []
         while len(next_sols) < pop_size:
-            sol = cur_sols[np.random.choice(len(scores), p=weights)]
+            idx = np.random.choice(len(scores), p=weights)
+            sol = cur_sols[idx]
+            goodputs = stats[idx][1]
 
-            # random mutation
+            if model_num_unserved_list[idx] is not None:
+                model_num_unserved = model_num_unserved_list[idx]
+            else:
+                model_num_unserved = np.array([
+                    (rate * (1 - goodput)) for rate, goodput in zip(rates, goodputs)])
+                model_num_unserved = model_num_unserved / np.sum(model_num_unserved)
+                model_num_unserved_list[idx] = model_num_unserved
+
+            group_configs = list(sol.group_configs)
             group_models = [list(x) for x in sol.group_models]
+
+            # Merge two groups
+            if np.random.uniform() < merge_group_prob:
+                merge_two_groups(group_configs, group_models, stats[idx],
+                                 model_datas, mem_budget, rates, weight_mem,
+                                 model_num_unserved)
+
+            # Mutate one model
             for g_id in range(len(group_models)):
                 for m_id in range(len(group_models[g_id])):
-                    if np.random.uniform() < mutation_prob:
-                        new_m_id = np.random.choice(num_models)
+                    if np.random.uniform() < mutate_one_model_prob:
+                        new_m_id = np.random.choice(num_models, p=model_num_unserved)
                         if new_m_id not in group_models[g_id]:
                             group_models[g_id][m_id] = new_m_id
 
-            new_sol = ModelPlacement(sol.group_configs, group_models)
+            new_sol = ModelPlacement(group_configs, group_models)
             next_sols.append(new_sol)
             visited.add(new_sol.normalize().group_models)
 
@@ -619,3 +645,41 @@ def evolutionary_search(init_sols: List[ModelPlacement],
         cur_sols = next_sols + [best_sol]
 
     return best_sol
+
+def merge_two_groups(group_configs, group_models, stats,
+                     model_datas, mem_budget, rates, weight_mem,
+                     model_num_unserved):
+    g_id_1 = np.random.choice(len(group_models))
+    g_id_2 = np.random.choice(len(group_models))
+
+    if g_id_1 != g_id_2 and group_configs[g_id_1] == group_configs[g_id_2]:
+        # merge
+        old_cfg = group_configs[g_id_1]
+        new_cfg = ParallelConfig(old_cfg.dp, old_cfg.op, old_cfg.pp * 2)
+        new_group_models = list(set(group_models[g_id_1] + group_models[g_id_2]))
+
+        # remove models if necessary
+        new_group_models.sort(key=lambda m_id: -model_datas[m_id].rate)
+        new_group_mem = sum(weight_mem[new_cfg][m_id] for m_id in new_group_models)
+        while new_group_mem > mem_budget:
+            m_id = new_group_models[-1]
+            del new_group_models[-1]
+            new_group_mem -= weight_mem[new_cfg][m_id]
+
+        # add models if necessary
+        goodputs = stats[1]
+        model_ids = np.argsort(model_num_unserved)[::-1]
+        for m_id in model_ids:
+            if m_id in new_group_models:
+                continue
+            if new_group_mem + weight_mem[new_cfg][m_id] <= mem_budget:
+                group_models[g_id_1].append(m_id)
+                new_group_mem += weight_mem[new_cfg][m_id]
+                continue
+            break
+
+        # update groups
+        group_configs[g_id_1] = new_cfg
+        group_models[g_id_1] = new_group_models
+        del group_configs[g_id_2]
+        del group_models[g_id_2]

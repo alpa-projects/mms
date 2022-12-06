@@ -9,6 +9,8 @@ if __name__ == "__main__":
     parser.add_argument("--exp-name", type=str, default="default")
     parser.add_argument("--output", type=str, default="res_goodput_vs_slo.tsv")
     parser.add_argument("--parallel", action="store_true")
+    parser.add_argument("--policy", type=str)
+    parser.add_argument("--slo-scale", type=float)
     parser.add_argument("--trace", choices=["synthetic", "azure_v2"],
                         default="synthetic")
     parser.add_argument("--mode", choices=["simulate", "run"],
@@ -17,7 +19,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-greedy", "mp-greedy-4", "mp-search"]
+    if args.policy is not None:
+        policies = [args.policy]
+    else:
+        policies = ["sr-greedy", "mp-greedy-4", "mp-search"]
     num_devices = 16
     mem_budget = 14 * GB
     model_type = "bert-2.6b"
@@ -35,7 +40,10 @@ if __name__ == "__main__":
         rate_distribution = None
         arrival_process_kwargs = None
 
-    slo_scales = [0.5, 1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7.5, 10]
+    if args.slo_scale is None:
+        slo_scales = [args.slo_scale]
+    else:
+        slo_scales = [0.5, 1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7.5, 10]
     duration = 200
 
     cases = []
