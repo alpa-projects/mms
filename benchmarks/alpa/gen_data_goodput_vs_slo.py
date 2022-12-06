@@ -40,7 +40,7 @@ if __name__ == "__main__":
         rate_distribution = None
         arrival_process_kwargs = None
 
-    if args.slo_scale is None:
+    if args.slo_scale is not None:
         slo_scales = [args.slo_scale]
     else:
         slo_scales = [0.5, 1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7.5, 10]

@@ -248,8 +248,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
         self.n_iter = n_iter
         self.seed = 0
         self.beam_size = 3
-        self.simulation_min_duration = 100
-        self.simulation_min_samples = 30000
 
         self.evaluator_method = "fast_simulator"
         self.parallel_evaluator = False
