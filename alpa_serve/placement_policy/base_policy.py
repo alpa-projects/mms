@@ -566,8 +566,8 @@ def evolutionary_search(init_sols: List[ModelPlacement],
     # Constants
     pop_size = 1024
     mutate_one_model_prob = 0.05
-    merge_group_prob = 0.10
-    split_group_prob = 0.10
+    merge_group_prob = 0.08
+    split_group_prob = 0.08
     num_models = len(model_datas)
 
     mem_budget = cluster_env.mem_budget
@@ -617,9 +617,13 @@ def evolutionary_search(init_sols: List[ModelPlacement],
 
             # Merge two groups
             if np.random.uniform() < merge_group_prob:
-                merge_two_groups(group_configs, group_models, stats[idx],
-                                 model_datas, mem_budget, rates, weight_mem,
-                                 model_num_unserved)
+                merge_two_groups(group_configs, group_models, model_num_unserved,
+                                 weight_mem, mem_budget)
+
+            # Split one group
+            if np.random.uniform() < split_group_prob:
+                split_one_group(group_configs, group_models, model_num_unserved,
+                                weight_mem, mem_budget)
 
             # Mutate one model
             for g_id in range(len(group_models)):
@@ -629,57 +633,98 @@ def evolutionary_search(init_sols: List[ModelPlacement],
                         if new_m_id not in group_models[g_id]:
                             group_models[g_id][m_id] = new_m_id
 
-            new_sol = ModelPlacement(group_configs, group_models)
+            new_sol = ModelPlacement(group_configs, group_models).normalize()
             next_sols.append(new_sol)
-            visited.add(new_sol.normalize().group_models)
+            visited.add(new_sol.group_models)
 
         if verbose >= 1:
             print(f"iter: {it}, best score: {best_score:.4f}, "
-                  f"iter score: {scores[tmp_best_idx]:.4f}, "
+                  f"iter avg-score: {np.mean(scores):.4f}, "
                   f"iter #sol: {len(scores)}, "
                   f"visited #sol: {len(visited)}, "
                   f"elapsed: {time.time() - tic:.2f}, "
-                  f"best placement: {best_sol}, ")
+                  f"best sol: {best_sol}, ")
 
         it += 1
         cur_sols = next_sols + [best_sol]
 
     return best_sol
 
-def merge_two_groups(group_configs, group_models, stats,
-                     model_datas, mem_budget, rates, weight_mem,
-                     model_num_unserved):
-    g_id_1 = np.random.choice(len(group_models))
-    g_id_2 = np.random.choice(len(group_models))
 
-    if g_id_1 != g_id_2 and group_configs[g_id_1] == group_configs[g_id_2]:
-        # merge
-        old_cfg = group_configs[g_id_1]
-        new_cfg = ParallelConfig(old_cfg.dp, old_cfg.op, old_cfg.pp * 2)
-        new_group_models = list(set(group_models[g_id_1] + group_models[g_id_2]))
-
-        # remove models if necessary
-        new_group_models.sort(key=lambda m_id: -model_datas[m_id].rate)
-        new_group_mem = sum(weight_mem[new_cfg][m_id] for m_id in new_group_models)
-        while new_group_mem > mem_budget:
-            m_id = new_group_models[-1]
-            del new_group_models[-1]
-            new_group_mem -= weight_mem[new_cfg][m_id]
-
-        # add models if necessary
-        goodputs = stats[1]
-        model_ids = np.argsort(model_num_unserved)[::-1]
-        for m_id in model_ids:
-            if m_id in new_group_models:
-                continue
-            if new_group_mem + weight_mem[new_cfg][m_id] <= mem_budget:
-                group_models[g_id_1].append(m_id)
-                new_group_mem += weight_mem[new_cfg][m_id]
-                continue
+def merge_two_groups(group_configs, group_models, model_num_unserved,
+                     weight_mem, mem_budget):
+    retry = 0
+    while retry < 10:
+        g_id_1 = np.random.choice(len(group_models))
+        g_id_2 = np.random.choice(len(group_models))
+        if g_id_1 != g_id_2 and group_configs[g_id_1] == group_configs[g_id_2]:
             break
+        retry += 1
+    if retry >= 10:
+        return
 
-        # update groups
-        group_configs[g_id_1] = new_cfg
-        group_models[g_id_1] = new_group_models
-        del group_configs[g_id_2]
-        del group_models[g_id_2]
+    # merge
+    old_cfg = group_configs[g_id_1]
+    new_cfg = ParallelConfig(old_cfg.dp, old_cfg.op, old_cfg.pp * 2)
+    new_group_models = list(set(group_models[g_id_1] + group_models[g_id_2]))
+    fit_mem_budget(new_cfg, new_group_models, model_num_unserved,
+                   weight_mem, mem_budget)
+
+    # update groups
+    group_configs[g_id_1] = new_cfg
+    group_models[g_id_1] = new_group_models
+    del group_configs[g_id_2]
+    del group_models[g_id_2]
+
+
+def split_one_group(group_configs, group_models, model_num_unserved,
+                    weight_mem, mem_budget):
+    retry = 0
+    while retry < 10:
+        g_id = np.random.choice(len(group_models))
+        if group_configs[g_id].pp % 2 == 0:
+            break
+        retry += 1
+    if retry >= 10:
+        return
+
+    # split
+    old_cfg = group_configs[g_id]
+    new_cfg = ParallelConfig(old_cfg.dp, old_cfg.op, old_cfg.pp // 2)
+    group_models[g_id].sort(key=lambda m_id: model_num_unserved[m_id])
+    new_group_models_1 = group_models[g_id][::2]
+    new_group_models_2 = group_models[g_id][1::2]
+
+    fit_mem_budget(new_cfg, new_group_models_1, model_num_unserved,
+                   weight_mem, mem_budget)
+    fit_mem_budget(new_cfg, new_group_models_2, model_num_unserved,
+                   weight_mem, mem_budget)
+
+    group_configs[g_id] = new_cfg
+    group_models[g_id] = new_group_models_1
+    group_configs.append(new_cfg)
+    group_models.append(new_group_models_2)
+
+
+def fit_mem_budget(group_config, group_models, model_num_unserved,
+                   weight_mem, mem_budget):
+    # Remove models if necessary
+    # Remove the model with the lowest number of unserved requests
+    group_models.sort(key=lambda m_id: model_num_unserved[m_id])
+    new_group_mem = sum(weight_mem[group_config][m_id] for m_id in group_models)
+    while new_group_mem > mem_budget:
+        m_id = group_models[0]
+        del group_models[0]
+        new_group_mem -= weight_mem[group_config][m_id]
+
+    # Add models if possible
+    # Add the model with the highest number of unserved requests
+    model_ids = np.argsort(model_num_unserved)
+    for m_id in reversed(model_ids):
+        if m_id in group_models:
+            continue
+        if new_group_mem + weight_mem[group_config][m_id] <= mem_budget:
+            group_models.append(m_id)
+            new_group_mem += weight_mem[group_config][m_id]
+            continue
+        break

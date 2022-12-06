@@ -323,7 +323,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
             # TODO: mutate solution
             it += 1
 
-        # best_sol = evolutionary_search([best_sol], model_datas, evaluator, self.verbose)
+        #best_sol = evolutionary_search([best_sol], model_datas, cluster_env,
+        #                               evaluator, 200, self.verbose)
         return best_sol, {}
 
     def enumerate_group_configs(self, cluster_env):
