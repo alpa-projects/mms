@@ -92,13 +92,15 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
         x_max = max(x_max, *xs)
         y_max = max(y_max, *ys)
 
-    ax.set_ylim(bottom=85, top=max(y_max * 1.05, 100))
+    ax.set_ylim(bottom=85, top=max(y_max * 1.02, 100))
     ax.set_ylabel("Goodput (%)")
     ax.set_xlabel(xlabel)
     ax.legend(curves, legends)
     ax.set_title(title)
 
     for i in range(len(methods)):
+        if first_good[i] == 0:
+            continue
         ax.axvline(first_good[i], color=method2color(methods[i]), linestyle=":")
 
     if show:
