@@ -6,6 +6,7 @@ import time
 
 import requests
 import ray
+import numpy as np
 
 from alpa_serve.controller import run_controller
 from alpa_serve.profiling import ProfilingDatabase
@@ -72,9 +73,10 @@ class Client:
         for workload, futures in self.futures.items():
             res = [f.result() for f in futures]
             start, finish, good = zip(*res)
-            self.res_dict[workload] = (start, finish, good)
-
-        self.futuress = dict()
+            self.res_dict[workload] = (
+                np.asarray(start, dtype=np.float64),
+                np.asarray(finish, dtype=np.float64),
+                np.asarray(good, dtype=bool))
 
     def compute_stats(self, workload: Workload, warmup: float):
         start, finish, good = self.res_dict[workload]

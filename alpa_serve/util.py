@@ -16,7 +16,7 @@ ServingCase = namedtuple("ServingCase",
 
 
 GB = 1 << 30
-eps = 1e-5
+eps = 1e-6
 inf = 1e20
 
 

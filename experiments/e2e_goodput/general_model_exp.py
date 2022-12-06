@@ -4,6 +4,7 @@ import os
 
 from benchmarks.alpa.general_model_case import GeneralModelCase, run_general_model_cases
 from alpa_serve.util import GB
+from general_model_suite import synthetic_suite, azure_v1_suite, azure_v2_suite
 
 
 if __name__ == "__main__":
@@ -18,29 +19,38 @@ if __name__ == "__main__":
                         choices=["all", "goodput_vs_num_devices", "goodput_vs_num_models",
                               "goodput_vs_slo", "goodput_vs_rate", "goodput_vs_cv",
                               "device_vs_model"])
-    parser.add_argument("--synthetic", action="store_true")
+    parser.add_argument("--mem_budget", type=int, default=14)
+    parser.add_argument("--workload", type=str, default="synthetic",
+                        choices=["synthetic", "azure_v1", "azure_v2"])
     parser.add_argument("--rate-distribution", choices=["uniform", "power_law"],
-                        default="uniform")
+                        default="power_law")
     parser.add_argument("--rate", type=float, default=64)
     parser.add_argument("--cv", type=float, default=4)
     parser.add_argument('--duration', type=float, default=200)
-    parser.add_argument("--mixed", action="store_true")
+    parser.add_argument("--model_type", type=str, default="all_transformers",
+                        choices=["all_transformers", "mixed"])
 
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8", "mp-search"}
     policies = ["sr-greedy", "mp-search"]
-    mem_budget = 16 * GB
+    mem_budget = args.mem_budget * GB
+    model_type = args.model_type
     
     # default config
-    fixed_num_devices = 32
+    if args.model_type == "mixed":
+        fixed_num_devices = 64
+        fixed_num_modelset = 10
+    else:
+        fixed_num_devices = 32
+        fixed_num_modelset = 10
+
     fixed_rate_scale = 1
-    fixed_cv_scale = 4
+    fixed_cv_scale = 1
     fixed_slo_scale = 5
-    fixed_num_modelset = 10
 
     # multi-model config
-    if args.mixed:
+    if args.model_type == "mixed":
         model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-7.1b"]
     else:
         model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"]
@@ -49,14 +59,17 @@ if __name__ == "__main__":
     model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(fixed_num_modelset)], [])
 
     # workload config
-    if args.synthetic:
+    if args.workload == "synthetic":
         rate_distribution = args.rate_distribution
         total_rate = args.rate
         duration = args.duration
 
         arrival_process = "gamma"
         arrival_process_kwargs = {"cv": args.cv}
-    else:
+
+        num_devices_list, num_modelset_list, slo_scales, \
+        rate_list, cv_list, rate_scales, cv_scales = synthetic_suite[model_type]
+    elif args.workload == "azure_v2":
         # real trace does not need these config
         rate_distribution = None
         total_rate = -1
@@ -66,15 +79,10 @@ if __name__ == "__main__":
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
                                   "cv_scale": fixed_cv_scale,
                                   "trace_dir": args.trace_dir}
-
-    # variables
-    num_devices_list = [16, 24, 32, 48, 64, 96, 128]
-    num_modelset_list = [1, 4, 8, 10, 12, 14]
-    rate_list = [16, 32, 48, 64, 80] # synthetic trace only
-    cv_list = [1, 2, 4, 8]           # synthetic trace only
-    rate_scales = [1, 2, 4, 8, 16]   # real trace only
-    cv_scales = [1, 2, 4, 8, 16]     # real trace only
-    slo_scales = [2.5, 5, 10, 20, 40]
+        num_devices_list, num_modelset_list, slo_scales, \
+        rate_list, cv_list, rate_scales, cv_scales = azure_v2_suite[model_type]
+    else:
+        raise ValueError("Unsupported workload!")
 
     if args.output.endswith(".tsv"):
         output_file_name = args.output
@@ -123,7 +131,7 @@ if __name__ == "__main__":
             for policy_name in policies:
                 new_model_types = model_set * num_modelset
                 new_model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(num_modelset)], [])
-                if args.synthetic:
+                if args.workload == "synthetic":
                      cases.append(GeneralModelCase(
                         fixed_num_devices, mem_budget, new_model_types, new_model_names,
                         total_rate * num_modelset / fixed_num_modelset, rate_distribution,
@@ -160,9 +168,9 @@ if __name__ == "__main__":
                                 output_file=output_file,
                                 mode=args.mode, parallel=args.parallel)
 
-    ##### goodput vs rate_scale #####
+    ##### goodput vs rate/rate_scale #####
     if "goodput_vs_rate" in experiments:
-        if args.synthetic:
+        if args.workload == "synthetic":
             print("=== Running goodput vs. rate ===")
             cases = []
             for new_rate in rate_list:
@@ -194,9 +202,9 @@ if __name__ == "__main__":
                                     mode=args.mode, parallel=args.parallel)
 
 
-    ##### goodput vs cv_scale #####
+    ##### goodput vs cv/cv_scale #####
     if "goodput_vs_cv" in experiments:
-        if args.synthetic:
+        if args.workload == "synthetic":
             print("=== Running goodput vs. cv ===")
             cases = []
             for new_cv in cv_list:

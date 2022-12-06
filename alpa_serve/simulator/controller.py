@@ -21,8 +21,8 @@ from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
     main_loop, sleep, run_event_loop)
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import (Workload, StatsResult,
-    PerDeviceStatsResult, DEFAULT_WARMUP)
-from alpa_serve.util import ServingCase, inf, to_str_round
+    PerDeviceStatsResult, PerModelStatsResult, DEFAULT_WARMUP)
+from alpa_serve.util import ServingCase, inf, eps, to_str_round
 
 
 class GroupManager:
@@ -308,7 +308,7 @@ def approximate_one_case(case: ServingCase,
                          seed: int = 0,
                          warmup: int = DEFAULT_WARMUP,
                          debug: bool = False,
-                         compute_per_model_stats: bool = True):
+                         fast_stats: bool = False):
     """A fast simulator that only simulates one stage for a pipeline."""
     tic = time.time()
     register_models, generate_workload, place_models = case
@@ -364,21 +364,38 @@ def approximate_one_case(case: ServingCase,
     good = np.empty(num_requests, dtype=bool)
     tstamps = workload.arrivals
 
-    group_num_requests = simulate_requests(
+    (model_num_requests, model_num_good_requests,
+     group_num_requests, group_num_good_requests) = simulate_requests(
         finish, good, tstamps, model_ids, slos, m_id2g_id,
         group_max_latency, group_sum_latency, num_requests)
 
-    stats = workload.compute_stats(start, finish, good, warmup, compute_per_model_stats)
-    stats.group_num_requests = group_num_requests
+    if fast_stats:
+        # Note: no warmup
+        interval = start[-1] - start[0]
+        per_model_stats = [PerModelStatsResult(
+            model_names[i], model_num_requests[i],
+            model_num_good_requests[i] / (model_num_requests[i] + eps),
+            model_num_requests[i] / interval,
+            0, 0, 0, 0) for i in range(num_models)]
+        stats = StatsResult(per_model_stats, group_num_requests, np.mean(good),
+                            np.mean(finish - start), len(start), len(start) / interval)
+    else:
+        stats = workload.compute_stats(start, finish, good, warmup)
+        stats.group_num_requests = group_num_requests
     return stats, placement
 
 
 @numba.jit(nopython=True)
 def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
                       group_max_latency, group_sum_latency, num_requests):
+    num_models = len(group_max_latency)
     num_groups = len(group_max_latency[0])
+
     group_clocks = np.zeros(num_groups, dtype=np.float32)
     group_num_requests = np.zeros(num_groups, dtype=np.int32)
+    group_num_good_requests = np.zeros(num_groups, dtype=np.int32)
+    model_num_requests = np.zeros(num_models, dtype=np.int32)
+    model_num_good_requests = np.zeros(num_models, dtype=np.int32)
     fixed_overhead = 0.009
 
     for i in range(num_requests):
@@ -401,14 +418,18 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
 
         start_time = max(group_clocks[g_id], tstamp)
         finish_time = start_time + group_sum_latency[m_id][g_id] + fixed_overhead
+        group_num_requests[g_id] += 1
+        model_num_requests[m_id] += 1
 
         if finish_time - tstamp <= slo:
             finish[i] = finish_time
             good[i] = True
             group_clocks[g_id] = start_time + group_max_latency[m_id][g_id]
-            group_num_requests[g_id] += 1
+            group_num_good_requests[g_id] += 1
+            model_num_good_requests[m_id] += 1
         else:
             finish[i] = tstamp
             good[i] = False
 
-    return group_num_requests
+    return (model_num_requests, model_num_good_requests,
+            group_num_requests, group_num_good_requests)
