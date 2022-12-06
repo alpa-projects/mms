@@ -10,7 +10,7 @@ from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
     ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
-from alpa_serve.trace import Trace
+from alpa_serve.trace import Trace, report_group_stats
 from alpa_serve.util import GB, write_tsv, ServingCase
 
 from benchmarks.alpa.util import get_model_def
@@ -43,15 +43,16 @@ def get_general_model_serving_case(case, prof_database=None):
     if rate_distribution == "uniform":
         rates = [total_rate / num_models] * num_models
     elif rate_distribution == "power_law":
-        q = 1/2
-        s = (1 - q ** num_models) / (1 - q)
+        alpha = 0.5
+        s = sum((x+1)**(-alpha) for x in range(num_models))
         base = total_rate / s
-        rates = [base * (q ** i) for i in range(num_models)]
+        rates = [base * ((x+1) ** (-alpha)) for x in range(num_models)]
     elif rate_distribution is None:
         pass
     else:
         raise ValueError(f"Invalid rate distribution: {rate_distribution}")
 
+    train_workload = None
     if arrival_process == "gamma":
         arrival_processes = [
             GammaProcess(rates[i], arrival_process_kwargs["cv"])
@@ -65,19 +66,32 @@ def get_general_model_serving_case(case, prof_database=None):
     elif arrival_process == "azure_v2":
         azure_v2_trace_dir = arrival_process_kwargs["trace_dir"]
         azure_v2_trace = Trace("azure_v2", azure_v2_trace_dir)
-        train_replays = azure_v2_trace.replay(model_names, model_mapping_strategy="stripe", arrival_distribution="vanilla",
-                                                    start_time='0.0.0', end_time='1.0.0', replication_factor=arrival_process_kwargs["rate_scale"])
+        train_replays = azure_v2_trace.replay(model_names,
+                                              model_mapping_strategy="stripe",
+                                              arrival_distribution="gamma",
+                                              start_time='5.0.0',
+                                              end_time='6.0.0',
+                                              interval_seconds=5400,
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
         test_replays = azure_v2_trace.replay(model_names,
-                                             model_mapping_strategy="stripe",
-                                             arrival_distribution="gamma",
-                                             start_time='5.0.0',
-                                             end_time='6.0.0',
-                                             interval_seconds=5400,
-                                             rate_scale_factor=arrival_process_kwargs["rate_scale"],
-                                             cv_scale_factor=arrival_process_kwargs["cv_scale"])
-        train_workload = Workload.empty()
+                                              model_mapping_strategy="stripe",
+                                              arrival_distribution="gamma",
+                                              start_time='5.0.0',
+                                              end_time='6.0.0',
+                                              interval_seconds=5400,
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        ws = []
         for model_name, slo in zip(model_names, slos):
-            train_workload += train_replays[model_name].to_workload(slo)
+            ws.append(train_replays[model_name].to_workload(slo))
+        train_workload = Workload.merge(*ws)
+
+        # for debugging:
+
+        for m in test_replays:
+            test_replays[m].report_stats()
+        report_group_stats(list(test_replays.values()))
         arrival_processes = [test_replays[model_name] for model_name in model_names]
     else:
         raise ValueError("Invalid arrival process: {arrival_process}")
