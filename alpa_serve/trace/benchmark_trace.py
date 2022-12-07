@@ -6,7 +6,7 @@ import numpy as np
 trace_name = "azure_v2"
 trace_dir = "/mnt/e/projects/projects/dataset/mms_dataset/azure_v2.pkl"
 
-n_model = 48
+n_model = 108
 models = [f"gpt{i}" for i in range(n_model)]
 trace = Trace(trace_name, trace_dir)
 
@@ -16,7 +16,7 @@ def cdf(x):
     return np.cumsum(np.sort(x)[::-1]) / np.sum(x)
 
 
-for day in range(14):
+for day in range(13, 14):
     start_time = str(day) + ".0.0"
     end_time = str(day+1) + ".0.0"
 

@@ -19,7 +19,7 @@ if __name__ == "__main__":
                         choices=["all", "goodput_vs_num_devices", "goodput_vs_num_models",
                               "goodput_vs_slo", "goodput_vs_rate", "goodput_vs_cv",
                               "device_vs_model"])
-    parser.add_argument("--mem_budget", type=int, default=14)
+    parser.add_argument("--mem-budget", type=int, default=14)
     parser.add_argument("--workload", type=str, default="synthetic",
                         choices=["synthetic", "azure_v1", "azure_v2"])
     parser.add_argument("--rate-distribution", choices=["uniform", "power_law"],
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     parser.add_argument("--rate", type=float, default=64)
     parser.add_argument("--cv", type=float, default=4)
     parser.add_argument('--duration', type=float, default=200)
-    parser.add_argument("--model_type", type=str, default="all_transformers",
+    parser.add_argument("--model-type", type=str, default="all_transformers",
                         choices=["all_transformers", "mixed"])
 
     args = parser.parse_args()
@@ -74,6 +74,13 @@ if __name__ == "__main__":
         rate_distribution = None
         total_rate = -1
         duration = -1
+
+        if args.model_type == "all_transformers":
+            fixed_num_devices = 16
+            fixed_num_modelset = 12
+        else:
+            fixed_num_devices = 32
+            fixed_num_modelset = 12
 
         arrival_process = "azure_v2"
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
@@ -139,8 +146,8 @@ if __name__ == "__main__":
                         fixed_slo_scale, duration, policy_name))
                 else:
                     new_arrival_process_kwargs = {"rate_scale": num_modelset / fixed_num_modelset,
-                                                "cv_scale": fixed_cv_scale,
-                                                "trace_dir": args.trace_dir}
+                                                 "cv_scale": fixed_cv_scale,
+                                                 "trace_dir": args.trace_dir}
                     cases.append(GeneralModelCase(
                         fixed_num_devices, mem_budget, new_model_types, new_model_names,
                         total_rate, rate_distribution,
