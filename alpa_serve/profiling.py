@@ -100,6 +100,7 @@ class ProfilingDatabase:
             with open(file_name, "w") as f:
                 f.writelines(lines)
 
+        # read lines
         results = {}
         with open(file_name, "r") as f:
             reader = csv.DictReader(f, delimiter="\t")
