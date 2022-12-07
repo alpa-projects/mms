@@ -224,7 +224,7 @@ class ModelParallelismGreedy(BasePlacementPolicy):
 
         # Run greedy placement
         evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
-                                       "simulator", False)
+                                       "fast_simulator", False)
 
         assert cluster_env.num_devices % self.group_size == 0
         num_groups = cluster_env.num_devices // self.group_size
@@ -350,17 +350,19 @@ class ModelParallelismSearch(BasePlacementPolicy):
             sol = ModelPlacement([],[])
             for i, eco in enumerate(eco_separation):
                 sub_model_datas, sub_cluster_env = eco
-                print([m.name for m in sub_model_datas])
-                print(sub_cluster_env)
                 eco_sol, _ = self.solve_placement_one_eco(sub_model_datas, sub_cluster_env, train_workload)
                 sol.group_configs += eco_sol.group_configs
                 sol.group_models += [[model_id_map[(i, model_id)] for model_id in group]
                                      for group in eco_sol.group_models]
-                print(sol)
             sols.append(sol)
 
+        # Do not separate
         evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
             self.evaluator_method, self.parallel_evaluator)
+
+        sol, _ = self.solve_placement_one_eco(model_datas, cluster_env, train_workload)
+        sols.append(sol)
+
         scores = evaluator.get_scores(sols)
         best_idx = np.argmax(scores)
         best_sol = sols[best_idx]
