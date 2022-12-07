@@ -2,6 +2,7 @@
 from collections import namedtuple
 from functools import partial
 import logging
+import math
 import multiprocessing
 import time
 from typing import List
@@ -19,7 +20,9 @@ from alpa_serve.simulator.controller import simulate_one_case
 from alpa_serve.simulator.executable import Executable
 from alpa_serve.simulator.workload import Workload, GammaProcess
 from alpa_serve.trace import Trace
-from alpa_serve.util import get_factors, ServingCase, eps
+from alpa_serve.util import (
+    get_factors, get_partitions, get2tok, decompose2tok,
+    ServingCase, eps)
 
 
 def compute_capability(model_data, parallel_config, max_bs):
@@ -204,12 +207,12 @@ class ModelParallelismILP(BasePlacementPolicy):
 class ModelParallelismGreedy(BasePlacementPolicy):
 
     def __init__(self, group_size: int = 2,
-                 add_evo_search: bool = False,
+                 use_evo_search: bool = False,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.group_size = group_size
-        self.add_evo_search = add_evo_search
+        self.use_evo_search = use_evo_search
 
     def solve_placement(self,
                         model_datas: List[ModelData],
@@ -231,7 +234,7 @@ class ModelParallelismGreedy(BasePlacementPolicy):
             sol, model_datas, cluster_env, train_workload,
             evaluator, self.verbose)
 
-        if self.add_evo_search:
+        if self.use_evo_search:
             sol = evolutionary_search([sol], model_datas, cluster_env,
                                       evaluator, 200, self.verbose)
         return sol, None
@@ -243,7 +246,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
                  max_bs: int = 1,
                  max_pp: int = 8,
                  max_op: int = 4,
-                 add_evo_search: bool = False,
+                 use_evo_search: bool = False,
+                 use_separation: bool = False,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
 
@@ -253,7 +257,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
         self.n_iter = 1
         self.seed = 0
         self.beam_size = 3
-        self.add_evo_search = add_evo_search
+        self.use_evo_search = use_evo_search
+        self.use_separation = use_separation
 
         self.evaluator_method = "fast_simulator"
         self.parallel_evaluator = False
@@ -263,21 +268,16 @@ class ModelParallelismSearch(BasePlacementPolicy):
             and not ray.is_initialized()):
             ray.init(address="auto", ignore_reinit_error=True)
 
-    def solve_placement(self,
-                        model_datas: List[ModelData],
-                        cluster_env: ClusterEnv,
-                        train_workload: Workload = None):
-        # Generate workloads
-        if train_workload is None:
-            train_workload = gen_train_workload(model_datas)
 
+    def solve_placement_one_eco(self,
+                                model_datas: List[ModelData],
+                                cluster_env: ClusterEnv,
+                                train_workload: Workload = None):
         evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
             self.evaluator_method, self.parallel_evaluator)
 
         # Get initial solutions
-        initial_sols = self.enumerate_group_configs(cluster_env)
-        #initial_sols = self.greedy_group_configs(
-        #        model_datas, cluster_env, train_workload, evaluator)
+        initial_sols = self.enumerate_group_configs_uneven(cluster_env)
 
         if self.parallel_initial_placement:
             func = ray.remote(replica_placement_fast_greedy).remote
@@ -290,50 +290,118 @@ class ModelParallelismSearch(BasePlacementPolicy):
             for i in range(len(initial_sols)):
                 initial_sols[i] = replica_placement_fast_greedy(
                     initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
-                     self.verbose)
+                    self.verbose)
                 #initial_sols[i] = replica_placement_beam_search(
                 #    initial_sols[i], model_datas, cluster_env, train_workload, evaluator,
                 #     self.beam_size, self.verbose)
 
-        # Iterative search
-        cur_sols = initial_sols
-        best_score = -1
-        best_sol = None
+        scores = evaluator.get_scores(initial_sols)
+        best_idx = np.argmax(scores)
+        best_sol = initial_sols[best_idx]
 
-        it = 0
-        tic = time.time()
-        while it < self.n_iter:
-            scores = evaluator.get_scores(cur_sols)
+        return best_sol, {}
 
-            tmp_best_idx = np.argmax(scores)
 
-            if scores[tmp_best_idx] > best_score:
-                best_score = scores[tmp_best_idx]
-                best_sol = cur_sols[tmp_best_idx]
+    def enumerate_separations(self,
+                              model_datas: List[ModelData],
+                              cluster_env: ClusterEnv):
+        same_model_threshold = 0.1
 
-            if self.verbose >= 1:
-                print(f"iter: {it}, best score: {best_score}, "
-                      f"iter score: {scores[tmp_best_idx]}, "
-                      f"iter #sol: {len(scores)}, "
-                      f"elapsed: {time.time() - tic:.2f}, "
-                      f"best placement: {best_sol}, ")
+        model_id_map = {}
+        eco_model_datas = []
+        for model_id, model_data in enumerate(model_datas):
+            cur_latency = max(model_data.profiling_result. \
+                          para_dict[ParallelConfig(1, 1, 1)].latency[1])
+            flag = False
+            for i, cluster in enumerate(eco_model_datas):
+                cluster_latency = max(cluster[0].profiling_result. \
+                                  para_dict[ParallelConfig(1, 1, 1)].latency[1])
+                if math.fabs(cur_latency - cluster_latency) / cluster_latency < same_model_threshold:
+                    model_id_map[(i, len(cluster))] = model_id
+                    cluster.append(model_data)
+                    flag = True
+                    break
+            if not flag:
+                model_id_map[(len(eco_model_datas), 0)] = model_id
+                eco_model_datas.append([model_data])
+
+        # List[List[(List[ModelData], ClusterEnv)]]
+        partitions = get_partitions(cluster_env.num_devices, len(eco_model_datas))
+        separations = [[(eco_model_datas[i], ClusterEnv(device_cnt, cluster_env.mem_budget)) \
+                        for i, device_cnt in enumerate(partition)] \
+                       for partition in partitions]
+
+        return separations, model_id_map
+
+
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
+        # Generate workloads
+        if train_workload is None:
+            train_workload = gen_train_workload(model_datas)
+
+        best_sol, _ = self.solve_placement_one_eco(model_datas, cluster_env, train_workload)
+
+        # Separate unequal model
+        if self.use_separation:
+            eco_separations, model_id_map = self.enumerate_separations(model_datas, cluster_env)
+            sols = []
+            for eco_separation in eco_separations:
+                sol = ModelPlacement([],[])
+                for i, eco in enumerate(eco_separation):
+                    sub_model_datas, sub_cluster_env = eco
+                    eco_sol, _ = self.solve_placement_one_eco(sub_model_datas, sub_cluster_env, train_workload)
+                    sol.group_configs += eco_sol.group_configs
+                    sol.group_models += [[model_id_map[(i, model_id)] for model_id in group]
+                                         for group in eco_sol.group_models]
+                sols.append(sol)
+
+            evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
+                self.evaluator_method, self.parallel_evaluator)
+            scores = evaluator.get_scores(sols)
+            best_idx = np.argmax(scores)
+
+            evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
+                "simulator", self.parallel_evaluator)
+            score_mixed = evaluator.get_scores([best_sol])[0]
 
             if self.verbose >= 2:
-                print("\n--- iter sols ---")
-                for i in range(len(cur_sols)):
-                    print(f"idx={i}")
-                    print(f"placement={cur_sols[i]}")
-                    print(f"score={scores[i]:.3f}\n")
-                print("-----------------")
+                print(f"score_mixed: {score_mixed:.3f}, score_separate: {scores[best_idx]:.3f}")
 
-            # TODO: mutate solution
-            it += 1
+            if scores[best_idx] > score_mixed:
+                best_sol = sols[best_idx]
 
-        if self.add_evo_search:
+        if self.use_evo_search:
             best_sol = evolutionary_search(
                 [best_sol], model_datas, cluster_env,
                 evaluator, 200, self.verbose)
         return best_sol, {}
+
+
+    def enumerate_group_configs_uneven(self, cluster_env: ClusterEnv):
+        sols = []
+        num_devices = cluster_env.num_devices
+        num_devices_per_node = cluster_env.num_devices_per_node
+
+        for group_size in get2tok(num_devices):
+            if group_size > num_devices_per_node and group_size % num_devices_per_node != 0:
+                continue
+            num_reg_groups = num_devices // group_size
+            quo_groups = decompose2tok(num_devices % group_size)
+
+            for pp in get_factors(group_size):
+                op = group_size // pp
+
+                if pp > self.max_pp or op > self.max_op:
+                    continue
+
+                sols.append(ModelPlacement([ParallelConfig(1, op, pp)] * num_reg_groups +
+                                           [ParallelConfig(1, 1, s) for s in quo_groups],
+                                           [[] for _ in range(num_reg_groups + len(quo_groups))]))
+        return sols
+
 
     def enumerate_group_configs(self, cluster_env):
         sols = []
@@ -383,7 +451,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
                     for sol in beam_sols[cur_num - last_group_size]:
                         pre_sol = sol.copy()
                         pre_sol.group_configs.append(ParallelConfig(1, op, pp))
-                        pre_sol.group_models.append([])
+                        pre_sol.group_models = [[] for _ in range(len(pre_sol.group_configs))]
 
                         #new_sol = replica_placement_on_last_group(
                         #new_sol = replica_placement_beam_search(
