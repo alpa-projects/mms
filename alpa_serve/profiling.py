@@ -60,7 +60,8 @@ class ProfilingResult:
             self.para_dict[parallel_config] = LatencyMemData(
                 latency={batch_size: stage_latency},
                 act_mem={batch_size: act_mem},
-                weight_mem=weight_mem)
+                weight_mem=weight_mem,
+                metadata=metadata)
         else:
             self.para_dict[parallel_config].add_result(batch_size, stage_latency,
                                                        act_mem, weight_mem, metadata)
