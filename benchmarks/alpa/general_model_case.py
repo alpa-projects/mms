@@ -3,7 +3,7 @@ import os
 
 import ray
 
-from alpa_serve.simulator.controller import Controller, simulate_one_case
+from alpa_serve.simulator.controller import Controller, simulate_one_case, approximate_one_case
 from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,

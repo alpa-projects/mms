@@ -124,6 +124,30 @@ def get_partitions(n: int, k: int, lb: int = 1):
     return ret
 
 
+def get2tok(n: int):
+    assert n > 0
+    ret = [1]
+    while True:
+        if ret[-1] * 2 <= n:
+            ret.append(ret[-1] * 2)
+        else:
+            break
+    return ret
+
+
+def decompose2tok(n: int):
+    ret = []
+    i = 1
+    while n > 0:
+        if n % 2 == 1:
+            ret.append(i)
+        i *= 2
+        n = n // 2
+    return ret
+
+
 if __name__ == "__main__":
     print(get_partitions(32, 2, 1))
     print(get_partitions(32, 3, 1))
+    print(get2tok(34))
+    print(decompose2tok(13))
