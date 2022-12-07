@@ -108,6 +108,53 @@ class ProfilingDatabase:
                     results[model_name].add_result(parallel_config, batch_size, stage_latencies, act_mem, weight_mem)
         self.results.update(results)
 
+    def _extract_auto_data(self, row):
+        """Extract the profiling results from a row of the profiling CSV file."""
+        stage_latencies = list(map(float, row["StageLatencies(s)"].strip("[]").split(", ")))
+        weight_mem = list(map(float, row["StageWeights(B)"].strip("[]").split(", ")))
+        peak_mem = list(map(float, row["StagePeakMem(B)"].strip("[]").split(", ")))
+        act_mem = [peak_mem - weight_mem for peak_mem, weight_mem in zip(peak_mem, weight_mem)]
+        assert min(act_mem) > 0, "negative activation memory"
+        metadata = eval(row["Metadata"])
+        pp = len(metadata["submesh_shapes"])
+        op = metadata["submesh_shapes"][0][1]
+        parallel_config = ParallelConfig(1, op, pp)
+        return row["ModelName"], parallel_config, int(row["BS"]), stage_latencies, weight_mem, act_mem
+
+    def update_from_auto_csv(self, file_name: str):
+        fieldnames = [
+                "ModelName", "BS", "#Microbatch", "ParallelArgs", "MeanTime(s)",
+                "StdTime(s)", "TFLOPs", "StageWeights(B)", "StagePeakMem(B)",
+                "StageLatencies(s)", "Metadata", "TimeStamp"
+            ]
+        results = {}
+        with open(file_name, "r") as f:
+            reader = csv.DictReader(f, fieldnames=fieldnames, delimiter="\t")
+            for row in reader:
+                model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem = self._extract_data(row)
+                print(model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem)
+                # if model_name not in results:
+                #     results[model_name] = ProfilingResult(
+                #                                             model_name,
+                #                                             {
+                #                                                 parallel_config: LatencyMemData(
+                #                                                     latency={   # Dict[batch_size -> List[stage_latency]]
+                #                                                         batch_size: stage_latencies,
+                #                                                     },
+                #                                                     act_mem={   # Dict[batch_size -> List[stage_act_mem]]
+                #                                                         batch_size: act_mem,
+                #                                                     },
+                #                                                     weight_mem=weight_mem # List[stage_weight_mem]
+                #                                                 )
+                #                                             },
+                #                                             preprocess_cpu=0.0,
+                #                                             postprocess_cpu=0.0
+                #                                         )
+                # else:
+                #     results[model_name].add_result(parallel_config, batch_size, stage_latencies, act_mem, weight_mem)
+        # self.results.update(results)
+
+
     def materialize(self):
         """Write the profiling results to the database file."""
         with open(self.database_filename, "wb") as f:
