@@ -26,7 +26,7 @@ if __name__ == "__main__":
     if args.policy is not None:
         policies = [args.policy]
     else:
-        policies = ["sr-greedy", "mp-greedy-4", "mp-search"]
+        policies = ["sr-greedy", "mp-greedy-2", "mp-greedy-4", "mp-search"]
     num_devices = 16
     mem_budget = 14 * GB
     model_type = "bert-2.6b"
@@ -59,10 +59,6 @@ if __name__ == "__main__":
         fixed_num_modelset = 8
         model_types = model_set * fixed_num_modelset
         model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(fixed_num_modelset)], [])
-
-        slo_scales = [4]
-        policies = ["mp-search"]
-        #policies = ["mp-greedy-2"]
 
         cases = []
         for slo_scale in slo_scales:
