@@ -147,17 +147,22 @@ def get_equal_model_serving_case(case, prof_database=None):
 
         if policy_name == "sr-ilp":
             policy = SelectiveReplicationILP(verbose=1)
-        elif policy_name == "sr-greedy":
+        elif policy_name in "sr-greedy":
             policy = SelectiveReplicationGreedy(verbose=1)
         elif policy_name == "sr-search":
             policy = SelectiveReplicationSearch(verbose=1)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
-        elif policy_name == "mp-search":
-            policy = ModelParallelismSearch(verbose=2)
+        elif policy_name in ["mp-search", "mp-search-evo"]:
+            add_evo_search = "evo" in policy_name
+            policy = ModelParallelismSearch(
+                add_evo_search=add_evo_search, verbose=2)
         elif "mp-greedy" in policy_name:
             group_size = int(policy_name.split("-")[2])
-            policy = ModelParallelismGreedy(group_size=group_size, verbose=1)
+            add_evo_search = "evo" in policy_name
+            policy = ModelParallelismGreedy(
+                add_evo_search=add_evo_search,
+                group_size=group_size, verbose=1)
         else:
             raise ValueError(f"Invalid placement policy: {policy_name}")
 

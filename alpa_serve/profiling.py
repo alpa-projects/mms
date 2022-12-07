@@ -73,15 +73,34 @@ class ProfilingDatabase:
 
     def _extract_data(self, row):
         """Extract the profiling results from a row of the profiling CSV file."""
-        stage_latencies = list(map(float, row["StageLatencies(s)"].strip("[]").split()))
-        weight_mem = list(map(float, row["StageWeights(B)"].strip("[]").split()))
-        peak_mem = list(map(float, row["StagePeakMem(B)"].strip("[]").split()))
+        stage_latencies = list(map(float, row["StageLatencies(s)"].strip("[]").split(",")))
+        weight_mem = list(map(float, row["StageWeights(B)"].strip("[]").split(",")))
+        peak_mem = list(map(float, row["StagePeakMem(B)"].strip("[]").split(",")))
         act_mem = [peak_mem - weight_mem for peak_mem, weight_mem in zip(peak_mem, weight_mem)]
         assert min(act_mem) > 0, "negative activation memory"
         parallel_config = ParallelConfig(int(row["DP"]), int(row["OP"]), int(row["PP"]))
         return row["ModelName"], parallel_config, int(row["BS"]), stage_latencies, weight_mem, act_mem
 
     def update_from_csv(self, file_name: str):
+        # Add head if there is no head
+        missing_head = False
+        with open(file_name, "r") as f:
+            l = f.readline()
+            if l[0] != 'M':
+                lines = [l] + f.readlines()
+                missing_head = True
+
+        if missing_head:
+            heads = [
+                "ModelName", "BS", "#Microbatch", "DP", "OP", "PP", "#GPU",
+                "MeanTime(s)", "StdTime(s)", "TFLOPs", "StageWeights(B)",
+                "StagePeakMem(B)", "StageLatencies(s)"
+            ]
+            lines = ["\t".join(heads) + "\n"] + lines
+            with open(file_name, "w") as f:
+                f.writelines(lines)
+
+        # read lines
         results = {}
         with open(file_name, "r") as f:
             reader = csv.DictReader(f, delimiter="\t")
