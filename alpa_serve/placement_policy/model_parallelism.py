@@ -365,7 +365,10 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
             evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
                 "simulator", self.parallel_evaluator)
-            score_mixed = evaluator.get_scores([best_sol])
+            score_mixed = evaluator.get_scores([best_sol])[0]
+
+            if self.verbose >= 2:
+                print(f"score_mixed: {score_mixed:.3f}, score_separate: {scores[best_idx]:.3f}")
 
             if scores[best_idx] > score_mixed:
                 best_sol = sols[best_idx]

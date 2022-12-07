@@ -196,7 +196,7 @@ def run_general_model_cases(cases, exp_name="default", output_file=None,
         else:
             stats, placement = run_res
 
-        Workload.print_stats(stats)
+        #Workload.print_stats(stats)
         goodput = stats.goodput
 
         (num_devices, mem_budget, model_types, model_names,
