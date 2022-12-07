@@ -4,7 +4,7 @@ import csv
 import dataclasses
 import json
 import pickle
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Any
 
 from alpa_serve.util import GB
 
@@ -24,10 +24,20 @@ class LatencyMemData:
     # The weight memory of each stage
     # Type: List[stage_weight_mem]
     weight_mem: List
-
-    def add_result(self, batch_size: int, latency: List[float], act_mem: List[float]):
-        self.latency[batch_size] = latency
-        self.act_mem[batch_size] = act_mem
+    # Metadata for parallel strategy
+    metadata: Any = None
+    def add_result(self, batch_size: int, latency: List[float], act_mem: List[float], weight_mem: List[float], metadata: Any = None):
+        if batch_size not in self.latency:
+            self.latency[batch_size] = latency
+            self.act_mem[batch_size] = act_mem
+        else:
+            new_max_latency = max(latency)
+            old_max_latency = max(self.latency[batch_size])
+            if new_max_latency < old_max_latency:
+                self.latency[batch_size] = latency
+                self.act_mem[batch_size] = act_mem
+                self.weight_mem = weight_mem
+                self.metadata = metadata
 
 
 @dataclasses.dataclass
@@ -43,15 +53,18 @@ class ProfilingResult:
     postprocess_cpu: float
 
     def add_result(self, parallel_config: ParallelConfig, batch_size: int,
-                   stage_latency: List[float], act_mem: List[float], weight_mem: List[float]):
+                   stage_latency: List[float], act_mem: List[float], weight_mem: List[float],
+                   metadata: Any = None):
         """Add or overwrite the profiling results of a model."""
         if parallel_config not in self.para_dict:
             self.para_dict[parallel_config] = LatencyMemData(
                 latency={batch_size: stage_latency},
                 act_mem={batch_size: act_mem},
-                weight_mem=weight_mem)
+                weight_mem=weight_mem,
+                metadata=metadata)
         else:
-            self.para_dict[parallel_config].add_result(batch_size, stage_latency, act_mem)
+            self.para_dict[parallel_config].add_result(batch_size, stage_latency,
+                                                       act_mem, weight_mem, metadata)
 
 
 class ProfilingDatabase:
@@ -126,6 +139,52 @@ class ProfilingDatabase:
                 else:
                     results[model_name].add_result(parallel_config, batch_size, stage_latencies, act_mem, weight_mem)
         self.results.update(results)
+
+    def _extract_auto_data(self, row):
+        """Extract the profiling results from a row of the profiling CSV file."""
+        stage_latencies = list(map(float, row["StageLatencies(s)"].strip("[]").split(", ")))
+        weight_mem = list(map(float, row["StageWeights(B)"].strip("[]").split(", ")))
+        peak_mem = list(map(float, row["StagePeakMem(B)"].strip("[]").split(", ")))
+        act_mem = [peak_mem - weight_mem for peak_mem, weight_mem in zip(peak_mem, weight_mem)]
+        assert min(act_mem) > 0, "negative activation memory"
+        metadata = eval(row["Metadata"])
+        pp = len(metadata["submesh_shapes"])
+        op = metadata["submesh_shapes"][0][1]
+        parallel_config = ParallelConfig(1, op, pp)
+        return row["ModelName"], parallel_config, int(row["BS"]), stage_latencies, weight_mem, act_mem, metadata
+
+    def update_from_auto_csv(self, file_name: str):
+        fieldnames = [
+                "ModelName", "BS", "#Microbatch", "ParallelArgs", "MeanTime(s)",
+                "StdTime(s)", "TFLOPs", "StageWeights(B)", "StagePeakMem(B)",
+                "StageLatencies(s)", "Metadata", "TimeStamp"
+            ]
+        with open(file_name, "r") as f:
+            reader = csv.DictReader(f, fieldnames=fieldnames, delimiter="\t")
+            for row in reader:
+                model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem, metadata = self._extract_auto_data(row)
+                print(model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem, metadata)
+                if model_name not in self.results:
+                    self.results[model_name] = ProfilingResult(
+                        model_name,
+                        {
+                            parallel_config: LatencyMemData(
+                                latency={   # Dict[batch_size -> List[stage_latency]]
+                                    batch_size: stage_latencies,
+                                },
+                                act_mem={   # Dict[batch_size -> List[stage_act_mem]]
+                                    batch_size: act_mem,
+                                },
+                                weight_mem=weight_mem, # List[stage_weight_mem]
+                                metadata=metadata,
+                            )
+                        },
+                        preprocess_cpu=0.0,
+                        postprocess_cpu=0.0
+                    )
+                else:
+                    self.results[model_name].add_result(parallel_config, batch_size, stage_latencies, act_mem, weight_mem, metadata)
+
 
     def materialize(self):
         """Write the profiling results to the database file."""
