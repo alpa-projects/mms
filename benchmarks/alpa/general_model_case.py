@@ -130,11 +130,17 @@ def get_general_model_serving_case(case, prof_database=None):
             policy = SelectiveReplicationGreedy(verbose=1)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
-        elif policy_name == "mp-search":
-            policy = ModelParallelismSearch(verbose=2)
+        elif policy_name in ["mp-search", "mp-search-evo", "mp-search-sep"]:
+            use_evo_search = "evo" in policy_name
+            use_separation = "sep" in policy_name
+            policy = ModelParallelismSearch(
+                use_evo_search=use_evo_search, use_separation=use_separation, verbose=2)
         elif "mp-greedy" in policy_name:
             group_size = int(policy_name.split("-")[2])
-            policy = ModelParallelismGreedy(group_size=group_size, verbose=1)
+            use_evo_search = "evo" in policy_name
+            policy = ModelParallelismGreedy(
+                use_evo_search=use_evo_search,
+                group_size=group_size, verbose=1)
         else:
             raise ValueError(f"Invalid placement policy: {policy_name}")
 

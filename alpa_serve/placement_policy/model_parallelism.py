@@ -207,12 +207,12 @@ class ModelParallelismILP(BasePlacementPolicy):
 class ModelParallelismGreedy(BasePlacementPolicy):
 
     def __init__(self, group_size: int = 2,
-                 add_evo_search: bool = False,
+                 use_evo_search: bool = False,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.group_size = group_size
-        self.add_evo_search = add_evo_search
+        self.use_evo_search = use_evo_search
 
     def solve_placement(self,
                         model_datas: List[ModelData],
@@ -234,7 +234,7 @@ class ModelParallelismGreedy(BasePlacementPolicy):
             sol, model_datas, cluster_env, train_workload,
             evaluator, self.verbose)
 
-        if self.add_evo_search:
+        if self.use_evo_search:
             sol = evolutionary_search([sol], model_datas, cluster_env,
                                       evaluator, 200, self.verbose)
         return sol, None
@@ -246,7 +246,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
                  max_bs: int = 1,
                  max_pp: int = 8,
                  max_op: int = 4,
-                 add_evo_search: bool = False,
+                 use_evo_search: bool = False,
+                 use_separation: bool = False,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
 
@@ -256,7 +257,8 @@ class ModelParallelismSearch(BasePlacementPolicy):
         self.n_iter = 1
         self.seed = 0
         self.beam_size = 3
-        self.add_evo_search = add_evo_search
+        self.use_evo_search = use_evo_search
+        self.use_separation = use_separation
 
         self.evaluator_method = "fast_simulator"
         self.parallel_evaluator = False
@@ -297,8 +299,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
         best_idx = np.argmax(scores)
         best_sol = initial_sols[best_idx]
 
-        #best_sol = evolutionary_search([best_sol], model_datas, cluster_env,
-        #                               evaluator, 200, self.verbose)
         return best_sol, {}
 
 
@@ -342,36 +342,35 @@ class ModelParallelismSearch(BasePlacementPolicy):
         if train_workload is None:
             train_workload = gen_train_workload(model_datas)
 
+        best_sol, _ = self.solve_placement_one_eco(model_datas, cluster_env, train_workload)
+
         # Separate unequal model
-        eco_separations, model_id_map = self.enumerate_separations(model_datas, cluster_env)
-        sols = []
-        for eco_separation in eco_separations:
-            sol = ModelPlacement([],[])
-            for i, eco in enumerate(eco_separation):
-                sub_model_datas, sub_cluster_env = eco
-                eco_sol, _ = self.solve_placement_one_eco(sub_model_datas, sub_cluster_env, train_workload)
-                sol.group_configs += eco_sol.group_configs
-                sol.group_models += [[model_id_map[(i, model_id)] for model_id in group]
-                                     for group in eco_sol.group_models]
-            sols.append(sol)
+        if self.use_separation:
+            eco_separations, model_id_map = self.enumerate_separations(model_datas, cluster_env)
+            sols = []
+            for eco_separation in eco_separations:
+                sol = ModelPlacement([],[])
+                for i, eco in enumerate(eco_separation):
+                    sub_model_datas, sub_cluster_env = eco
+                    eco_sol, _ = self.solve_placement_one_eco(sub_model_datas, sub_cluster_env, train_workload)
+                    sol.group_configs += eco_sol.group_configs
+                    sol.group_models += [[model_id_map[(i, model_id)] for model_id in group]
+                                         for group in eco_sol.group_models]
+                sols.append(sol)
 
-        evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
-            self.evaluator_method, self.parallel_evaluator)
+            evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
+                self.evaluator_method, self.parallel_evaluator)
+            scores = evaluator.get_scores(sols)
+            best_idx = np.argmax(scores)
 
-        scores = evaluator.get_scores(sols)
-        best_idx = np.argmax(scores)
-        best_sol = sols[best_idx]
+            evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
+                "simulator", self.parallel_evaluator)
+            score_mixed = evaluator.get_scores([best_sol])
 
-        # Do not separate (mixed models on devices)
-        sol_mixed, _ = self.solve_placement_one_eco(model_datas, cluster_env, train_workload)
-        evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
-            "simulator", self.parallel_evaluator)
-        score_mixed = evaluator.get_scores([sol_mixed])
+            if scores[best_idx] > score_mixed:
+                best_sol = sols[best_idx]
 
-        if score_mixed > scores[best_idx]:
-            best_sol = sol_mixed
-
-        if self.add_evo_search:
+        if self.use_evo_search:
             best_sol = evolutionary_search(
                 [best_sol], model_datas, cluster_env,
                 evaluator, 200, self.verbose)
