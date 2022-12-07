@@ -119,7 +119,7 @@ class ProfilingDatabase:
         pp = len(metadata["submesh_shapes"])
         op = metadata["submesh_shapes"][0][1]
         parallel_config = ParallelConfig(1, op, pp)
-        return row["ModelName"], parallel_config, int(row["BS"]), stage_latencies, weight_mem, act_mem
+        return row["ModelName"], parallel_config, int(row["BS"]), stage_latencies, weight_mem, act_mem, metadata
 
     def update_from_auto_csv(self, file_name: str):
         fieldnames = [
@@ -131,8 +131,8 @@ class ProfilingDatabase:
         with open(file_name, "r") as f:
             reader = csv.DictReader(f, fieldnames=fieldnames, delimiter="\t")
             for row in reader:
-                model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem = self._extract_auto_data(row)
-                print(model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem)
+                model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem, metadata = self._extract_auto_data(row)
+                print(model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem, metadata)
                 # if model_name not in results:
                 #     results[model_name] = ProfilingResult(
                 #                                             model_name,
