@@ -275,7 +275,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
             self.evaluator_method, self.parallel_evaluator)
 
         # Get initial solutions
-        #initial_sols = self.enumerate_group_configs(cluster_env)
         initial_sols = self.enumerate_group_configs_uneven(cluster_env)
 
         if self.parallel_initial_placement:
@@ -306,7 +305,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
     def enumerate_separations(self,
                               model_datas: List[ModelData],
                               cluster_env: ClusterEnv):
-        same_model_threshold = 0.05
+        same_model_threshold = 0.1
 
         model_id_map = {}
         eco_model_datas = []
@@ -356,16 +355,21 @@ class ModelParallelismSearch(BasePlacementPolicy):
                                      for group in eco_sol.group_models]
             sols.append(sol)
 
-        # Do not separate
         evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
             self.evaluator_method, self.parallel_evaluator)
-
-        sol, _ = self.solve_placement_one_eco(model_datas, cluster_env, train_workload)
-        sols.append(sol)
 
         scores = evaluator.get_scores(sols)
         best_idx = np.argmax(scores)
         best_sol = sols[best_idx]
+
+        # Do not separate (mixed models on devices)
+        sol_mixed, _ = self.solve_placement_one_eco(model_datas, cluster_env, train_workload)
+        evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
+            "simulator", self.parallel_evaluator)
+        score_mixed = evaluator.get_scores([sol_mixed])
+
+        if score_mixed > scores[best_idx]:
+            best_sol = sol_mixed
 
         if self.add_evo_search:
             best_sol = evolutionary_search(
