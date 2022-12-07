@@ -7,7 +7,7 @@ from alpa_serve.simulator.controller import Controller, simulate_one_case
 from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
-    SelectiveReplicationILP, SelectiveReplicationGreedy,
+    SelectiveReplicationILP, SelectiveReplicationGreedy, SelectiveReplicationGreedyForLargeModel,
     ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.trace import Trace, report_group_stats
@@ -23,7 +23,7 @@ GeneralModelCase = namedtuple("GeneralModelCase", [
     "slo_scale", "duration", "policy_name"])
 
 default_slos = {"bert-1.3b": 0.100, "bert-2.6b": 0.145, "bert-6.7b": 0.234,
-                "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041}
+                "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041, "moe-10.2b": 0.052}
 
 def get_general_model_serving_case(case, prof_database=None):
     assert isinstance(case, GeneralModelCase), "not GeneralModelCase"     
@@ -69,16 +69,16 @@ def get_general_model_serving_case(case, prof_database=None):
         train_replays = azure_v2_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
-                                              start_time='5.0.0',
-                                              end_time='6.0.0',
+                                              start_time='13.0.0',
+                                              end_time='13.23.60',
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
         test_replays = azure_v2_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
-                                              start_time='5.0.0',
-                                              end_time='6.0.0',
+                                              start_time='13.0.0',
+                                              end_time='13.23.60',
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
@@ -128,6 +128,8 @@ def get_general_model_serving_case(case, prof_database=None):
             policy = SelectiveReplicationILP(verbose=1)
         elif policy_name == "sr-greedy":
             policy = SelectiveReplicationGreedy(verbose=1)
+        elif policy_name == "sr-greedy-large":
+            policy = SelectiveReplicationGreedyForLargeModel(verbose=1)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
         elif policy_name == "mp-search":

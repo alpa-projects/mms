@@ -176,3 +176,30 @@ class SelectiveReplicationSearch(BasePlacementPolicy):
             sol, model_datas, cluster_env, train_workload,
             evaluator, self.beam_size, self.verbose)
         return sol, None
+
+
+class SelectiveReplicationGreedyForLargeModel(BasePlacementPolicy):
+    
+    def __init__(self, verbose: int = 0):
+        super().__init__(verbose=verbose)
+
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
+        # Generate workloads
+        if train_workload is None:
+            train_workload = gen_train_workload(model_datas)
+
+        # Run greedy placement
+        evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
+                                       "fast_simulator", False)
+        num_groups = cluster_env.num_devices // 2
+        sol = ModelPlacement([ParallelConfig(1,1,2)] * num_groups, [[] for _ in range(num_groups)])
+
+        sol = replica_placement_fast_greedy(
+            sol, model_datas, cluster_env, train_workload,
+            evaluator, self.verbose)
+
+        #sol = evolutionary_search([sol], model_datas, evaluator, self.verbose)
+        return sol, None

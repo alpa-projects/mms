@@ -9,6 +9,7 @@ from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
 
 show_name_dict = {
     "sr-greedy":   "Selective Replication (greedy)",
+    "sr-greedy-large":   "Selective Replication Large (greedy)",
     "sr-search":   "Selective Replication (search)",
     "sr-ilp":      "Selective Replication (ilp)",
 
@@ -38,7 +39,7 @@ def method2color(name):
 
 
 method_order_list = [
-    "sr-greedy", "sr-search", "sr-ilp",
+    "sr-greedy", "sr-greedy-large", "sr-search", "sr-ilp",
 
     "mp-ilp", "mp-search",
     "mp-search-100", "mp-search-1000",

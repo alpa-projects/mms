@@ -28,15 +28,20 @@ if __name__ == "__main__":
     parser.add_argument("--cv", type=float, default=4)
     parser.add_argument('--duration', type=float, default=200)
     parser.add_argument("--model_type", type=str, default="all_transformers",
-                        choices=["all_transformers", "mixed"])
+                        choices=["all_transformers", "mixed", "large_models"])
 
     args = parser.parse_args()
 
-    # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8", "mp-search"}
-    policies = ["sr-greedy", "mp-search"]
     mem_budget = args.mem_budget * GB
     model_type = args.model_type
-    
+
+    # algorithm config
+    # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8", "mp-search"}
+    if args.model_type == "large_models":
+        policies = ["sr-greedy-large", "mp-search"]
+    else:
+        policies = ["sr-greedy", "mp-search"]
+   
     # default config
     if args.model_type == "mixed":
         fixed_num_devices = 64
@@ -52,8 +57,10 @@ if __name__ == "__main__":
     # multi-model config
     if args.model_type == "mixed":
         model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-7.1b"]
-    else:
+    elif args.model_type == "all_transformers":
         model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"]
+    elif args.model_type == "large_models":
+        model_set = ["moe-10.2b"]
     
     model_types = model_set * fixed_num_modelset
     model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(fixed_num_modelset)], [])
