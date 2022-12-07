@@ -22,7 +22,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
+    # choices: {"sr-greedy", "sr-ilp", "mp-ilp",
+    #           "mp-greedy-2", "mp-greedy-4", "mp-greedy-8",
+    #           "mp-search",  "mp-search-sep"}
     if args.policy is not None:
         policies = [args.policy]
     else:
@@ -55,7 +57,7 @@ if __name__ == "__main__":
         if args.model_type == "mixed":
             model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-7.1b"]
         else:
-            model_set = ["bert-2.6b", "bert-6.7b"]
+            model_set = ["bert-6.7b", "moe-1.3b"]
         fixed_num_modelset = 8
         model_types = model_set * fixed_num_modelset
         model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(fixed_num_modelset)], [])
