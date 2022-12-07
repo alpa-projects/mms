@@ -327,7 +327,6 @@ def replica_placement_fast_greedy(init_sol: ModelPlacement,
             break
 
         sol = sol.add_model(g_id, m_id).normalize()
-        sol.verify(model_datas, cluster_env)
 
         if verbose >= 2:
             print(f"iter: {it}, score: {overall_goodput:.4f}, "
