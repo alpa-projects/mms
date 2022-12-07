@@ -131,7 +131,7 @@ class ProfilingDatabase:
         with open(file_name, "r") as f:
             reader = csv.DictReader(f, fieldnames=fieldnames, delimiter="\t")
             for row in reader:
-                model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem = self._extract_data(row)
+                model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem = self._extract_auto_data(row)
                 print(model_name, parallel_config, batch_size, stage_latencies, weight_mem, act_mem)
                 # if model_name not in results:
                 #     results[model_name] = ProfilingResult(

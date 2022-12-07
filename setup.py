@@ -8,5 +8,5 @@ install_requires = [
 ]
 
 setup(name="alpa_serve",
-      install_requires=install_require_list,
+      install_requires=install_requires,
       packages=find_packages(exclude=["simulator"]))
