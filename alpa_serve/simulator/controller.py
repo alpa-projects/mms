@@ -327,7 +327,7 @@ def approximate_one_case(case: ServingCase,
         model_names, prof_ress = zip(*controller.name2profiling.items())
 
         name2model_id = {m: i for i, m in enumerate(model_names)}
-        model_ids = np.array([name2model_id[r.model_name] for r in workload.requests], dtype=np.int32)
+        model_ids = np.array([name2model_id.get(r.model_name, -1) for r in workload.requests], dtype=np.int32)
         slos = np.array([r.slo for r in workload.requests], dtype=np.float32)
 
         if workload.enable_simulator_cache:
@@ -400,6 +400,11 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
 
     for i in range(num_requests):
         tstamp, m_id, slo = tstamps[i], model_ids[i], slos[i]
+
+        if m_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
 
         # Select group id
         g_id = -1

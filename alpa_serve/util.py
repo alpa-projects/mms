@@ -82,7 +82,6 @@ def get_factors(n: int):
     return ret
 
 
-
 def to_str_round(x: Any, decimal: int = 6):
     """Print a python object but round all floating point numbers."""
     if isinstance(x, str):
@@ -100,3 +99,31 @@ def to_str_round(x: Any, decimal: int = 6):
     if x is None:
         return str(x)
     raise ValueError("Invalid value: " + str(x))
+
+
+def is_valid_size(n: int, i: int):
+    if i <= n % 8 or (n - i) % 8 == 0 or n % 8 == 0:
+        return True
+    else:
+        return False
+
+# partition n into k parts that summed to n
+# each part could only be 2^k
+def get_partitions(n: int, k: int, lb: int = 1):
+    if k == 1:
+        if n >= lb:
+            return [[n]]
+        else:
+            return []
+
+    ret = []
+    for i in range(lb, n):
+        if not is_valid_size(n, i): continue
+        pre_partitions = get_partitions(n - i, k - 1, i)
+        ret += [partition + [i] for partition in pre_partitions]
+    return ret
+
+
+if __name__ == "__main__":
+    print(get_partitions(32, 2, 1))
+    print(get_partitions(32, 3, 1))

@@ -1,6 +1,7 @@
 import argparse
 
 from benchmarks.alpa.equal_model_case import EqualModelCase, run_equal_model_cases
+from benchmarks.alpa.general_model_case import GeneralModelCase, run_general_model_cases
 from alpa_serve.util import GB
 
 
@@ -15,6 +16,9 @@ if __name__ == "__main__":
                         default="synthetic")
     parser.add_argument("--mode", choices=["simulate", "run"],
                         default="simulate")
+    parser.add_argument("--unequal", action="store_true")
+    parser.add_argument("--model_type", type=str, default="all_transformers",
+                        choices=["all_transformers", "mixed"])
 
     args = parser.parse_args()
 
@@ -46,17 +50,46 @@ if __name__ == "__main__":
         slo_scales = [0.5, 1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7.5, 10]
     duration = 200
 
-    cases = []
-    for slo_scale in slo_scales:
-        for policy_name in policies:
-            cases.append(EqualModelCase(
-                num_devices, mem_budget, model_type, num_models,
-                total_rate, rate_distribution,
-                arrival_process, arrival_process_kwargs,
-                slo_scale, duration, policy_name))
+    if args.unequal:
+        # multi-model config
+        if args.model_type == "mixed":
+            model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-7.1b"]
+        else:
+            model_set = ["bert-1.3b", "bert-2.6b"]
+        fixed_num_modelset = 8
+        model_types = model_set * fixed_num_modelset
+        model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(fixed_num_modelset)], [])
 
-    run_equal_model_cases(cases,
-                          exp_name=args.exp_name,
-                          output_file=args.output,
-                          mode=args.mode,
-                          parallel=args.parallel)
+        slo_scales = [4]
+        policies = ["mp-search"]
+
+        cases = []
+        for slo_scale in slo_scales:
+            for policy_name in policies:
+                cases.append(GeneralModelCase(
+                    num_devices, mem_budget, model_types, model_names,
+                    total_rate, rate_distribution,
+                    arrival_process, arrival_process_kwargs,
+                    slo_scale, duration, policy_name))
+
+        run_general_model_cases(cases,
+                                exp_name=args.exp_name,
+                                output_file=args.output,
+                                mode=args.mode,
+                                parallel=args.parallel)
+    else:
+        cases = []
+        for slo_scale in slo_scales:
+            for policy_name in policies:
+                cases.append(EqualModelCase(
+                    num_devices, mem_budget, model_type, num_models,
+                    total_rate, rate_distribution,
+                    arrival_process, arrival_process_kwargs,
+                    slo_scale, duration, policy_name))
+
+
+        run_equal_model_cases(cases,
+                              exp_name=args.exp_name,
+                              output_file=args.output,
+                              mode=args.mode,
+                              parallel=args.parallel)
