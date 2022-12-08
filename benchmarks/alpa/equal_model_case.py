@@ -28,7 +28,7 @@ EqualModelCase = namedtuple("EqualModelCase", [
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name"])
 
-default_slos = {"bert-1.3b": 0.100, "bert-2.6b": 0.145, "bert-6.7b": 0.234,
+default_slos = {"bert-1.3b": 0.0628, "bert-2.6b": 0.0967, "bert-6.7b": 0.234,
                 "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041}
 
 def get_equal_model_serving_case(case, prof_database=None):
@@ -173,15 +173,15 @@ def get_equal_model_serving_case(case, prof_database=None):
     return ServingCase(register_models, generate_workload, place_models)
 
 
-def simulate_one_equal_model_case(case, prof_database=None):
+def simulate_one_equal_model_case(case, debug=False, prof_database=None):
     serving_case = get_equal_model_serving_case(case, prof_database)
-    stats, placement = approximate_one_case(serving_case)
+    stats, placement = approximate_one_case(serving_case, debug=debug)
     return stats, placement
 
 
-def run_one_equal_model_case(case, prof_database=None):
+def run_one_equal_model_case(case, debug=False, prof_database=None):
     serving_case = get_equal_model_serving_case(case, prof_database)
-    stats, placement = run_one_case(serving_case)
+    stats, placement = run_one_case(serving_case, debug=debug)
     return stats, placement
 
 
@@ -193,7 +193,7 @@ _DATA_HEADS = ("exp_name",
                "placement", "goodput", "mode")
 
 def run_equal_model_cases(cases, exp_name="default", output_file=None,
-                          mode="simulate", parallel=False):
+                          mode="simulate", debug_tstamp=False, parallel=False):
     if mode == "simulate":
         if parallel:
             ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
@@ -208,7 +208,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
 
     run_results = []
     for case in cases:
-        run_results.append(run_one_case_(case))
+        run_results.append(run_one_case_(case, debug=debug_tstamp))
 
     results = []
     for case, run_res in zip(cases, run_results):
