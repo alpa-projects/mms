@@ -5,7 +5,6 @@ import ray
 
 from alpa_serve.simulator.controller import Controller, simulate_one_case
 from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
-from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
     ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
@@ -22,8 +21,12 @@ GeneralModelCase = namedtuple("GeneralModelCase", [
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name"])
 
-default_slos = {"bert-1.3b": 0.100, "bert-2.6b": 0.145, "bert-6.7b": 0.234,
-                "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041}
+
+# default_slos = {"bert-1.3b": 0.06183671951293945, "bert-2.6b": 0.09547750155131023 , "bert-6.7b": 0.18315919240315756 ,
+#                 "moe-1.3b": 0.024369213316175673, "moe-2.4b": 0.028811666700575087 , "moe-7.1b": 0.04116768307156033 }
+default_slos = {"bert-1.3b": 0.15109131071302626, "bert-2.6b": 0.23757214016384548, "bert-6.7b": 0.3950637976328532,
+                "moe-1.3b": 0.024369213316175673, "moe-2.4b": 0.028811666700575087 , "moe-7.1b": 0.04116768307156033 }
+
 
 def get_general_model_serving_case(case, prof_database=None):
     assert isinstance(case, GeneralModelCase), "not GeneralModelCase"     
@@ -69,16 +72,18 @@ def get_general_model_serving_case(case, prof_database=None):
         train_replays = azure_v2_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
-                                              start_time='5.0.0',
-                                              end_time='6.0.0',
+                                              start_time='13.0.0',
+                                              end_time='13.23.60',
+                                              # end_time='13.1.0',
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
         test_replays = azure_v2_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
-                                              start_time='5.0.0',
-                                              end_time='6.0.0',
+                                              start_time='13.0.0',
+                                              end_time='13.23.60',
+                                              # end_time='13.1.0',
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
@@ -169,7 +174,7 @@ def run_general_model_cases(cases, exp_name="default", output_file=None,
                             mode="simulate", parallel=False):
     if mode == "simulate":
         if parallel:
-            ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
+            ray.init(address="auto", runtime_env={"working_dir": os.getcwd(), "excludes": ["backup"]},
                      ignore_reinit_error=True)
             run_one_case_ = ray.remote(num_cpus=2)(simulate_one_general_model_case).remote
         else:

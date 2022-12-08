@@ -28,11 +28,17 @@ EqualModelCase = namedtuple("EqualModelCase", [
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name"])
 
-default_slos = {"bert-1.3b": 0.100, "bert-2.6b": 0.145, "bert-6.7b": 0.234,
-                "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041}
+# default_slos = {"bert-1.3b": 0.100, "bert-2.6b": 0.145, "bert-6.7b": 0.234,
+#                 "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041}
+# default_slos = {"bert-1.3b": 0.06183671951293945, "bert-2.6b": 0.09547750155131023 , "bert-6.7b": 0.18315919240315756 ,
+#                 "moe-1.3b": 0.024369213316175673, "moe-2.4b": 0.028811666700575087 , "moe-7.1b": 0.04116768307156033 }
+default_slos = {"bert-1.3b": 0.15109131071302626, "bert-2.6b": 0.23757214016384548, "bert-6.7b": 0.3950637976328532,
+                "moe-1.3b": 0.024369213316175673, "moe-2.4b": 0.028811666700575087 , "moe-7.1b": 0.04116768307156033 }
+
 
 def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
+        # prof_database = ProfilingDatabase("profiling_result_dp.pkl")
         prof_database = ProfilingDatabase("profiling_result.pkl")
 
     (num_devices, mem_budget, model_type, num_models,
@@ -217,7 +223,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
                           mode="simulate", parallel=False):
     if mode == "simulate":
         if parallel:
-            ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
+            ray.init(address="auto", runtime_env={"working_dir": os.getcwd(), "excludes": ["backup"]},
                      ignore_reinit_error=True)
             run_one_case_ = ray.remote(num_cpus=2)(simulate_one_equal_model_case).remote
         else:
@@ -238,7 +244,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
         else:
             stats, placement = run_res
 
-        #Workload.print_stats(stats)
+        Workload.print_stats(stats)
         print(f"group #req: {stats.group_num_requests}")
         goodput = stats.goodput
 

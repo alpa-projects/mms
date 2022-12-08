@@ -51,9 +51,9 @@ if __name__ == "__main__":
 
     # multi-model config
     if args.model_type == "mixed":
-        model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-7.1b"]
+        model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-7.1b"] # 42.8G
     else:
-        model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"]
+        model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"] # 21.2 G
     
     model_types = model_set * fixed_num_modelset
     model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(fixed_num_modelset)], [])
@@ -76,11 +76,13 @@ if __name__ == "__main__":
         duration = -1
 
         if args.model_type == "all_transformers":
-            fixed_num_devices = 16
+            fixed_num_devices = 20
             fixed_num_modelset = 12
+            fixed_rate_scale = 16
         else:
-            fixed_num_devices = 32
+            fixed_num_devices = 40
             fixed_num_modelset = 12
+            fixed_rate_scale = 16
 
         arrival_process = "azure_v2"
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
@@ -232,8 +234,8 @@ if __name__ == "__main__":
             for cv_scale in cv_scales:
                 for policy_name in policies:
                     new_arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
-                                                "cv_scale": cv_scale,
-                                                "trace_dir": args.trace_dir}
+                                                  "cv_scale": cv_scale,
+                                                  "trace_dir": args.trace_dir}
                     cases.append(GeneralModelCase(
                         fixed_num_devices, mem_budget, model_types, model_names,
                         total_rate, rate_distribution,

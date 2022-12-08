@@ -84,17 +84,18 @@ if __name__ == "__main__":
         duration = -1
 
         arrival_process = "azure_v2"
+        fixed_rate_scale = 16
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
                                   "cv_scale": fixed_cv_scale,
                                   "trace_dir": args.trace_dir}
         if model_type == "bert-1.3b":
-            fixed_num_devices = 8
-            fixed_num_models = 48
-        elif model_type == "bert-2.6b":
             fixed_num_devices = 16
             fixed_num_models = 48
+        elif model_type == "bert-2.6b":
+            fixed_num_devices = 32
+            fixed_num_models = 48
         else:
-            fixed_num_devices = 48
+            fixed_num_devices = 64
             fixed_num_models = 48
         num_devices_list, num_models_list, slo_scales, \
         rate_list, cv_list, rate_scales, cv_scales = azure_v2_suite[model_type]

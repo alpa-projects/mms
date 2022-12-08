@@ -534,7 +534,7 @@ class Trace:
         mapping = OrderedDict()
         n_model = len(models)
         n_function = len(function_names)
-        assert n_function >= n_model
+        assert n_function >= n_model, f"#function {n_function} < #models {n_model}"
         if strategy not in ["round_robin", "stripe"]:
             raise NotImplementedError(f"Unimplemented strategy: {strategy}")
         for i, f in enumerate(function_names):
