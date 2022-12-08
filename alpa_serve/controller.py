@@ -138,6 +138,7 @@ class GroupManager:
         obj = await request.json()
 
         if "slo" in obj:
+            slo = obj["slo"]
             k = self.latency_scale[name]
             # SLO awareness
             stage_latency = self.latency_dict[name][1]
@@ -151,7 +152,7 @@ class GroupManager:
             ret_time = req_stage_clock[-1]
 
             # Drop this request if it will exceed deadline
-            if ret_time + self.fixed_overhead > obj["submit_time"] + obj["slo"]:
+            if ret_time + self.fixed_overhead > obj["submit_time"] + slo:
                 return {"rejected": True, "ts": request.scope["ts"]}
 
             # Accept this request
@@ -170,8 +171,9 @@ class GroupManager:
             predicted_runtime = ret_time - start_time
             ratio = actual_runtime / predicted_runtime
 
-            if ratio > 1.2 and start_time > self.freeze_end:
-                # Adjust the clock to Block all requests temporarily
+            if (ratio > 1.2 and start_time > self.freeze_end and
+                actual_runtime > slo):
+                # Adjust the clock to block all requests temporarily
                 num_stages = len(stage_latency)
                 queue_size = (self.stage_clock[0] - start_time) / (
                     predicted_runtime / num_stages)
@@ -179,9 +181,9 @@ class GroupManager:
                 for i in range(len(stage_latency)):
                     self.stage_clock[i] += adjust_clock
 
+                # Adjust the scale
                 for key in self.latency_scale:
-                    self.latency_scale[key] = min(
-                        1.1, self.latency_scale[key] * 1.05)
+                    self.latency_scale[key] *= 1.05
 
                 print(f"adjust clock: {adjust_clock:.2f}, queue size: {queue_size:.2f}")
                 print(f"adjust latency scale: {to_str_round(self.latency_scale, 2)}")
@@ -204,7 +206,7 @@ class GroupManager:
                 e2e_latency = time.time() - start
                 actual.append(e2e_latency)
 
-                tstamps = {x: (y - start) * 1e3 for x, y in res["ts"]}
+                #tstamps = {x: (y - start) * 1e3 for x, y in res["ts"]}
                 #print(f"idx: {i}, ts: {to_str_round(tstamps,2)}, "
                 #      f"actual: {e2e_latency*1e3:.2f} ms, "
                 #      f"estimated: {estimated*1e3:.2f} ms")
