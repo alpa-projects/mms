@@ -199,18 +199,18 @@ class BertModel:
 
         # Final inference function
         async def infer_func(src, request):
-            inputs = tokenizer(src,
-                               max_length=seq_len,
-                               padding="max_length",
-                               return_tensors="np")
-            input_ids = inputs.input_ids
-            batch = {
-                "input_ids": input_ids,
-                "attention_mask": inputs.attention_mask,
-                "token_type_ids": inputs.token_type_ids,
-                "position_ids": np.broadcast_to(np.arange(
-                    np.atleast_2d(input_ids).shape[-1]), input_ids.shape),
-            }
+            #inputs = tokenizer(src,
+            #                   max_length=seq_len,
+            #                   padding="max_length",
+            #                   return_tensors="np")
+            #input_ids = inputs.input_ids
+            #batch = {
+            #    "input_ids": input_ids,
+            #    "attention_mask": inputs.attention_mask,
+            #    "token_type_ids": inputs.token_type_ids,
+            #    "position_ids": np.broadcast_to(np.arange(
+            #        np.atleast_2d(input_ids).shape[-1]), input_ids.shape),
+            #}
             outputs = executable(params, batch)
             request.scope["ts"].append(("d", time.time()))
             logits = outputs.logits

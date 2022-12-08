@@ -9,7 +9,7 @@ import ray
 from alpa_serve.simulator.controller import (Controller, simulate_one_case,
     approximate_one_case)
 from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
-from alpa_serve.profiling import ProfilingDatabase
+from alpa_serve.profiling import ProfilingDatabase, ParallelConfig
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
     SelectiveReplicationSearch,
@@ -38,7 +38,6 @@ default_slos = {"bert-1.3b": 0.15109131071302626, "bert-2.6b": 0.237572140163845
 
 def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
-        # prof_database = ProfilingDatabase("profiling_result_dp.pkl")
         prof_database = ProfilingDatabase("profiling_result.pkl")
 
     (num_devices, mem_budget, model_type, num_models,
@@ -50,7 +49,11 @@ def get_equal_model_serving_case(case, prof_database=None):
 
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
-    slos = [slo_scale * default_slos[model_type]] * num_models
+    # slos = [slo_scale * default_slos[model_type]] * num_models
+    single_latency = {
+        model_type: sum(prof_database.get(model_type).para_dict[ParallelConfig(1,1,1)
+        ].latency[1]) for model_type in set(model_types)}
+    slos = [slo_scale * single_latency[model_type]] * num_models
 
     if rate_distribution == "uniform":
         rates = [total_rate / num_models] * num_models
@@ -179,17 +182,22 @@ def get_equal_model_serving_case(case, prof_database=None):
 
         if policy_name == "sr-ilp":
             policy = SelectiveReplicationILP(verbose=1)
-        elif policy_name == "sr-greedy":
+        elif policy_name in "sr-greedy":
             policy = SelectiveReplicationGreedy(verbose=1)
         elif policy_name == "sr-search":
             policy = SelectiveReplicationSearch(verbose=1)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
-        elif policy_name == "mp-search":
-            policy = ModelParallelismSearch(verbose=2)
+        elif policy_name in ["mp-search", "mp-search-evo"]:
+            use_evo_search = "evo" in policy_name
+            policy = ModelParallelismSearch(
+                use_evo_search=use_evo_search, verbose=2)
         elif "mp-greedy" in policy_name:
             group_size = int(policy_name.split("-")[2])
-            policy = ModelParallelismGreedy(group_size=group_size, verbose=1)
+            use_evo_search = "evo" in policy_name
+            policy = ModelParallelismGreedy(
+                use_evo_search=use_evo_search,
+                group_size=group_size, verbose=1)
         else:
             raise ValueError(f"Invalid placement policy: {policy_name}")
 
@@ -200,18 +208,6 @@ def get_equal_model_serving_case(case, prof_database=None):
     return ServingCase(register_models, generate_workload, place_models)
 
 
-def simulate_one_equal_model_case(case, prof_database=None):
-    serving_case = get_equal_model_serving_case(case, prof_database)
-    stats, placement = approximate_one_case(serving_case)
-    return stats, placement
-
-
-def run_one_equal_model_case(case, prof_database=None):
-    serving_case = get_equal_model_serving_case(case, prof_database)
-    stats, placement = run_one_case(serving_case)
-    return stats, placement
-
-
 _DATA_HEADS = ("exp_name",
                "num_devices", "mem_budget", "model_type", "num_models",
                "total_rate", "rate_distribution",
@@ -219,41 +215,46 @@ _DATA_HEADS = ("exp_name",
                "slo_scale", "duration", "policy_name",
                "placement", "goodput", "mode")
 
-def run_equal_model_cases(cases, exp_name="default", output_file=None,
-                          mode="simulate", parallel=False):
+
+def run_one_equal_model_case(case, exp_name, mode,
+                             output_file=None, prof_database=None,
+                             debug=False):
+    serving_case = get_equal_model_serving_case(case, prof_database)
+
     if mode == "simulate":
-        if parallel:
-            ray.init(address="auto", runtime_env={"working_dir": os.getcwd(), "excludes": ["backup"]},
-                     ignore_reinit_error=True)
-            run_one_case_ = ray.remote(num_cpus=2)(simulate_one_equal_model_case).remote
-        else:
-            run_one_case_ = simulate_one_equal_model_case
+        stats, placement = approximate_one_case(serving_case, debug=debug)
     else:
-        ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
-                 ignore_reinit_error=True)
+        stats, placement = run_one_case(serving_case, debug=debug)
+
+    #Workload.print_stats(stats)
+    print(f"group #req: {stats.group_num_requests}")
+
+    res = (placement, round(stats.goodput, 3), mode)
+    values = (exp_name,) + tuple(case) + res
+
+    if output_file is not None:
+        write_tsv(_DATA_HEADS, values, output_file)
+
+    return values
+
+
+def run_equal_model_cases(cases, exp_name="default", output_file=None,
+                          mode="simulate", debug_tstamp=False, parallel=False):
+    if not ray.is_initialized():
+        ray.init(address="auto", runtime_env={"working_dir": os.getcwd()})
+
+    if parallel:
+        run_one_case_ = ray.remote(num_cpus=2)(run_one_equal_model_case).remote
+    else:
         run_one_case_ = run_one_equal_model_case
 
-    run_results = []
-    for case in cases:
-        run_results.append(run_one_case_(case))
-
     results = []
-    for case, run_res in zip(cases, run_results):
-        if parallel:
-            stats, placement = ray.get(run_res)
-        else:
-            stats, placement = run_res
+    for case in cases:
+        results.append(run_one_case_(case, exp_name, mode,
+            output_file=output_file, debug=debug_tstamp))
 
-        Workload.print_stats(stats)
-        print(f"group #req: {stats.group_num_requests}")
-        goodput = stats.goodput
-
-        res = (placement, round(goodput, 3), mode)
-        values = (exp_name,) + tuple(case) + res
-
-        if output_file is not None:
-            write_tsv(_DATA_HEADS, values, output_file)
-        results.append(res)
+    if parallel:
+        results = ray.get(results)
 
     return results
 

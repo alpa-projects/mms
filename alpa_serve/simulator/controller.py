@@ -8,6 +8,7 @@ import math
 from collections import defaultdict
 import dataclasses
 from functools import partial
+from itertools import cycle
 import time
 from typing import Callable, List, Dict, Optional, Tuple
 
@@ -47,8 +48,8 @@ class GroupManager:
 
         # Constants
         self.fixed_overhead = 0.004
-
-        self.alpa_overhead = partial(np.random.normal, loc=0.004, scale=0.001)
+        self.alpa_overhead = cycle(
+            np.abs(np.random.normal(loc=0.005, scale=0.0005, size=(2048,))))
 
         # Simulator specific code
         install_remote_methods(self)
@@ -92,7 +93,8 @@ class GroupManager:
             for i in range(len(stage_latency)):
                 self.stage_clock[i] = req_stage_clock[i]
 
-        ret = await self.replicas[name].handle_request(request, delay=self.alpa_overhead())
+        ret = await self.replicas[name].handle_request(request,
+            delay=next(self.alpa_overhead))
         return ret
 
 
@@ -115,8 +117,8 @@ class Controller:
         self.logger = build_logger("controller")
 
         # Simulator specific code
-        np.random.seed(1)
-        self.dispatch_overhead = partial(np.random.normal, loc=0.002, scale=0.0015)
+        self.dispatch_overhead = cycle(
+            np.abs(np.random.normal(loc=0.0025, scale=0.0005, size=(2048,))))
 
         install_remote_methods(self)
 
@@ -202,7 +204,7 @@ class Controller:
 
         self.group_info[group_id].queue_size += 1
         response = await manager.handle_request.remote(name, request,
-            delay=abs(self.dispatch_overhead()))
+            delay=next(self.dispatch_overhead))
         self.group_info[group_id].queue_size -= 1
         self.group_info[group_id].num_total_requests += 1
 
@@ -218,13 +220,12 @@ class Client:
         self.debug = debug
 
         self.res_dict = dict()
-        self.http_overhead = partial(np.random.normal, loc=0.0023, scale=0.0005)
 
     @timed_coroutine
-    async def submit_one(self, request, idx, start, finish, good):
+    async def submit_one(self, request, idx, start, finish, good, http_overhead):
         start[idx] = clock()
         request.submit_time = start[idx]
-        res = await self.controller.handle_request(request, delay=self.http_overhead())
+        res = await self.controller.handle_request(request, delay=http_overhead)
         finish[idx] = clock()
         e2e_latency = finish[idx] - start[idx]
         good[idx] = e2e_latency <= request.slo and res is not None
@@ -233,17 +234,19 @@ class Client:
             tstamps = to_str_round({x: (y - request.submit_time) * 1e3 for x, y in request.time_stamp.items()}, 2)
             print(f"idx: {idx} ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
 
-    def submit_workload(self, workload: Workload):
-        start, finish, good = (np.zeros(len(workload)),
-            np.zeros(len(workload)), np.zeros((len(workload),), dtype=np.bool))
+    async def submit_workload(self, workload: Workload):
+        num_requests = len(workload)
+        start, finish, good = (np.zeros(num_requests),
+            np.zeros(num_requests), np.zeros(num_requests, dtype=np.bool))
         self.res_dict[workload] = (start, finish, good)
 
+        http_overheads = np.abs(np.random.normal(
+            loc=0.0025, scale=0.0005, size=(num_requests,)))
         for i in range(len(workload)):
             self.submit_one(workload.requests[i], i, start, finish, good,
-                            tstamp=workload.arrivals[i])
+                            http_overheads[i], tstamp=workload.arrivals[i])
 
-    def wait_all(self):
-        return main_loop()
+        await main_loop()
 
     def compute_stats(self, workload: Workload, warmup: float):
         start, finish, good = self.res_dict[workload]
@@ -251,10 +254,7 @@ class Client:
 
 
 async def run_workload(client, workload, warmup):
-    client.submit_workload(workload)
-
-    await client.wait_all()
-
+    await client.submit_workload(workload)
     return client.compute_stats(workload, warmup=warmup)
 
 
@@ -327,7 +327,7 @@ def approximate_one_case(case: ServingCase,
         model_names, prof_ress = zip(*controller.name2profiling.items())
 
         name2model_id = {m: i for i, m in enumerate(model_names)}
-        model_ids = np.array([name2model_id[r.model_name] for r in workload.requests], dtype=np.int32)
+        model_ids = np.array([name2model_id.get(r.model_name, -1) for r in workload.requests], dtype=np.int32)
         slos = np.array([r.slo for r in workload.requests], dtype=np.float32)
 
         if workload.enable_simulator_cache:
@@ -377,8 +377,9 @@ def approximate_one_case(case: ServingCase,
             model_num_good_requests[i] / (model_num_requests[i] + eps),
             model_num_requests[i] / interval,
             0, 0, 0, 0) for i in range(num_models)]
-        stats = StatsResult(per_model_stats, group_num_requests, np.mean(good),
-                            np.mean(finish - start), len(start), len(start) / interval)
+        stats = StatsResult(per_model_stats, tuple(group_num_requests),
+                            np.mean(good), np.mean(finish - start),
+                            len(start), len(start) / interval)
     else:
         stats = workload.compute_stats(start, finish, good, warmup)
         stats.group_num_requests = group_num_requests
@@ -396,10 +397,15 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
     group_num_good_requests = np.zeros(num_groups, dtype=np.int32)
     model_num_requests = np.zeros(num_models, dtype=np.int32)
     model_num_good_requests = np.zeros(num_models, dtype=np.int32)
-    fixed_overhead = 0.009
+    fixed_overhead = 0.011
 
     for i in range(num_requests):
         tstamp, m_id, slo = tstamps[i], model_ids[i], slos[i]
+
+        if m_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
 
         # Select group id
         g_id = -1

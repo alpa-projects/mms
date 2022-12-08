@@ -136,6 +136,8 @@ class PlacementEvaluator:
                  parallel: bool):
         self.parallel = parallel
 
+        workload.cached_data = None
+
         if parallel:
             self.model_datas = ray.put(model_datas)
             self.cluster_env = ray.put(cluster_env)
