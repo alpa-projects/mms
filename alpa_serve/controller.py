@@ -334,24 +334,28 @@ class Controller:
             assert name in self.model_info, (
                 f"Model '{name}' is not registered.")
             model_info = self.model_info[name]
-            assert model_info.group_ids, (
-                f"No replica of model '{name}' is created.")
+            #assert model_info.group_ids, (
+            #    f"No replica of model '{name}' is created.")
 
-            # Dispatch
-            group_id = self.select_group_id(model_info.group_ids)
-            manager = self.group_info[group_id].manager
-
-            self.group_info[group_id].queue_size += 1
-            response = await manager.handle_request.remote(
-                name, request_wrapper_bytes)
-            self.group_info[group_id].queue_size -= 1
-            self.group_info[group_id].num_total_requests += 1
-
-            if isinstance(response, RelayException):
-                response = make_error_response(response)
-                status_code = 400
-            else:
+            if not model_info.group_ids:
                 status_code = 200
+                response = {"rejected": True}
+            else:
+                # Dispatch
+                group_id = self.select_group_id(model_info.group_ids)
+                manager = self.group_info[group_id].manager
+
+                self.group_info[group_id].queue_size += 1
+                response = await manager.handle_request.remote(
+                    name, request_wrapper_bytes)
+                self.group_info[group_id].queue_size -= 1
+                self.group_info[group_id].num_total_requests += 1
+
+                if isinstance(response, RelayException):
+                    response = make_error_response(response)
+                    status_code = 400
+                else:
+                    status_code = 200
         except Exception as e:  # pylint: disable=broad-except
             response = make_error_response(e)
             status_code = 400

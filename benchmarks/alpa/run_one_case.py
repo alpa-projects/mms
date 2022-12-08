@@ -29,7 +29,8 @@ class Client:
     @staticmethod
     def submit_one(url, model_name, slo, start, idx, debug):
         if time.time() > start:
-            print(f"WARNING: Request {idx} is blocked by the client.")
+            print(f"WARNING: Request {idx} is blocked by the client. "
+                  f"Arrival: {start:.4f}")
 
         while time.time() < start:
             pass
@@ -46,9 +47,10 @@ class Client:
         assert status_code == 200, f"{res}"
         end = time.time()
         e2e_latency = end - start
-        good = e2e_latency <= slo and not res["rejected"]
+        rejected = res["rejected"]
+        good = e2e_latency <= slo and not rejected
 
-        if e2e_latency > slo and not res["rejected"]:
+        if e2e_latency > slo and not rejected:
             print(f"WARNING: Request {idx} is accepted but not good.")
 
         if debug:

@@ -77,6 +77,14 @@ def debug_case(per_model_rate, duration, placement):
                 "b", group_id, [ParallelConfig(1, 1, 8)])
 
             model_placement = ModelPlacement([ParallelConfig(1,1,8)], [[0, 1]])
+        elif placement == "invalid":
+            group_id = 0
+            controller.create_mesh_group_manager.remote(group_id, [1, 1])
+
+            group_id = 1
+            controller.create_mesh_group_manager.remote(group_id, [1, 1])
+
+            model_placement = ModelPlacement([], [])
         else:
             raise ValueError(f"Invalid placement: {placement}")
 
@@ -91,3 +99,4 @@ suite_debug["debug_replicate_2x"] = debug_case(4, 60, "replicate_2x")
 suite_debug["debug_pipeline_2x"] = debug_case(4, 60, "pipeline_2x")
 suite_debug["debug_replicate_overloaded"] = debug_case(30, 30, "replicate")
 suite_debug["debug_pipeline_overloaded"] = debug_case(30, 30, "pipeline_2x")
+suite_debug["debug_invalid"] = debug_case(4, 30, "invalid")
