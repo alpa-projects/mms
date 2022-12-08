@@ -9,7 +9,7 @@ import ray
 from alpa_serve.simulator.controller import (Controller, simulate_one_case,
     approximate_one_case)
 from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
-from alpa_serve.profiling import ProfilingDatabase
+from alpa_serve.profiling import ProfilingDatabase, ParallelConfig
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
     SelectiveReplicationSearch,
@@ -28,8 +28,6 @@ EqualModelCase = namedtuple("EqualModelCase", [
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name"])
 
-default_slos = {"bert-1.3b": 0.0628, "bert-2.6b": 0.0967, "bert-6.7b": 0.234,
-                "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041}
 
 def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
@@ -44,7 +42,11 @@ def get_equal_model_serving_case(case, prof_database=None):
 
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
-    slos = [slo_scale * default_slos[model_type]] * num_models
+
+    single_latency = {
+        model_type: sum(prof_database.get(model_type).para_dict[ParallelConfig(1,1,1)
+        ].latency[1])}
+    slos = [slo_scale * single_latency[model_type]] * num_models
 
     if rate_distribution == "uniform":
         rates = [total_rate / num_models] * num_models

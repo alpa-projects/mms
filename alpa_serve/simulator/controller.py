@@ -49,7 +49,7 @@ class GroupManager:
         # Constants
         self.fixed_overhead = 0.004
         self.alpa_overhead = cycle(
-            np.random.normal(loc=0.005, scale=0.0005, size=(1024,)))
+            np.abs(np.random.normal(loc=0.005, scale=0.0005, size=(2048,))))
 
         # Simulator specific code
         install_remote_methods(self)
@@ -118,7 +118,7 @@ class Controller:
 
         # Simulator specific code
         self.dispatch_overhead = cycle(
-            np.random.normal(loc=0.0025, scale=0.0005, size=(1024,)))
+            np.abs(np.random.normal(loc=0.0025, scale=0.0005, size=(2048,))))
 
         install_remote_methods(self)
 
