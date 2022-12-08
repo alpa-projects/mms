@@ -69,7 +69,7 @@ def get_equal_model_serving_case(case, prof_database=None):
         rates = np.array(frac) / s * total_rate
     elif isinstance(rate_distribution, (list, tuple, np.ndarray)):
         assert len(rate_distribution) == num_models
-        rates = rate_distribution / sum(rate_distribution) * total_rate
+        rates = np.array(rate_distribution) / sum(rate_distribution) * total_rate
     elif rate_distribution is None:
         pass
     else:
