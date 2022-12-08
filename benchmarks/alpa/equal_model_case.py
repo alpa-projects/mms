@@ -45,7 +45,7 @@ def get_equal_model_serving_case(case, prof_database=None):
 
     single_latency = {
         model_type: sum(prof_database.get(model_type).para_dict[ParallelConfig(1,1,1)
-        ].latency[1])}
+        ].latency[1]) for model_type in set(model_types)}
     slos = [slo_scale * single_latency[model_type]] * num_models
 
     if rate_distribution == "uniform":
@@ -193,7 +193,9 @@ def run_one_equal_model_case(case, exp_name, mode,
     else:
         stats, placement = run_one_case(serving_case, debug=debug)
 
+    #Workload.print_stats(stats)
     print(f"group #req: {stats.group_num_requests}")
+
     res = (placement, round(stats.goodput, 3), mode)
     values = (exp_name,) + tuple(case) + res
 
