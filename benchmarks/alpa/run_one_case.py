@@ -54,10 +54,11 @@ def submit_one(arg):
     e2e_latency = end - start
     rejected = res["rejected"]
     good = e2e_latency <= slo and not rejected
+    #good = not rejected
 
     if e2e_latency > slo and not rejected:
-        print(f"WARNING: Request {idx} is accepted but not good. "
-              f"e2e latency: {e2e_latency*1e3:.2f} ms")
+        print(f"WARNING: Request {idx} is accepted but not good. ")
+        debug = True
 
     if debug:
         tstamps = to_str_round({x: (y - start) * 1e3 for x, y in res["ts"]}, 2)
