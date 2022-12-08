@@ -152,7 +152,7 @@ class GroupManager:
             ret_time = req_stage_clock[-1]
 
             # Drop this request if it will exceed deadline
-            if ret_time + self.fixed_overhead > obj["submit_time"] + slo:
+            if ret_time + self.fixed_overhead + 0.001 > obj["submit_time"] + slo:
                 return {"rejected": True, "ts": request.scope["ts"]}
 
             # Accept this request
@@ -171,8 +171,13 @@ class GroupManager:
             predicted_runtime = ret_time - start_time
             ratio = actual_runtime / predicted_runtime
 
-            if (ratio > 1.2 and start_time > self.freeze_end and
-                actual_runtime > slo):
+            if time.time() + self.fixed_overhead > obj["submit_time"] + slo:
+                underestimated = True
+            else:
+                underestimated = False
+
+            # ratio > 1.2 and
+            if start_time > self.freeze_end and underestimated:
                 # Adjust the clock to block all requests temporarily
                 num_stages = len(stage_latency)
                 queue_size = (self.stage_clock[0] - start_time) / (
@@ -183,10 +188,11 @@ class GroupManager:
 
                 # Adjust the scale
                 for key in self.latency_scale:
-                    self.latency_scale[key] *= 1.05
+                    self.latency_scale[key] += 0.05
 
                 print(f"adjust clock: {adjust_clock:.2f}, queue size: {queue_size:.2f}")
                 print(f"adjust latency scale: {to_str_round(self.latency_scale, 2)}")
+                print(f"estimated time: {sum(stage_latency) * self.latency_scale[name]}")
                 self.freeze_end = self.stage_clock[-1]
 
         return ret

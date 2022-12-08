@@ -107,10 +107,10 @@ suite_debug["debug_invalid"] = debug_case(4, 30, "invalid")
 
 def align_case_1():
     model_type = "bert-2.6b"
-    rate = 3
-    cv = 1e-5
+    rate = 10
+    cv = 4
     duration = 30
-    slo = 100 * default_slos[model_type]
+    slo = 1 * default_slos[model_type]
 
     def register_models(controller):
         is_simulator = isinstance(controller, Controller)

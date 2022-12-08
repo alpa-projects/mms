@@ -377,8 +377,9 @@ def approximate_one_case(case: ServingCase,
             model_num_good_requests[i] / (model_num_requests[i] + eps),
             model_num_requests[i] / interval,
             0, 0, 0, 0) for i in range(num_models)]
-        stats = StatsResult(per_model_stats, group_num_requests, np.mean(good),
-                            np.mean(finish - start), len(start), len(start) / interval)
+        stats = StatsResult(per_model_stats, tuple(group_num_requests),
+                            np.mean(good), np.mean(finish - start),
+                            len(start), len(start) / interval)
     else:
         stats = workload.compute_stats(start, finish, good, warmup)
         stats.group_num_requests = group_num_requests
