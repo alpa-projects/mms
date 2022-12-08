@@ -19,6 +19,7 @@ if __name__ == "__main__":
     parser.add_argument("--unequal", action="store_true")
     parser.add_argument("--model_type", type=str, default="all_transformers",
                         choices=["all_transformers", "mixed"])
+    parser.add_argument("--debug-tstamp", action="store_true")
 
     args = parser.parse_args()
 
@@ -28,12 +29,12 @@ if __name__ == "__main__":
     if args.policy is not None:
         policies = [args.policy]
     else:
-        policies = ["sr-greedy", "mp-greedy-2", "mp-greedy-4", "mp-search"]
-    num_devices = 16
+        policies = ["sr-greedy", "mp-greedy-4", "mp-search"]
+    num_devices = 8
     mem_budget = 14 * GB
     model_type = "bert-2.6b"
-    num_models = 24
-    total_rate = 70
+    num_models = 12
+    total_rate = 35
     if args.trace == "synthetic":
         # choices: {"gamma", "uniform_mmpp"}
         arrival_process = "gamma"
@@ -49,7 +50,7 @@ if __name__ == "__main__":
     if args.slo_scale is not None:
         slo_scales = [args.slo_scale]
     else:
-        slo_scales = [0.5, 1, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7.5, 10]
+        slo_scales = [0.5, 1, 2, 4, 5, 6, 10]
     duration = 200
 
     if args.unequal:
@@ -75,6 +76,7 @@ if __name__ == "__main__":
                                 exp_name=args.exp_name,
                                 output_file=args.output,
                                 mode=args.mode,
+                                debug_tstamp=args.debug_tstamp,
                                 parallel=args.parallel)
     else:
         cases = []
@@ -91,4 +93,5 @@ if __name__ == "__main__":
                               exp_name=args.exp_name,
                               output_file=args.output,
                               mode=args.mode,
+                              debug_tstamp=args.debug_tstamp,
                               parallel=args.parallel)
