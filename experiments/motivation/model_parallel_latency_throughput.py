@@ -20,23 +20,23 @@ def plot_database(database, model_name="bert-6.7b"):
     dp_throughput = []
     dp_memory = []
     for n in n_gpus:
-        pp_all_latency = database[model_name][(1, 1, n)].latency
+        pp_all_latency = database[model_name].para_dict[(1, 1, n)].latency[1]
         pp_latency.append(get_latency_and_throughput(pp_all_latency)[0])
         pp_throughput.append(get_latency_and_throughput(pp_all_latency)[1])
-        pp_memory.append(sum(database[model_name][(1, 1, n)].weight_mem))
-        op_all_latency = database[model_name][(1, n, 1)].latency
+        pp_memory.append(sum(database[model_name].para_dict[(1, 1, n)].weight_mem))
+        op_all_latency = database[model_name].para_dict[(1, n, 1)].latency[1]
         op_latency.append(get_latency_and_throughput(op_all_latency)[0])
-        op_memory.append(sum(database[model_name][(1, n, 1)].weight_mem))
+        op_memory.append(sum(database[model_name].para_dict[(1, n, 1)].weight_mem) * n)
         op_throughput.append(get_latency_and_throughput(op_all_latency)[1])
-        dp_all_latency = database[model_name][(1, 1, 1)].latency
+        dp_all_latency = database[model_name].para_dict[(1, 1, 1)].latency[1]
         dp_latency.append(dp_all_latency)
         dp_throughput.append(n / max(dp_all_latency))
-        dp_memory.append(sum(database[model_name][(1, 1, 1)].weight_mem) * n)
+        dp_memory.append(sum(database[model_name].para_dict[(1, 1, 1)].weight_mem) * n)
 
     plt.figure()
-    plt.plot(n_gpus, pp_latency, label="PP")
-    plt.plot(n_gpus, op_latency, label="OP")
-    plt.plot(n_gpus, dp_latency, label="DP")
+    plt.plot(n_gpus, pp_latency, '.-', label="PP")
+    plt.plot(n_gpus, op_latency, '.-', label="OP")
+    plt.plot(n_gpus, dp_latency, '.-', label="DP")
     plt.xlabel("Number of GPUs")
     plt.ylabel("Latency (s)")
     plt.legend()
@@ -44,9 +44,9 @@ def plot_database(database, model_name="bert-6.7b"):
     plt.savefig(f"model_parallel_latency.pdf")
 
     plt.figure()
-    plt.plot(n_gpus, pp_throughput, label="PP")
-    plt.plot(n_gpus, op_throughput, label="OP")
-    plt.plot(n_gpus, dp_throughput, label="DP")
+    plt.plot(n_gpus, pp_throughput, '.-', label="PP")
+    plt.plot(n_gpus, op_throughput, '.-', label="OP")
+    plt.plot(n_gpus, dp_throughput, '.-', label="DP")
     plt.xlabel("Number of GPUs")
     plt.ylabel("Throughput (req/s)")
     plt.legend()
@@ -54,9 +54,9 @@ def plot_database(database, model_name="bert-6.7b"):
     plt.savefig(f"model_parallel_throughput.pdf")
 
     plt.figure()
-    plt.plot(n_gpus, pp_memory, label="PP")
-    plt.plot(n_gpus, op_memory, label="OP")
-    plt.plot(n_gpus, dp_memory, label="DP")
+    plt.plot(n_gpus, pp_memory, '.-', label="PP")
+    plt.plot(n_gpus, op_memory, '.-', label="OP")
+    plt.plot(n_gpus, dp_memory, '.-', label="DP")
     plt.xlabel("Number of GPUs")
     plt.ylabel("Memory (Bytes)")
     plt.legend()
