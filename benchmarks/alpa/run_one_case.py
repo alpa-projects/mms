@@ -1,8 +1,8 @@
 import argparse
 import asyncio
-from multiprocessing import get_context
 import concurrent.futures
 from concurrent.futures import wait
+from multiprocessing import get_context
 import time
 
 import requests
