@@ -211,11 +211,13 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
         run_results.append(run_one_case_(case))
 
     results = []
+    all_stats = []
     for case, run_res in zip(cases, run_results):
         if parallel:
             stats, placement = ray.get(run_res)
         else:
             stats, placement = run_res
+        all_stats.append(stats)
 
         #Workload.print_stats(stats)
         print(f"group #req: {stats.group_num_requests}")
@@ -228,7 +230,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
             write_tsv(_DATA_HEADS, values, output_file)
         results.append(res)
 
-    return results
+    return results, all_stats
 
 
 def read_equal_model_case_tsv(filename):
@@ -248,7 +250,7 @@ def read_equal_model_case_tsv(filename):
 
         num_devices = int(num_devices)
         num_models = int(num_models)
-        total_rate = float(total_rate) 
+        total_rate = float(total_rate)
         arrival_process_kwargs = eval(arrival_process_kwargs)
         slo_scale = float(slo_scale)
         duration = float(duration)
