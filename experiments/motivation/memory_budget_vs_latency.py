@@ -19,9 +19,9 @@ def run_case(case_id=1, mode="simulate", parallel=False):
     arrival_process_kwargs = {"cv": 5.0}
     slo_scale = np.inf
     duration = 20000
-    mp_mem_budgets = [3 * GB, 6 * GB, 12 * GB]
+    mp_mem_budgets = [3.2 * GB * i for i in [1, 2, 4]]
     mp_policies = ["mp-greedy-8", "mp-greedy-4", "mp-greedy-2"]
-    sr_mem_budgets = [3 * GB * i for i in range(1, 6)]
+    sr_mem_budgets = [3.2 * GB * i for i in range(1, 6)]
     sr_policies = ["sr-uniform"] * len(sr_mem_budgets)
 
     cases = []
@@ -52,7 +52,6 @@ def run_case(case_id=1, mode="simulate", parallel=False):
 def plot_case(case_id=1):
     with open(f"memory_budget_vs_latency_results_{case_id}.pkl", "rb") as f:
         ((mp_mem_budgets, mp_policies, sr_mem_budgets, sr_policies), stats) = pickle.load(f)
-
     mp_x = mp_mem_budgets
     mp_y = []
     mp_stats = stats[:len(mp_policies)]
@@ -61,19 +60,19 @@ def plot_case(case_id=1):
 
     sr_x = sr_mem_budgets
     sr_y = []
-    sr_stats = stats[:len(sr_policies)]
+    sr_stats = stats[len(mp_policies):]
     for stat in sr_stats:
         sr_y.append(stat.latency_mean)
 
 
     plt.figure()
-    plt.plot(mp_x, mp_y, label="MP")
-    plt.plot(sr_x, sr_y, label="SR")
+    plt.plot(mp_x, mp_y, '.-', label="MP")
+    plt.plot(sr_x, sr_y, '.-', label="SR")
     plt.xlabel("Memory Budget (Bytes)")
     plt.ylabel("Mean Latency (s)")
     plt.legend()
     plt.tight_layout()
-    plt.savefig(f"memory_budget_vs_latency_{case_id}.pdf")
+    plt.savefig(f"memory_budget_vs_latency_mean_latency_{case_id}.pdf")
     # plt.show()
 
 
