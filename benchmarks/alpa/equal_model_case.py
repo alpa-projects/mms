@@ -12,7 +12,7 @@ from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
-    SelectiveReplicationSearch,
+    SelectiveReplicationSearch, SelectiveReplicationUniform,
     ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.trace import Trace, report_group_stats
@@ -166,6 +166,8 @@ def get_equal_model_serving_case(case, prof_database=None):
             policy = ModelParallelismGreedy(
                 use_evo_search=use_evo_search,
                 group_size=group_size, verbose=1)
+        elif policy_name == "sr-uniform":
+            policy = SelectiveReplicationUniform(verbose=1)
         else:
             raise ValueError(f"Invalid placement policy: {policy_name}")
 

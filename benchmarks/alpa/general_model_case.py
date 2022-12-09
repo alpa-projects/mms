@@ -8,7 +8,8 @@ from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
-    ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
+    SelectiveReplicationUniform, ModelParallelismILP, ModelParallelismGreedy,
+    ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.trace import Trace, report_group_stats
 from alpa_serve.util import GB, write_tsv, ServingCase
@@ -26,7 +27,7 @@ default_slos = {"bert-1.3b": 0.100, "bert-2.6b": 0.145, "bert-6.7b": 0.234,
                 "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041}
 
 def get_general_model_serving_case(case, prof_database=None):
-    assert isinstance(case, GeneralModelCase), "not GeneralModelCase"     
+    assert isinstance(case, GeneralModelCase), "not GeneralModelCase"
     if prof_database is None:
         prof_database = ProfilingDatabase("profiling_result.pkl")
 
@@ -141,6 +142,8 @@ def get_general_model_serving_case(case, prof_database=None):
             policy = ModelParallelismGreedy(
                 use_evo_search=use_evo_search,
                 group_size=group_size, verbose=1)
+        elif policy_name == "sr-uniform":
+            policy = SelectiveReplicationUniform(verbose=1)
         else:
             raise ValueError(f"Invalid placement policy: {policy_name}")
 
@@ -234,7 +237,7 @@ def read_general_model_case_tsv(filename):
 
         num_devices = int(num_devices)
         num_models = int(num_models)
-        total_rate = float(total_rate) 
+        total_rate = float(total_rate)
         arrival_process_kwargs = eval(arrival_process_kwargs)
         slo_scale = float(slo_scale)
         duration = float(duration)

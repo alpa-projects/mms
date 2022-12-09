@@ -22,7 +22,7 @@ def run_case(case_id=1, mode="simulate", parallel=False):
     mp_mem_budgets = [3 * GB, 6 * GB, 12 * GB]
     mp_policies = ["mp-greedy-8", "mp-greedy-4", "mp-greedy-2"]
     sr_mem_budgets = [3 * GB * i for i in range(1, 6)]
-    sr_policies = ["sr-greedy"] * len(sr_mem_budgets)
+    sr_policies = ["sr-uniform"] * len(sr_mem_budgets)
 
     cases = []
     for policy_name, mem_budget in zip(mp_policies, mp_mem_budgets):
