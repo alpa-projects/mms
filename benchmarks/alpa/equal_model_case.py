@@ -198,7 +198,7 @@ _DATA_HEADS = ("exp_name",
                "placement", "goodput", "mode")
 
 def run_equal_model_cases(cases, exp_name="default", output_file=None,
-                          mode="simulate", parallel=False):
+                          mode="simulate", parallel=False, prof_database=None):
     if mode == "simulate":
         if parallel:
             ray.init(address="auto", runtime_env={"working_dir": os.getcwd()},
@@ -213,7 +213,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
 
     run_results = []
     for case in cases:
-        run_results.append(run_one_case_(case))
+        run_results.append(run_one_case_(case, prof_database))
 
     results = []
     all_stats = []
