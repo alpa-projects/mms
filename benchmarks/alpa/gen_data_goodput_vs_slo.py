@@ -30,7 +30,7 @@ if __name__ == "__main__":
     if args.policy is not None:
         policies = [args.policy]
     else:
-        policies = ["sr-greedy", "mp-greedy-4", "mp-search"]
+        policies = ["sr-greedy", "mp-search"]
     num_devices = 16
     mem_budget = 14 * GB
     model_type = "bert-2.6b"
