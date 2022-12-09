@@ -19,6 +19,7 @@ if __name__ == "__main__":
     parser.add_argument("--unequal", action="store_true")
     parser.add_argument("--model_type", type=str, default="all_transformers",
                         choices=["all_transformers", "mixed"])
+    parser.add_argument("--relax-slo", action="store_true")
     parser.add_argument("--debug-tstamp", action="store_true")
 
     args = parser.parse_args()
@@ -30,11 +31,11 @@ if __name__ == "__main__":
         policies = [args.policy]
     else:
         policies = ["sr-greedy", "mp-greedy-4", "mp-search"]
-    num_devices = 8
+    num_devices = 16
     mem_budget = 14 * GB
     model_type = "bert-2.6b"
-    num_models = 12
-    total_rate = 35
+    num_models = 24
+    total_rate = 70
     if args.trace == "synthetic":
         # choices: {"gamma", "uniform_mmpp"}
         arrival_process = "gamma"
@@ -93,5 +94,6 @@ if __name__ == "__main__":
                               exp_name=args.exp_name,
                               output_file=args.output,
                               mode=args.mode,
+                              relax_slo=args.relax_slo,
                               debug_tstamp=args.debug_tstamp,
                               parallel=args.parallel)

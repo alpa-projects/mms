@@ -98,6 +98,7 @@ class GroupManager:
         # Latency prediction
         self.stage_clock = [0] * np.prod(virtual_mesh_shape)
         self.latency_scale = {}
+        self.max_latency_scale = 1.08
         self.freeze_end = 0
 
         self.logger = build_logger()
@@ -167,32 +168,34 @@ class GroupManager:
             ret = RelayException(e)
 
         if ret_time:
-            actual_runtime = time.time() - start_time
-            predicted_runtime = ret_time - start_time
-            ratio = actual_runtime / predicted_runtime
-
             if time.time() + self.fixed_overhead > obj["submit_time"] + slo:
                 underestimated = True
             else:
                 underestimated = False
 
-            # ratio > 1.2 and
             if start_time > self.freeze_end and underestimated:
+                actual_runtime = time.time() - start_time
+                predicted_runtime = ret_time - start_time
+                ratio = actual_runtime / predicted_runtime
+
                 # Adjust the clock to block all requests temporarily
                 num_stages = len(stage_latency)
                 queue_size = (self.stage_clock[0] - start_time) / (
                     predicted_runtime / num_stages)
-                adjust_clock = actual_runtime / num_stages * queue_size * 2
+                adjust_clock = actual_runtime / num_stages * queue_size / 2
                 for i in range(len(stage_latency)):
                     self.stage_clock[i] += adjust_clock
 
                 # Adjust the scale
-                for key in self.latency_scale:
-                    self.latency_scale[key] += 0.05
+                if ratio > 1.2:
+                    for key in self.latency_scale:
+                        self.latency_scale[key] = min(
+                            self.max_latency_scale,
+                            self.latency_scale[key] + 0.04)
 
-                print(f"adjust clock: {adjust_clock:.2f}, queue size: {queue_size:.2f}")
-                print(f"adjust latency scale: {to_str_round(self.latency_scale, 2)}")
-                print(f"estimated time: {sum(stage_latency) * self.latency_scale[name]}")
+                #print(f"adjust clock: {adjust_clock:.2f}, queue size: {queue_size:.2f}, ratio: {ratio:.2f}")
+                #print(f"adjust latency scale: {to_str_round(self.latency_scale, 2)}")
+                #print(f"estimated latency {sum(stage_latency) * self.latency_scale[name]:.3f}")
                 self.freeze_end = self.stage_clock[-1]
 
         return ret
@@ -219,6 +222,8 @@ class GroupManager:
 
             self.latency_scale[name] = max(actual[n_warmup:]) / estimated
 
+        for name in self.latency_scale:
+            self.latency_scale[name] = max(self.latency_scale.values())
         print(f"latency scale: {to_str_round(self.latency_scale, 2)}")
 
     def shutdown(self):
