@@ -193,7 +193,7 @@ def run_one_equal_model_case(case, exp_name, mode,
     else:
         stats, placement = run_one_case(serving_case, debug=debug)
 
-    #Workload.print_stats(stats)
+    Workload.print_stats(stats)
     print(f"group #req: {stats.group_num_requests}")
 
     res = (placement, round(stats.goodput, 3), mode)

@@ -99,6 +99,8 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
     ax.set_title(title)
 
     for i in range(len(methods)):
+        if first_good[i] == 0:
+            continue
         ax.axvline(first_good[i], color=method2color(methods[i]), linestyle=":")
 
     if show:
