@@ -353,7 +353,8 @@ def approximate_one_case(case: ServingCase,
         for g_id in range(num_groups):
             value = prof_ress[m_id].para_dict.get(group_configs[g_id], None)
             if value:
-                group_max_latency[m_id][g_id] = max(value.latency[max_bs])
+                group_max_latency[m_id][g_id] = max(value.latency[max_bs]) * (
+                    1 + 0.005 * len(value.latency[max_bs]))
                 group_sum_latency[m_id][g_id] = sum(value.latency[max_bs])
             else:
                 group_max_latency[m_id][g_id] = group_sum_latency[m_id][g_id] = inf

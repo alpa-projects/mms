@@ -22,7 +22,12 @@ show_name_dict = {
 }
 
 def show_name(name):
-    return show_name_dict.get(name, name)
+    if "-real" in name:
+        name = name.replace("-real", "")
+        suffix = " REAL"
+    else:
+        suffix = ""
+    return show_name_dict.get(name, name) + suffix
 
 
 method2color_dict = {
@@ -46,8 +51,12 @@ method_order_list = [
 ]
 
 def method2order(name):
-    return method_order_list.index(name)
-
+    if "-real" in name:
+        name = name.replace("-real", "")
+        delta = len(method_order_list)
+    else:
+        delta = 0
+    return method_order_list.index(name) + delta
 
 
 def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show):

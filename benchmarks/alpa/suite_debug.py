@@ -6,7 +6,7 @@ from alpa_serve.util import ServingCase, GB
 
 from benchmarks.alpa.util import get_model_def
 from benchmarks.alpa.equal_model_case import (EqualModelCase,
-    get_equal_model_serving_case, default_slos)
+    get_equal_model_serving_case)
 
 
 suite_debug = {
@@ -110,7 +110,7 @@ def align_case_1():
     rate = 10
     cv = 4
     duration = 30
-    slo = 1 * default_slos[model_type]
+    slo = 1 * 0.1
 
     def register_models(controller):
         is_simulator = isinstance(controller, Controller)

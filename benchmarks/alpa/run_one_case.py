@@ -27,9 +27,9 @@ def worker_initializer(url):
 
 
 def submit_one(arg):
-    url, model_name, slo, start, idx, debug = arg
+    url, model_name, slo, start, idx, relax_slo, debug = arg
     if time.time() > start:
-        print(f"WARNING: Request {idx} is blocked by the client. ")
+        pass #print(f"WARNING: Request {idx} is blocked by the client. ")
 
     while time.time() < start:
         pass
@@ -54,11 +54,11 @@ def submit_one(arg):
     e2e_latency = end - start
     rejected = res["rejected"]
     good = e2e_latency <= slo and not rejected
-    #good = not rejected
+    if relax_slo:
+        good = not rejected
 
     if e2e_latency > slo and not rejected:
         print(f"WARNING: Request {idx} is accepted but not good. ")
-        debug = True
 
     if debug:
         tstamps = to_str_round({x: (y - start) * 1e3 for x, y in res["ts"]}, 2)
@@ -68,8 +68,9 @@ def submit_one(arg):
 
 
 class ProcessPoolClient:
-    def __init__(self, url, debug=False, max_workers=20):
+    def __init__(self, url, relax_slo=False, debug=False, max_workers=20):
         self.url = url
+        self.relax_slo = relax_slo
         self.debug = debug
         self.executor = concurrent.futures.ProcessPoolExecutor(
             max_workers=max_workers, mp_context=get_context("spawn"),
@@ -78,8 +79,8 @@ class ProcessPoolClient:
 
     async def submit_workload(self, workload: Workload):
         args = [(self.url, workload.requests[i].model_name,
-                 workload.requests[i].slo, workload.arrivals[i],
-                 i, self.debug) for i in range(len((workload)))]
+                 workload.requests[i].slo, float(workload.arrivals[i]),
+                 i, self.relax_slo, self.debug) for i in range(len((workload)))]
         res = self.executor.map(submit_one, args)
 
         start, finish, good = zip(*res)
@@ -98,7 +99,8 @@ class ProcessPoolClient:
 
 
 def run_one_case(case: ServingCase, warmup=DEFAULT_WARMUP,
-                 debug=False, protocol="http", port=20001):
+                 relax_slo=False, debug=False,
+                 protocol="http", port=20001):
     register_models, generate_workload, place_models = case
 
     # Launch the controller
@@ -110,7 +112,7 @@ def run_one_case(case: ServingCase, warmup=DEFAULT_WARMUP,
 
     # Launch the client
     url = f"http://localhost:{port}" if protocol == "http" else None
-    client = ProcessPoolClient(url, debug)
+    client = ProcessPoolClient(url, relax_slo, debug)
     workload = generate_workload(start=time.time() + 2)
 
     # Run workloads
@@ -125,6 +127,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--case", type=str, default="debug_replicate")
+    parser.add_argument("--relax-slo", action="store_true")
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--protocol", choices=["http", "ray"], default="http")
     args = parser.parse_args()
@@ -132,5 +135,6 @@ if __name__ == "__main__":
     ray.init(address="auto", namespace="alpa_serve")
 
     stats, placement = run_one_case(
-        suite_debug[args.case], protocol=args.protocol, debug=args.debug)
+        suite_debug[args.case], relax_slo=args.relax_slo, debug=args.debug,
+        protocol=args.protocol)
     Workload.print_stats(stats)
