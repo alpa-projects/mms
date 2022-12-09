@@ -19,9 +19,9 @@ def run_case(case_id=1, mode="simulate", parallel=False):
     arrival_process_kwargs = {"cv": 5.0}
     slo_scale = np.inf
     duration = 20000
-    mp_mem_budgets = [weight_mem, weight_mem * 2, weight_mem * 4]
+    mp_mem_budgets = [3 * GB, 6 * GB, 12 * GB]
     mp_policies = ["mp-greedy-8", "mp-greedy-4", "mp-greedy-2"]
-    sr_mem_budgets = [weight_mem * i for i in range(1, 6)]
+    sr_mem_budgets = [3 * GB * i for i in range(1, 6)]
     sr_policies = ["sr-greedy"] * len(sr_mem_budgets)
 
     cases = []
