@@ -241,7 +241,7 @@ def run_one_equal_model_case(case, exp_name, mode,
 def run_equal_model_cases(cases, exp_name="default", output_file=None,
                           mode="simulate", debug_tstamp=False, parallel=False):
     if not ray.is_initialized():
-        ray.init(address="auto", runtime_env={"working_dir": os.getcwd()})
+        ray.init(address="auto", runtime_env={"working_dir": os.getcwd(), "excludes": ["backup"]})
 
     if parallel:
         run_one_case_ = ray.remote(num_cpus=2)(run_one_equal_model_case).remote

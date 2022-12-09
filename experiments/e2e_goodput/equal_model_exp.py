@@ -61,15 +61,15 @@ if __name__ == "__main__":
         total_rate = -1
         duration = -1
 
-        fixed_rate_scale = 2e-3
+        fixed_rate_scale = 1e-2
         if model_type == "bert-1.3b":
-            fixed_num_devices = 8
-            fixed_num_models = 48
-        elif model_type == "bert-2.6b":
             fixed_num_devices = 16
             fixed_num_models = 48
+        elif model_type == "bert-2.6b":
+            fixed_num_devices = 32
+            fixed_num_models = 48
         else:
-            fixed_num_devices = 48
+            fixed_num_devices = 64
             fixed_num_models = 48
 
         arrival_process = "azure_v1"
@@ -84,7 +84,7 @@ if __name__ == "__main__":
         duration = -1
 
         arrival_process = "azure_v2"
-        fixed_rate_scale = 16
+        fixed_rate_scale = 32
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
                                   "cv_scale": fixed_cv_scale,
                                   "trace_dir": args.trace_dir}
@@ -110,11 +110,13 @@ if __name__ == "__main__":
 
     if args.exp_name:
         os.makedirs(args.exp_name, exist_ok=True)
-        output_file = os.path.join(args.exp_name, output_file_name)
+        output_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                   args.exp_name, output_file_name)
     else:
         output_folder = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         os.makedirs(output_folder, exist_ok=True)
-        output_file = os.path.join(output_folder, output_file_name)
+        output_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                   output_folder, output_file_name)
 
     # parse exp ids:
     if args.exp_ids == "all":

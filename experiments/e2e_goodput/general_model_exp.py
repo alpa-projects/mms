@@ -37,14 +37,8 @@ if __name__ == "__main__":
     mem_budget = args.mem_budget * GB
     model_type = args.model_type
     
-    # default config
-    if args.model_type == "mixed":
-        fixed_num_devices = 64
-        fixed_num_modelset = 10
-    else:
-        fixed_num_devices = 32
-        fixed_num_modelset = 10
-
+    fixed_num_devices = 32
+    fixed_num_modelset = 10
     fixed_rate_scale = 1
     fixed_cv_scale = 1
     fixed_slo_scale = 5
@@ -76,13 +70,13 @@ if __name__ == "__main__":
         duration = -1
 
         if args.model_type == "all_transformers":
-            fixed_num_devices = 20
+            fixed_num_devices = 24
             fixed_num_modelset = 12
-            fixed_rate_scale = 16
+            fixed_rate_scale = 32
         else:
             fixed_num_devices = 40
             fixed_num_modelset = 12
-            fixed_rate_scale = 16
+            fixed_rate_scale = 32
 
         arrival_process = "azure_v2"
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
