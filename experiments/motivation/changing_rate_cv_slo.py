@@ -43,13 +43,13 @@ def plot_case(case_id=1):
         ((policies, total_rates), stats) = pickle.load(f)
 
     plt.figure()
-    case_id = 0
+    i = 0
     for policy in policies:
         policy_latency = []
         for total_rate in total_rates:
-            stat = stats[case_id]
+            stat = stats[i]
             policy_latency.append(stat.latency_mean)
-            case_id += 1
+            i += 1
         plt.plot(total_rates, policy_latency, '.-', label=policy)
     plt.xlabel("Total Rates (req/s)")
     plt.ylabel("Mean Latency (s)")
