@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
     # multi-model config
     if args.model_type == "mixed":
-        model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-7.1b"]
+        model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-5.3b"]
     else:
         model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"]
     
