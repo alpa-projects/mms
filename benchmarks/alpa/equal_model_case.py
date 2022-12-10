@@ -127,18 +127,20 @@ def get_equal_model_serving_case(case, prof_database=None):
         azure_v1_trace = Trace("azure_v1", azure_v1_trace_dir)
         train_replays = azure_v1_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
-                                              arrival_distribution="exponential",
+                                              arrival_distribution="gamma",
                                               start_time="0.0.0",
                                               end_time="0.1.0",
                                               interval_seconds=60,
-                                              rate_scale_factor=arrival_process_kwargs["rate_scale"])
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
         test_replays = azure_v1_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
-                                              arrival_distribution="exponential",
+                                              arrival_distribution="gamma",
                                               start_time="0.0.0",
                                               end_time="0.1.0",
                                               interval_seconds=60,
-                                              rate_scale_factor=arrival_process_kwargs["rate_scale"])
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
         ws = []
         for model_name, slo in zip(model_names, slos):
             ws.append(train_replays[model_name].to_workload(slo))

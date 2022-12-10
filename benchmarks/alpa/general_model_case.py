@@ -103,6 +103,34 @@ def get_general_model_serving_case(case, prof_database=None):
             test_replays[m].report_stats()
         report_group_stats(list(test_replays.values()))
         arrival_processes = [test_replays[model_name] for model_name in model_names]
+    elif arrival_process == "azure_v1":
+        azure_v1_trace_dir = arrival_process_kwargs["trace_dir"]
+        azure_v1_trace = Trace("azure_v1", azure_v1_trace_dir)
+        train_replays = azure_v1_trace.replay(model_names,
+                                              model_mapping_strategy="stripe",
+                                              arrival_distribution="gamma",
+                                              start_time="0.0.0",
+                                              end_time="0.1.0",
+                                              interval_seconds=60,
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        test_replays = azure_v1_trace.replay(model_names,
+                                              model_mapping_strategy="stripe",
+                                              arrival_distribution="gamma",
+                                              start_time="0.0.0",
+                                              end_time="0.1.0",
+                                              interval_seconds=60,
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        ws = []
+        for model_name, slo in zip(model_names, slos):
+            ws.append(train_replays[model_name].to_workload(slo))
+        train_workload = Workload.merge(*ws)
+        # for debugging:
+        for m in test_replays:
+            test_replays[m].report_stats()
+        report_group_stats(list(test_replays.values()))
+        arrival_processes = [test_replays[model_name] for model_name in model_names]
     else:
         raise ValueError("Invalid arrival process: {arrival_process}")
 

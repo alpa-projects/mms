@@ -21,7 +21,7 @@ if __name__ == "__main__":
                               "num_devices_vs_num_models"])
     parser.add_argument("--model-type", type=str, default="bert-1.3b",
                         choices=["bert-1.3b", "bert-2.6b", "bert-6.7b"])
-    parser.add_argument("--mem-budget", type=int, default=14)
+    parser.add_argument("--mem-budget", type=int, default=13)
     parser.add_argument("--workload", type=str, default="synthetic",
                         choices=["synthetic", "azure_v1", "azure_v2"])
     parser.add_argument("--rate-distribution", choices=["uniform", "power_law"],
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     fixed_num_devices = 32
     fixed_num_models = 32
     fixed_rate_scale = 1
-    fixed_cv_scale = 1
+    fixed_cv_scale = 4
     fixed_slo_scale = 5
 
     # workload config
@@ -61,9 +61,9 @@ if __name__ == "__main__":
         total_rate = -1
         duration = -1
 
-        fixed_rate_scale = 1e-2
+        fixed_rate_scale = 2e-3
         if model_type == "bert-1.3b":
-            fixed_num_devices = 16
+            fixed_num_devices = 24
             fixed_num_models = 48
         elif model_type == "bert-2.6b":
             fixed_num_devices = 32
@@ -74,6 +74,7 @@ if __name__ == "__main__":
 
         arrival_process = "azure_v1"
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
+                                  "cv_scale": fixed_cv_scale,
                                   "trace_dir": args.trace_dir}
         num_devices_list, num_models_list, slo_scales, \
         rate_list, cv_list, rate_scales, cv_scales = azure_v1_suite[model_type]
@@ -240,7 +241,7 @@ if __name__ == "__main__":
             run_equal_model_cases(cases, exp_name="goodput_vs_cv",
                                 output_file=output_file,
                                 mode=args.mode, parallel=args.parallel)
-        elif args.workload == "azure_v2":
+        else:
             print("=== Running goodput vs. cv_scale ===")
             cases = []
             for cv_scale in cv_scales:
@@ -257,8 +258,6 @@ if __name__ == "__main__":
             run_equal_model_cases(cases, exp_name="goodput_vs_cv_scale",
                                 output_file=output_file,
                                 mode=args.mode, parallel=args.parallel)
-        else:
-            print("=== Skip goodput vs. cv_scale for azure_v1 ===")
 
     # ### model vs devices ###
     # if "num_devices_vs_num_models" in experiments:

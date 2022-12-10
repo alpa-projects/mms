@@ -32,22 +32,22 @@ synthetic_suite = {
 
 azure_v1_suite = {
     "all_transformers": BenchmarkConfig(    
-        num_devices_list = [8, 16, 24, 32, 40, 48, 56, 64, 72, 80],
-        num_modelset_list = [4, 8, 12, 16, 20, 24, 32],
-        slo_scales = [1, 1.5, 2, 2.5, 5, 7.5, 10],
+        num_devices_list = [8, 16, 24, 32, 40, 48],
+        num_modelset_list =  [8, 12, 16, 20, 24, 28, 32],
+        slo_scales = [0.75, 1, 2, 3, 4, 5, 7.5, 10],
         rate_list = [8, 16, 32, 64, 96, 128, 160, 192],
         cv_list = [1, 2, 4, 6, 8],
-        rate_scales = [1, 2, 4, 8, 16],
-        cv_scales = [1, 2, 4, 8, 16],
+        rate_scales = [5e-4, 1e-3, 2e-3, 4e-3, 5e-3, 6e-3, 7e-3, 8e-3],
+        cv_scales = [1, 2, 3, 4, 5, 6, 8],
     ),
     "mixed": BenchmarkConfig(    
-        num_devices_list = [8, 16, 24, 32, 40, 48, 56, 64, 72, 80],
-        num_modelset_list = [4, 6, 8, 12, 16, 20],
-        slo_scales = [1, 1.5, 2, 2.5, 5, 7.5, 10],
+        num_devices_list = [32, 40, 48, 54, 64, 72, 96],
+        num_modelset_list =  [8, 12, 16, 20, 24, 28, 32],
+        slo_scales =[0.75, 1, 2, 3, 4, 5, 7.5, 10],
         rate_list = [8, 16, 32, 64, 96, 128, 160, 192],
         cv_list = [1, 2, 4, 6, 8],
-        rate_scales = [1, 2, 4, 8, 16],
-        cv_scales = [1, 2, 4, 8, 16],
+        rate_scales = [5e-4, 1e-3, 2e-3, 4e-3, 5e-3, 6e-3, 7e-3, 8e-3],
+        cv_scales = [1, 2, 3, 4, 5, 6, 8],
     ),
 }
 
