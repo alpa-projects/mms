@@ -5,6 +5,9 @@ install_requires = [
     "scipy",
     "pulp",
     "matplotlib",
+    "starlette",
+    "uvicorn",
+    "fastapi",
 ]
 
 setup(name="alpa_serve",
