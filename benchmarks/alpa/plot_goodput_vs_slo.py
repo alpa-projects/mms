@@ -48,7 +48,9 @@ def plot_goodput_vs_slo(data, title, output, show):
     for method in methods:
         curve = data[method]
         xs, ys = zip(*curve.items())
-        ys = np.array(ys) * 100
+        xs, ys = np.array(xs), np.array(ys) * 100
+        indices = np.argsort(xs)
+        xs, ys = xs[indices], ys[indices]
         curve = ax.plot(xs, ys, color=method2color(method), marker='*')
         curves.append(curve[0])
         legends.append(show_name(method))
