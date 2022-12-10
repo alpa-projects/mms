@@ -169,7 +169,8 @@ class BertModel:
                     submesh_autosharding_option_dicts=[{}] * pp))
         else: # auto partition
             metadata = self.metadata
-            layer_num = np.max(metadata["forward_stage_layer_ids"]) + 1
+            layer_num = max(max(x) for x in
+                metadata["forward_stage_layer_ids"]) + 1
             parallel_method = PipeshardParallel(
                 num_micro_batches=1,
                 default_auto_sharding_option=AutoShardingOption(

@@ -31,11 +31,11 @@ if __name__ == "__main__":
         policies = [args.policy]
     else:
         policies = ["sr-greedy", "mp-search"]
-    num_devices = 8
-    mem_budget = 14 * GB
+    num_devices = 16
+    mem_budget = 13 * GB
     model_type = "bert-2.6b"
-    num_models = 12
-    total_rate = 20
+    num_models = 24
+    total_rate = 45
     if args.trace == "synthetic":
         # choices: {"gamma", "uniform_mmpp"}
         arrival_process = "gamma"

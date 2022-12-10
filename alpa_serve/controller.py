@@ -185,6 +185,7 @@ class GroupManager:
                 adjust_clock = actual_runtime / num_stages * queue_size / 2
                 for i in range(len(stage_latency)):
                     self.stage_clock[i] += adjust_clock
+                print(f"adjust clock: {adjust_clock:.2f}, queue size: {queue_size:.2f}, ratio: {ratio:.2f}")
 
                 # Adjust the scale
                 if ratio > 1.2:
@@ -192,10 +193,7 @@ class GroupManager:
                         self.latency_scale[key] = min(
                             self.max_latency_scale,
                             self.latency_scale[key] + 0.04)
-
-                #print(f"adjust clock: {adjust_clock:.2f}, queue size: {queue_size:.2f}, ratio: {ratio:.2f}")
-                #print(f"adjust latency scale: {to_str_round(self.latency_scale, 2)}")
-                #print(f"estimated latency {sum(stage_latency) * self.latency_scale[name]:.3f}")
+                    print(f"adjust latency scale: {to_str_round(self.latency_scale, 2)}")
                 self.freeze_end = self.stage_clock[-1]
 
         return ret
