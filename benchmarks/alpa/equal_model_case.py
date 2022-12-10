@@ -212,15 +212,16 @@ _DATA_HEADS = ("exp_name",
 
 def run_one_equal_model_case(case, exp_name, mode,
                              output_file=None, prof_database=None,
-                             debug=False):
+                             relax_slo=False, debug=False):
     serving_case = get_equal_model_serving_case(case, prof_database)
 
     if mode == "simulate":
         stats, placement = approximate_one_case(serving_case, debug=debug)
     else:
-        stats, placement = run_one_case(serving_case, debug=debug)
+        stats, placement = run_one_case(serving_case, relax_slo=relax_slo,
+                                        debug=debug)
 
-    #Workload.print_stats(stats)
+    Workload.print_stats(stats)
     print(f"group #req: {stats.group_num_requests}")
 
     res = (placement, round(stats.goodput, 3), mode)
@@ -233,7 +234,8 @@ def run_one_equal_model_case(case, exp_name, mode,
 
 
 def run_equal_model_cases(cases, exp_name="default", output_file=None,
-                          mode="simulate", debug_tstamp=False, parallel=False):
+                          mode="simulate", relax_slo=False,
+                          debug_tstamp=False, parallel=False):
     if not ray.is_initialized():
         ray.init(address="auto", runtime_env={"working_dir": os.getcwd(), "excludes": ["backup"]})
 
@@ -245,7 +247,8 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
     results = []
     for case in cases:
         results.append(run_one_case_(case, exp_name, mode,
-            output_file=output_file, debug=debug_tstamp))
+            output_file=output_file, relax_slo=relax_slo,
+            debug=debug_tstamp))
 
     if parallel:
         results = ray.get(results)

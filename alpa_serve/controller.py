@@ -98,6 +98,7 @@ class GroupManager:
         # Latency prediction
         self.stage_clock = [0] * np.prod(virtual_mesh_shape)
         self.latency_scale = {}
+        self.max_latency_scale = 1.08
         self.freeze_end = 0
 
         self.logger = build_logger()
@@ -167,58 +168,66 @@ class GroupManager:
             ret = RelayException(e)
 
         if ret_time:
-            actual_runtime = time.time() - start_time
-            predicted_runtime = ret_time - start_time
-            ratio = actual_runtime / predicted_runtime
-
             if time.time() + self.fixed_overhead > obj["submit_time"] + slo:
                 underestimated = True
             else:
                 underestimated = False
 
-            # ratio > 1.2 and
             if start_time > self.freeze_end and underestimated:
+                actual_runtime = time.time() - start_time
+                predicted_runtime = ret_time - start_time
+                ratio = actual_runtime / predicted_runtime
+
                 # Adjust the clock to block all requests temporarily
                 num_stages = len(stage_latency)
                 queue_size = (self.stage_clock[0] - start_time) / (
                     predicted_runtime / num_stages)
-                adjust_clock = actual_runtime / num_stages * queue_size * 2
+                adjust_clock = actual_runtime / num_stages * queue_size / 2
                 for i in range(len(stage_latency)):
                     self.stage_clock[i] += adjust_clock
+                print(f"adjust clock: {adjust_clock:.2f}, queue size: {queue_size:.2f}, ratio: {ratio:.2f}")
 
                 # Adjust the scale
-                for key in self.latency_scale:
-                    self.latency_scale[key] += 0.05
-
-                print(f"adjust clock: {adjust_clock:.2f}, queue size: {queue_size:.2f}")
-                print(f"adjust latency scale: {to_str_round(self.latency_scale, 2)}")
-                print(f"estimated time: {sum(stage_latency) * self.latency_scale[name]}")
+                if ratio > 1.2:
+                    for key in self.latency_scale:
+                        self.latency_scale[key] = min(
+                            self.max_latency_scale,
+                            self.latency_scale[key] + 0.04)
+                    print(f"adjust latency scale: {to_str_round(self.latency_scale, 2)}")
                 self.freeze_end = self.stage_clock[-1]
 
         return ret
 
     async def warmup(self):
-        n_iter = 10
-        n_warmup = 5
+        n_iter = 12
+        n_warmup = 6
+        max_retry = 5
 
         for name in self.replicas:
             estimated = np.sum(self.latency_dict[name][1])
-            actual = []
 
-            for i in range(n_iter):
-                start = time.time()
-                request = DummyRequest({"input": "Test."})
-                res = await self.replicas[name].handle_request(request)
-                e2e_latency = time.time() - start
-                actual.append(e2e_latency)
+            retry = 0
+            self.latency_scale[name] = math.inf
 
-                #tstamps = {x: (y - start) * 1e3 for x, y in res["ts"]}
-                #print(f"idx: {i}, ts: {to_str_round(tstamps,2)}, "
-                #      f"actual: {e2e_latency*1e3:.2f} ms, "
-                #      f"estimated: {estimated*1e3:.2f} ms")
+            while self.latency_scale[name] > self.max_latency_scale and retry < max_retry:
+                actual = []
+                for i in range(n_iter):
+                    start = time.time()
+                    request = DummyRequest({"input": "Test."})
+                    res = await self.replicas[name].handle_request(request)
+                    e2e_latency = time.time() - start
+                    actual.append(e2e_latency)
 
-            self.latency_scale[name] = max(actual[n_warmup:]) / estimated
+                    #tstamps = {x: (y - start) * 1e3 for x, y in res["ts"]}
+                    #print(f"idx: {i}, ts: {to_str_round(tstamps,2)}, "
+                    #      f"actual: {e2e_latency*1e3:.2f} ms, "
+                    #      f"estimated: {estimated*1e3:.2f} ms")
 
+                self.latency_scale[name] = max(actual[n_warmup:]) / estimated
+                retry += 1
+
+        for name in self.latency_scale:
+            self.latency_scale[name] = max(self.latency_scale.values())
         print(f"latency scale: {to_str_round(self.latency_scale, 2)}")
 
     def shutdown(self):

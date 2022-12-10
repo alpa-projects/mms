@@ -16,13 +16,18 @@ def read_data(filename):
     rate = cv = None
 
     for line in read_equal_model_case_tsv(filename):
-        policy, slo_scale, goodput, total_rate, kwargs = (
+        policy, slo_scale, goodput, total_rate, kwargs, mode = (
             line["policy_name"], line["slo_scale"], line["goodput"],
-            line["total_rate"], line["arrival_process_kwargs"])
+            line["total_rate"], line["arrival_process_kwargs"], line["mode"])
 
         if rate is None:
             rate = total_rate
         cv = kwargs["cv"] if kwargs else 1
+
+        if mode == "simulate":
+            policy = policy
+        else:
+            policy = policy + "-real"
 
         data[policy][slo_scale] = goodput
 
@@ -43,7 +48,9 @@ def plot_goodput_vs_slo(data, title, output, show):
     for method in methods:
         curve = data[method]
         xs, ys = zip(*curve.items())
-        ys = np.array(ys) * 100
+        xs, ys = np.array(xs), np.array(ys) * 100
+        indices = np.argsort(xs)
+        xs, ys = xs[indices], ys[indices]
         curve = ax.plot(xs, ys, color=method2color(method), marker='*')
         curves.append(curve[0])
         legends.append(show_name(method))
