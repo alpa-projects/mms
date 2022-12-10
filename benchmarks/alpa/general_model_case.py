@@ -24,12 +24,6 @@ GeneralModelCase = namedtuple("GeneralModelCase", [
     "slo_scale", "duration", "policy_name"])
 
 
-# default_slos = {"bert-1.3b": 0.06183671951293945, "bert-2.6b": 0.09547750155131023 , "bert-6.7b": 0.18315919240315756 ,
-#                 "moe-1.3b": 0.024369213316175673, "moe-2.4b": 0.028811666700575087 , "moe-7.1b": 0.04116768307156033 }
-default_slos = {"bert-1.3b": 0.15109131071302626, "bert-2.6b": 0.23757214016384548, "bert-6.7b": 0.3950637976328532,
-                "moe-1.3b": 0.024369213316175673, "moe-2.4b": 0.028811666700575087 , "moe-7.1b": 0.04116768307156033 }
-
-
 def get_general_model_serving_case(case, prof_database=None):
     assert isinstance(case, GeneralModelCase), "not GeneralModelCase"     
     if prof_database is None:
@@ -42,7 +36,6 @@ def get_general_model_serving_case(case, prof_database=None):
     cluster_env = ClusterEnv(num_devices=num_devices, mem_budget=mem_budget)
     assert len(model_names) == len(model_types)
     num_models = len(model_names)
-    # slos = [default_slos[model_type] * slo_scale for model_type in model_types]
     single_latency = {
         model_type: sum(prof_database.get(model_type).para_dict[ParallelConfig(1,1,1)
         ].latency[1]) for model_type in set(model_types)}

@@ -28,13 +28,6 @@ EqualModelCase = namedtuple("EqualModelCase", [
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name"])
 
-# default_slos = {"bert-1.3b": 0.100, "bert-2.6b": 0.145, "bert-6.7b": 0.234,
-#                 "moe-1.3b": 0.022, "moe-2.4b": 0.028, "moe-7.1b": 0.041}
-# default_slos = {"bert-1.3b": 0.06183671951293945, "bert-2.6b": 0.09547750155131023 , "bert-6.7b": 0.18315919240315756 ,
-#                 "moe-1.3b": 0.024369213316175673, "moe-2.4b": 0.028811666700575087 , "moe-7.1b": 0.04116768307156033 }
-default_slos = {"bert-1.3b": 0.15109131071302626, "bert-2.6b": 0.23757214016384548, "bert-6.7b": 0.3950637976328532,
-                "moe-1.3b": 0.024369213316175673, "moe-2.4b": 0.028811666700575087 , "moe-7.1b": 0.04116768307156033 }
-
 
 def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
@@ -49,7 +42,6 @@ def get_equal_model_serving_case(case, prof_database=None):
 
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
-    # slos = [slo_scale * default_slos[model_type]] * num_models
     single_latency = {
         model_type: sum(prof_database.get(model_type).para_dict[ParallelConfig(1,1,1)
         ].latency[1]) for model_type in set(model_types)}
