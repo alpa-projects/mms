@@ -282,6 +282,12 @@ class Workload:
             self.rate = 0
             self.cv = 0
 
+    def split(self, number: int):
+        rets = []
+        for i in range(number):
+            rets.append(self[i::number])
+        return rets
+
     def compute_stats(self, start: Sequence[float], finish: Sequence[float],
                       good: Sequence[bool], warmup: float):
         """Compute the statistics of serving results."""
@@ -405,4 +411,6 @@ if __name__ == "__main__":
     print(w2)
 
     w3 = w1 + w2
-    print(w3[::2])
+    print(w3)
+    print(w3.split(2)[0])
+    print(w3.split(2)[1])

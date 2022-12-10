@@ -3,7 +3,6 @@ from collections import namedtuple, defaultdict
 import os
 
 import numpy as np
-
 import ray
 
 from alpa_serve.simulator.controller import (Controller, simulate_one_case,
@@ -212,14 +211,15 @@ _DATA_HEADS = ("exp_name",
 
 def run_one_equal_model_case(case, exp_name, mode,
                              output_file=None, prof_database=None,
-                             relax_slo=False, debug=False):
+                             relax_slo=False, protocol="http",
+                             debug=False):
     serving_case = get_equal_model_serving_case(case, prof_database)
 
     if mode == "simulate":
         stats, placement = approximate_one_case(serving_case, debug=debug)
     else:
         stats, placement = run_one_case(serving_case, relax_slo=relax_slo,
-                                        debug=debug)
+                                        protocol=protocol, debug=debug)
 
     Workload.print_stats(stats)
     print(f"group #req: {stats.group_num_requests}")
@@ -234,10 +234,12 @@ def run_one_equal_model_case(case, exp_name, mode,
 
 
 def run_equal_model_cases(cases, exp_name="default", output_file=None,
-                          mode="simulate", relax_slo=False,
+                          mode="simulate", relax_slo=False, protocol="http",
                           debug_tstamp=False, parallel=False):
-    if not ray.is_initialized():
-        ray.init(address="auto", runtime_env={"working_dir": os.getcwd(), "excludes": ["backup"]})
+    if parallel and not ray.is_initialized():
+        ray.init(address="auto", namespace="alpa_serve",
+                 runtime_env={"working_dir": os.getcwd(),
+                 "excludes": ["backup"]})
 
     if parallel:
         run_one_case_ = ray.remote(num_cpus=2)(run_one_equal_model_case).remote
@@ -248,7 +250,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
     for case in cases:
         results.append(run_one_case_(case, exp_name, mode,
             output_file=output_file, relax_slo=relax_slo,
-            debug=debug_tstamp))
+            protocol=protocol, debug=debug_tstamp))
 
     if parallel:
         results = ray.get(results)

@@ -218,7 +218,7 @@ class BertModel:
         global_config.use_dummy_value_for_benchmarking = False
 
         # Final inference function
-        async def infer_func(src, request):
+        def infer_func(src, request):
             #inputs = tokenizer(src,
             #                   max_length=seq_len,
             #                   padding="max_length",
@@ -235,7 +235,7 @@ class BertModel:
             request.scope["ts"].append(("d", time.time()))
             logits = outputs.logits
             logits.prefetch()
-            return await logits.to_np_async()
+            return logits.to_np_async()
 
         return infer_func
 
