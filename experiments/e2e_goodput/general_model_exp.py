@@ -88,14 +88,13 @@ if __name__ == "__main__":
         total_rate = -1
         duration = -1
 
+        fixed_rate_scale = 32
         if args.model_type == "all_transformers":
             fixed_num_devices = 24
             fixed_num_modelset = 12
-            fixed_rate_scale = 32
         else:
-            fixed_num_devices = 40
+            fixed_num_devices = 48
             fixed_num_modelset = 12
-            fixed_rate_scale = 32
 
         arrival_process = "azure_v2"
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,

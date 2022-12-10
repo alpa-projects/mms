@@ -72,16 +72,16 @@ azure_v1_suite = {
 azure_v2_suite = {
     "bert-1.3b": BenchmarkConfig(
         num_devices_list = [4, 8, 12, 16, 20],
-        num_models_list = [32, 48, 56, 64, 72, 108, 128],
+        num_models_list = [32, 40, 56, 64, 72, 80],
         slo_scales = [0.75, 1, 1.5, 2, 3, 4, 5, 7.5],
         rate_list = [8, 16, 32, 64, 96, 128, 160, 192],
         cv_list = [1, 2, 4, 6, 8],
-        rate_scales = [16, 32, 48, 72, 96, 128, 256],
+        rate_scales = [1, 4, 16, 32, 48, 72, 96, 128, 256],
         cv_scales = [1, 1.5, 2, 2.5, 3, 4, 5],
     ),
     "bert-2.6b": BenchmarkConfig(    
         num_devices_list =  [16, 24, 32, 40, 48, 56, 64],
-        num_models_list = [32, 40, 48, 56, 72, 96, 128],
+        num_models_list = [32, 40, 56, 64, 72, 80],
         slo_scales = [0.75, 1, 1.5, 2, 3, 4, 5, 7.5, 10, 20],
         rate_list = [8, 16, 32, 64, 96, 128, 160, 192],
         cv_list = [1, 2, 4, 6, 8],
@@ -90,7 +90,7 @@ azure_v2_suite = {
     ),
     "bert-6.7b": BenchmarkConfig(
         num_devices_list=[48, 56, 64, 72, 80, 96, 128],
-        num_models_list=[40, 48, 64, 72, 84, 96, 108],
+        num_models_list=[40, 48, 56, 72, 84, 96, 108],
         slo_scales=[0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10],
         rate_list=[8, 16, 32, 64, 96, 128, 160, 192],
         cv_list=[1, 2, 4, 6, 8],

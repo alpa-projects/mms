@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
         fixed_rate_scale = 2e-3
         if model_type == "bert-1.3b":
-            fixed_num_devices = 24
+            fixed_num_devices = 16
             fixed_num_models = 48
         elif model_type == "bert-2.6b":
             fixed_num_devices = 32
