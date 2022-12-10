@@ -355,8 +355,7 @@ def load_test_prof_result(name: str):
     else:
         raise ValueError(f"Unsupported model: {name}")
 
-database = ProfilingDatabase("/home/ubuntu/parax-efs/pycharm/mms/experiments/e2e_goodput/profiling_result.pkl", False)
-print(1)
+# database = ProfilingDatabase("profiling_result.pkl", False)
 # bert_1_3b = database.get("bert-1.3b")
 # bert_2_6b = database.get("bert-2.6b")
 # bert_6_7b = database.get("bert-6.7b")
