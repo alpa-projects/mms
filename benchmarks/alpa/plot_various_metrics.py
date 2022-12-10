@@ -77,8 +77,9 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
     y_max = 0
     for method in methods:
         curve = data[method]
-        xs, ys = zip(*curve.items())
-
+        xs_, ys_ = zip(*curve.items())
+        xs = [x for x, _ in sorted(zip(xs_, ys_))]
+        ys = [y for _, y in sorted(zip(xs_, ys_))]
         ys = np.array(ys) * 100
         curve = ax.plot(xs, ys, color=method2color(method), marker='*')
         curves.append(curve[0])
@@ -101,7 +102,7 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
         x_max = max(x_max, *xs)
         y_max = max(y_max, *ys)
 
-    ax.set_ylim(bottom=0, top=max(y_max * 1.05, 100))
+    ax.set_ylim(bottom=0, top=max(y_max * 1.02, 100))
     ax.set_ylabel("Goodput (%)")
     ax.set_xlabel(xlabel)
     ax.legend(curves, legends)

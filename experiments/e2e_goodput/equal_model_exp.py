@@ -19,9 +19,9 @@ if __name__ == "__main__":
                         choices=["all", "goodput_vs_num_devices", "goodput_vs_num_models",
                               "goodput_vs_slo", "goodput_vs_rate", "goodput_vs_cv",
                               "num_devices_vs_num_models"])
-    parser.add_argument("--model_type", type=str, default="bert-1.3b",
+    parser.add_argument("--model-type", type=str, default="bert-1.3b",
                         choices=["bert-1.3b", "bert-2.6b", "bert-6.7b"])
-    parser.add_argument("--mem_budget", type=int, default=14)
+    parser.add_argument("--mem-budget", type=int, default=13)
     parser.add_argument("--workload", type=str, default="synthetic",
                         choices=["synthetic", "azure_v1", "azure_v2"])
     parser.add_argument("--rate-distribution", choices=["uniform", "power_law"],
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     fixed_num_devices = 32
     fixed_num_models = 32
     fixed_rate_scale = 1
-    fixed_cv_scale = 1
+    fixed_cv_scale = 4
     fixed_slo_scale = 5
 
     # workload config
@@ -61,6 +61,17 @@ if __name__ == "__main__":
         total_rate = -1
         duration = -1
 
+        fixed_rate_scale = 2e-3
+        if model_type == "bert-1.3b":
+            fixed_num_devices = 16
+            fixed_num_models = 48
+        elif model_type == "bert-2.6b":
+            fixed_num_devices = 32
+            fixed_num_models = 48
+        else:
+            fixed_num_devices = 64
+            fixed_num_models = 48
+
         arrival_process = "azure_v1"
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
                                   "cv_scale": fixed_cv_scale,
@@ -74,9 +85,19 @@ if __name__ == "__main__":
         duration = -1
 
         arrival_process = "azure_v2"
+        fixed_rate_scale = 32
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
                                   "cv_scale": fixed_cv_scale,
                                   "trace_dir": args.trace_dir}
+        if model_type == "bert-1.3b":
+            fixed_num_devices = 16
+            fixed_num_models = 48
+        elif model_type == "bert-2.6b":
+            fixed_num_devices = 32
+            fixed_num_models = 48
+        else:
+            fixed_num_devices = 64
+            fixed_num_models = 48
         num_devices_list, num_models_list, slo_scales, \
         rate_list, cv_list, rate_scales, cv_scales = azure_v2_suite[model_type]
     else:
@@ -90,11 +111,13 @@ if __name__ == "__main__":
 
     if args.exp_name:
         os.makedirs(args.exp_name, exist_ok=True)
-        output_file = os.path.join(args.exp_name, output_file_name)
+        output_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                   args.exp_name, output_file_name)
     else:
         output_folder = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         os.makedirs(output_folder, exist_ok=True)
-        output_file = os.path.join(output_folder, output_file_name)
+        output_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                                   output_folder, output_file_name)
 
     # parse exp ids:
     if args.exp_ids == "all":
@@ -137,7 +160,8 @@ if __name__ == "__main__":
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
                 else:
-                    new_arrival_process_kwargs = {"rate_scale": num_models / fixed_num_models * 4,
+                    scale_factor = num_models / fixed_num_models
+                    new_arrival_process_kwargs = {"rate_scale": scale_factor * fixed_rate_scale,
                                                   "cv_scale": fixed_cv_scale,
                                                   "trace_dir": args.trace_dir}
                     cases.append(EqualModelCase(

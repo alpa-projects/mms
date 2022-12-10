@@ -288,10 +288,11 @@ class Workload:
         # Skip the first and last `warmup` seconds
         if len(self.arrivals) > 1:
             skip = int(warmup / (self.arrivals[-1] - self.arrivals[0]) * len(self.arrivals))
-            start = start[skip:-skip]
-            finish = finish[skip:-skip]
-            good = good[skip:-skip]
-            requests = self.requests[skip:-skip]
+            if skip > 0:
+                start = start[skip:-skip]
+                finish = finish[skip:-skip]
+                good = good[skip:-skip]
+                requests = self.requests[skip:-skip]
 
         # Compute stats per model
         model_indices = defaultdict(list)

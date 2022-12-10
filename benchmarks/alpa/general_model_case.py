@@ -36,7 +36,6 @@ def get_general_model_serving_case(case, prof_database=None):
     cluster_env = ClusterEnv(num_devices=num_devices, mem_budget=mem_budget)
     assert len(model_names) == len(model_types)
     num_models = len(model_names)
-
     single_latency = {
         model_type: sum(prof_database.get(model_type).para_dict[ParallelConfig(1,1,1)
         ].latency[1]) for model_type in set(model_types)}
@@ -71,16 +70,18 @@ def get_general_model_serving_case(case, prof_database=None):
         train_replays = azure_v2_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
-                                              start_time='5.0.0',
-                                              end_time='6.0.0',
+                                              start_time='13.0.0',
+                                              end_time='13.23.60',
+                                              # end_time='13.1.0',
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
         test_replays = azure_v2_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
-                                              start_time='5.0.0',
-                                              end_time='6.0.0',
+                                              start_time='13.0.0',
+                                              end_time='13.23.60',
+                                              # end_time='13.1.0',
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
@@ -91,6 +92,34 @@ def get_general_model_serving_case(case, prof_database=None):
 
         # for debugging:
 
+        for m in test_replays:
+            test_replays[m].report_stats()
+        report_group_stats(list(test_replays.values()))
+        arrival_processes = [test_replays[model_name] for model_name in model_names]
+    elif arrival_process == "azure_v1":
+        azure_v1_trace_dir = arrival_process_kwargs["trace_dir"]
+        azure_v1_trace = Trace("azure_v1", azure_v1_trace_dir)
+        train_replays = azure_v1_trace.replay(model_names,
+                                              model_mapping_strategy="stripe",
+                                              arrival_distribution="gamma",
+                                              start_time="0.0.0",
+                                              end_time="0.1.0",
+                                              interval_seconds=60,
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        test_replays = azure_v1_trace.replay(model_names,
+                                              model_mapping_strategy="stripe",
+                                              arrival_distribution="gamma",
+                                              start_time="0.0.0",
+                                              end_time="0.1.0",
+                                              interval_seconds=60,
+                                              rate_scale_factor=arrival_process_kwargs["rate_scale"],
+                                              cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        ws = []
+        for model_name, slo in zip(model_names, slos):
+            ws.append(train_replays[model_name].to_workload(slo))
+        train_workload = Workload.merge(*ws)
+        # for debugging:
         for m in test_replays:
             test_replays[m].report_stats()
         report_group_stats(list(test_replays.values()))
@@ -195,7 +224,7 @@ def run_one_general_model_case(case, exp_name, mode,
 def run_general_model_cases(cases, exp_name="default", output_file=None,
                             mode="simulate", debug_tstamp=False, parallel=False):
     if not ray.is_initialized():
-        ray.init(address="auto", runtime_env={"working_dir": os.getcwd()})
+        ray.init(address="auto", runtime_env={"working_dir": os.getcwd(), "excludes": ["backup"]})
 
     if parallel:
         run_one_case_ = ray.remote(num_cpus=2)(run_one_general_model_case).remote

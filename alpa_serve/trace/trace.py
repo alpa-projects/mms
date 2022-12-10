@@ -426,7 +426,8 @@ class Trace:
             distributions = self.estimate_parameters_with_histogram(histogram_dataset,
                                                                     interval_seconds,
                                                                     arrival_distribution,
-                                                                    rate_scale_factor)
+                                                                    rate_scale_factor,
+                                                                    cv_scale_factor)
         elif self.trace_name == "azure_v2":
             # Trace are exact arrivals
             # 1. Convert function trace to model trace
@@ -534,7 +535,7 @@ class Trace:
         mapping = OrderedDict()
         n_model = len(models)
         n_function = len(function_names)
-        assert n_function >= n_model
+        assert n_function >= n_model, f"#function {n_function} < #models {n_model}"
         if strategy not in ["round_robin", "stripe"]:
             raise NotImplementedError(f"Unimplemented strategy: {strategy}")
         for i, f in enumerate(function_names):
@@ -548,9 +549,10 @@ class Trace:
                                            dataset,
                                            interval_seconds,
                                            arrival_distribution="exponential",
-                                           rate_scale_factor=1.0):
-        if arrival_distribution not in ["exponential"]:
-            raise NotImplementedError(f"We can only use histogram data for exponential distribution, "
+                                           rate_scale_factor=1.0,
+                                           cv_scale_factor=1.0):
+        if arrival_distribution not in ["exponential", "gamma"]:
+            raise NotImplementedError(f"We can only use histogram data for exponential or gamma distribution, "
                                       f"got {arrival_distribution}")
         distributions = OrderedDict()
         for model, histogram in dataset.items():
@@ -561,7 +563,10 @@ class Trace:
                 else:
                     arrival_rate = h / interval_seconds
                     arrival_rate = arrival_rate * rate_scale_factor
-                    distributions[model].append(PoissonProcess(arrival_rate))
+                    if arrival_distribution == "exponential":
+                        distributions[model].append(PoissonProcess(arrival_rate))
+                    else:
+                        distributions[model].append(GammaProcess(arrival_rate, cv_scale_factor))
         return distributions
 
     def estimate_parameters_with_arrivals(self,
@@ -591,8 +596,9 @@ class Trace:
                             distributions[model].append(None)
                             continue
                         if arrival_rate > 5 * empirical_arrival_rate:
-                            warnings.warn(f"Estimation for model {model_index} is highly biased. "
-                                          f"Hard reset to empirical rate: {empirical_arrival_rate}.")
+                            if DEBUG:
+                                warnings.warn(f"Estimation for model {model_index} is highly biased. "
+                                              f"Hard reset to empirical rate: {empirical_arrival_rate}.")
                             arrival_rate = empirical_arrival_rate
                         arrival_rate *= rate_scale_factor
                         distributions[model].append(PoissonProcess(arrival_rate))
@@ -603,8 +609,9 @@ class Trace:
                                 distributions[model].append(None)
                                 continue
                             if arrival_rate > 5 * empirical_arrival_rate:
-                                warnings.warn(f"Estimation for model {model_index} is highly biased. "
-                                              f"Hard reset to empirical rate: {empirical_arrival_rate}.")
+                                if DEBUG:
+                                    warnings.warn(f"Estimation for model {model_index} is highly biased. "
+                                                  f"Hard reset to empirical rate: {empirical_arrival_rate}.")
                                 arrival_rate = empirical_arrival_rate
                             # scale them
                             arrival_rate *= rate_scale_factor
