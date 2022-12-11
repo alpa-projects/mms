@@ -261,7 +261,7 @@ class PlacementEvaluator:
         else:
             stats, _ = simulate_one_case(serving_case)
         model_goodput = [x.goodput for x in stats.per_model_stats]
-        return (stats.goodput, model_goodput, stats.group_num_requests)
+        return (stats.goodput, model_goodput, stats.group_num_requests, stats)
 
 
 def gen_train_workload(model_datas: List[ModelData],
@@ -308,19 +308,18 @@ def replica_placement_fast_greedy(init_sol: ModelPlacement,
             else inf
             for x in model_datas]
 
-    rates = [m.rate for m in model_datas]
-
     # Greedy placement
     sol = init_sol
     it = 0
 
     while True:
         stats = evaluator.get_stats([sol])[0]
-        overall_goodput, goodputs, group_num_requests = stats
+        overall_goodput, goodputs, group_num_requests, fullstats = stats
 
         # Find the most unserved model and the most available group
         model_num_unserved = [
-            (rate * (1 - goodput)) for rate, goodput in zip(rates, goodputs)]
+            (s.num_requests * (1 - goodput))
+            for s, goodput in zip(fullstats.per_model_stats, goodputs)]
         model_ids = np.argsort(model_num_unserved)[::-1]
         group_ids = np.argsort(group_num_requests)
         group_mem = [
@@ -595,7 +594,6 @@ def evolutionary_search(init_sols: List[ModelPlacement],
             if c not in weight_mem:
                 weight_mem[c] = [inf] * len(model_datas)
             weight_mem[c][m_id] = max(x.profiling_result.para_dict[c].weight_mem)
-    rates = [m.rate for m in model_datas]
 
     # Search status
     best_score = -1
@@ -621,12 +619,14 @@ def evolutionary_search(init_sols: List[ModelPlacement],
             idx = np.random.choice(len(scores), p=weights)
             sol = cur_sols[idx]
             goodputs = stats[idx][1]
+            fullstats = stats[idx][3]
 
             if model_num_unserved_list[idx] is not None:
                 model_num_unserved = model_num_unserved_list[idx]
             else:
-                model_num_unserved = np.array([
-                    (rate * (1 - goodput)) for rate, goodput in zip(rates, goodputs)])
+                model_num_unserved = [
+                    (s.num_requests * (1 - goodput))
+                    for s, goodput in zip(fullstats.per_model_stats, goodputs)]
                 model_num_unserved = model_num_unserved / np.sum(model_num_unserved)
                 model_num_unserved_list[idx] = model_num_unserved
 
