@@ -19,6 +19,8 @@ if __name__ == "__main__":
     parser.add_argument("--unequal", action="store_true")
     parser.add_argument("--model_type", type=str, default="all_transformers",
                         choices=["all_transformers", "mixed"])
+    parser.add_argument("--protocol", type=str, default="http",
+                        choices=["http", "ray"])
     parser.add_argument("--relax-slo", action="store_true")
     parser.add_argument("--debug-tstamp", action="store_true")
 
@@ -95,5 +97,6 @@ if __name__ == "__main__":
                               output_file=args.output,
                               mode=args.mode,
                               relax_slo=args.relax_slo,
+                              protocol=args.protocol,
                               debug_tstamp=args.debug_tstamp,
                               parallel=args.parallel)

@@ -192,7 +192,7 @@ class GroupManager:
                     for key in self.latency_scale:
                         self.latency_scale[key] = min(
                             self.max_latency_scale,
-                            self.latency_scale[key] + 0.04)
+                            self.latency_scale[key] + 0.03)
                     print(f"adjust latency scale: {to_str_round(self.latency_scale, 2)}")
                 self.freeze_end = self.stage_clock[-1]
 
@@ -223,11 +223,11 @@ class GroupManager:
                     #      f"actual: {e2e_latency*1e3:.2f} ms, "
                     #      f"estimated: {estimated*1e3:.2f} ms")
 
-                self.latency_scale[name] = max(actual[n_warmup:]) / estimated
+                self.latency_scale[name] = np.median(actual[n_warmup:]) / estimated
                 retry += 1
 
         for name in self.latency_scale:
-            self.latency_scale[name] = max(self.latency_scale.values())
+            self.latency_scale[name] = np.median(list(self.latency_scale.values()))
         print(f"latency scale: {to_str_round(self.latency_scale, 2)}")
 
     def shutdown(self):
