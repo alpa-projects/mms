@@ -159,7 +159,7 @@ def decompose2tok(n: int):
 
 
 if __name__ == "__main__":
-    print(get_partitions(32, 2, 1))
-    print(get_partitions(32, 3, 1))
+    print(get_partitions(32, 2))
+    print(get_partitions(32, 3))
     print(get2tok(34))
     print(decompose2tok(13))
