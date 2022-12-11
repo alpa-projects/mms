@@ -24,7 +24,7 @@ from benchmarks.alpa.run_one_case import run_one_case
 
 # A case where all models are the same
 EqualModelCase = namedtuple("EqualModelCase", [
-    "num_devices", "mem_budget", "model_type", "num_models",
+    "exp_name", "num_devices", "mem_budget", "model_type", "num_models",
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name"])
 
@@ -33,7 +33,7 @@ def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
         prof_database = ProfilingDatabase("profiling_result.pkl")
 
-    (num_devices, mem_budget, model_type, num_models,
+    (exp_name, num_devices, mem_budget, model_type, num_models,
      total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
      slo_scale, duration, policy_name) = case
 
@@ -218,7 +218,7 @@ _DATA_HEADS = ("exp_name",
                "placement", "goodput", "mode")
 
 
-def run_one_equal_model_case(case, exp_name, mode,
+def run_one_equal_model_case(case, mode,
                              output_file=None, prof_database=None,
                              relax_slo=False, protocol="http",
                              debug=False):
@@ -234,7 +234,7 @@ def run_one_equal_model_case(case, exp_name, mode,
     print(f"group #req: {stats.group_num_requests}")
 
     res = (placement, round(stats.goodput, 3), mode)
-    values = (exp_name,) + tuple(case) + res
+    values = tuple(case) + res
 
     if output_file is not None:
         write_tsv(_DATA_HEADS, values, output_file)
@@ -242,7 +242,7 @@ def run_one_equal_model_case(case, exp_name, mode,
     return values
 
 
-def run_equal_model_cases(cases, exp_name="default", output_file=None,
+def run_equal_model_cases(cases, output_file=None,
                           mode="simulate", relax_slo=False, protocol="http",
                           debug_tstamp=False, parallel=False):
     if parallel and not ray.is_initialized():
@@ -257,7 +257,7 @@ def run_equal_model_cases(cases, exp_name="default", output_file=None,
 
     results = []
     for case in cases:
-        results.append(run_one_case_(case, exp_name, mode,
+        results.append(run_one_case_(case, mode,
             output_file=output_file, relax_slo=relax_slo,
             protocol=protocol, debug=debug_tstamp))
 
@@ -306,6 +306,7 @@ if __name__ == "__main__":
         help="Whether to do a real run to check the results of simulation.")
     args = parser.parse_args()
 
+    exp_name = "tmp"
     num_devices = 4
     mem_budget = 12 * GB
     model_type = "bert-1.3b"
@@ -319,7 +320,7 @@ if __name__ == "__main__":
     policy_name = "mp-greedy-2"
 
     cases = [
-        EqualModelCase(num_devices, mem_budget, model_type, num_models,
+        EqualModelCase(exp_name, num_devices, mem_budget, model_type, num_models,
                        total_rate, rate_distribution,
                        arrival_process, arrival_process_kwargs,
                        slo, duration, policy_name)
@@ -327,13 +328,11 @@ if __name__ == "__main__":
 
     if args.run:
         run_equal_model_cases(cases,
-                             exp_name="tmp",
                              output_file="tmp.tsv",
                              mode="run",
                              parallel=False)
 
     run_equal_model_cases(cases,
-                          exp_name="tmp",
                           output_file="tmp.tsv",
                           mode="simulate",
                           parallel=True)

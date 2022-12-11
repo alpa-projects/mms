@@ -19,7 +19,7 @@ from benchmarks.alpa.run_one_case import run_one_case
 
 
 GeneralModelCase = namedtuple("GeneralModelCase", [
-    "num_devices", "mem_budget", "model_types", "model_names",
+    "exp_name", "num_devices", "mem_budget", "model_types", "model_names",
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name"])
 
@@ -29,7 +29,7 @@ def get_general_model_serving_case(case, prof_database=None):
     if prof_database is None:
         prof_database = ProfilingDatabase("profiling_result.pkl")
 
-    (num_devices, mem_budget, model_types, model_names,
+    (exp_name, num_devices, mem_budget, model_types, model_names,
      total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
      slo_scale, duration, policy_name) = case
 
@@ -195,7 +195,7 @@ _DATA_HEADS = ("exp_name", "num_models",
                "policy_name", "placement", "goodput", "mode")
 
 
-def run_one_general_model_case(case, exp_name, mode,
+def run_one_general_model_case(case, mode,
                                output_file=None, prof_database=None,
                                debug=False):
     serving_case = get_general_model_serving_case(case, prof_database)
@@ -208,7 +208,7 @@ def run_one_general_model_case(case, exp_name, mode,
     #Workload.print_stats(stats)
     print(f"group #req: {stats.group_num_requests}")
 
-    (num_devices, mem_budget, model_types, model_names,
+    (exp_name, num_devices, mem_budget, model_types, model_names,
     total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
     slo_scale, duration, policy_name) = case
 
@@ -225,7 +225,7 @@ def run_one_general_model_case(case, exp_name, mode,
     return values
 
 
-def run_general_model_cases(cases, exp_name="default", output_file=None,
+def run_general_model_cases(cases, output_file=None,
                             mode="simulate", debug_tstamp=False, parallel=False):
     if not ray.is_initialized():
         ray.init(address="auto", runtime_env={"working_dir": os.getcwd(), "excludes": ["backup"]})
@@ -237,7 +237,7 @@ def run_general_model_cases(cases, exp_name="default", output_file=None,
 
     results = []
     for case in cases:
-        results.append(run_one_case_(case, exp_name, mode,
+        results.append(run_one_case_(case, mode,
             output_file=output_file, debug=debug_tstamp))
 
     if parallel:
