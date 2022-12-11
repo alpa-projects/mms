@@ -322,6 +322,7 @@ class Workload:
             model_indices[requests[i].model_name].append(i)
 
         names = list(model_indices.keys())
+        #names.sort(key=lambda name: int(name[1:]))
         names.sort(key=lambda name: len(model_indices[name]))
 
         stats = []

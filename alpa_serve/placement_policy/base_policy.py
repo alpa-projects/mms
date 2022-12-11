@@ -265,9 +265,9 @@ class PlacementEvaluator:
 
 
 def gen_train_workload(model_datas: List[ModelData],
-                       seed: int = 1234,
-                       simulation_min_duration: float = 100,
-                       simulation_min_samples: int = 30000):
+                       seed: int = 0,
+                       simulation_min_duration: float = 200,
+                       simulation_min_samples: int = 0):
     """Generate a training workload for search."""
     total_rate = sum(d.rate for d in model_datas)
     duration = max(simulation_min_duration, simulation_min_samples / total_rate)
