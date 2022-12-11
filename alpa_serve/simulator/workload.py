@@ -282,7 +282,7 @@ class Workload:
             self.rate = 0
             self.cv = 0
 
-    def split(self, number: int):
+    def split_round_robin(self, number: int):
         rets = []
         for i in range(number):
             rets.append(self[i::number])

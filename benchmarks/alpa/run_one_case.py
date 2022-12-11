@@ -30,8 +30,8 @@ def worker_initializer(url):
 def submit_one(arg):
     url, model_name, slo, start, idx, relax_slo, debug = arg
     if time.time() > start:
-        print(f"WARNING: Request {idx} is blocked by the client. "
-              f"{time.time() - start:.4f}")
+        pass #print(f"WARNING: Request {idx} is blocked by the client. "
+              #f"{time.time() - start:.4f}")
 
     while time.time() < start:
         pass
@@ -127,7 +127,7 @@ class ThreadClient:
         finish = np.zeros(num_requests, dtype=np.float64)
         good = np.zeros(num_requests, dtype=bool)
 
-        ts = [None] * 200
+        ts = [None] * int(workload.rate * 10)
 
         for i in range(num_requests):
             while time.time() < workload.arrivals[i] - 0.010:
@@ -176,7 +176,7 @@ class ParallelThreadClient:
         return client.res_dict[workload]
 
     async def submit_workload(self, workload: Workload):
-        ws = workload.split(self.max_workers)
+        ws = workload.split_round_robin(self.max_workers)
         args = [(self.url, self.relax_slo, self.debug, w) for w in ws]
         results = self.executor.map(ParallelThreadClient.worker_func, args)
 
@@ -216,8 +216,8 @@ def run_one_case(case: ServingCase, warmup=DEFAULT_WARMUP,
 
     # Launch the client
     url = f"http://localhost:{port}" if protocol == "http" else None
-    #client = ParallelThreadClient(url, relax_slo, debug)
-    client = ProcessPoolClient(url, relax_slo, debug)
+    #client = ParallelThreadClient(url, relax_slo, debug, max_workers=2)
+    client = ThreadClient(url, relax_slo, debug)
     workload = generate_workload(start=time.time() + 5)
 
     # Run workloads
