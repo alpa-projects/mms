@@ -426,13 +426,8 @@ if __name__ == "__main__":
 
     w3 = w1 + w2
     print(w3)
-<<<<<<< HEAD
-    print(w3.split(2)[0])
-    print(w3.split(2)[1])
-=======
 
     ws = w3.split_time_interval(500)
     print(len(ws))
     print(ws[0])
     print(ws[1])
->>>>>>> ff17d19 (add sr-replace)
