@@ -33,7 +33,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-greedy", "mp-search"]
+    policies = ["sr-greedy", "sr-replace-5400", "mp-search"]
     mem_budget = args.mem_budget * GB
     model_type = args.model_type
 
