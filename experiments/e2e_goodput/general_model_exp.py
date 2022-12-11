@@ -116,6 +116,7 @@ if __name__ == "__main__":
                        "goodput_vs_rate", "goodput_vs_cv", "device_vs_model"]
         experiments = [args.exp_ids]
 
+    cases = []
 
     cases = []
     ##### goodput vs num_devices #####

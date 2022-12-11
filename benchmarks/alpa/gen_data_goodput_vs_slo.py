@@ -53,7 +53,7 @@ if __name__ == "__main__":
     if args.slo_scale is not None:
         slo_scales = [args.slo_scale]
     else:
-        slo_scales = [0.5, 1, 2, 4, 5, 6, 10]
+        slo_scales = [0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10]
     duration = 200
 
     if args.unequal:

@@ -27,5 +27,7 @@ def get_model_def(name, is_simulator, prof_database):
             return partial(BertModel, bert_specs["2.6B"], result)
         elif name == "bert-6.7b":
             return partial(BertModel, bert_specs["6.7B"], result)
+        elif name == "bert-103.5b":
+            return partial(BertModel, bert_specs["103.5B"], result)
         else:
             raise ValueError(f"Invalid model name: {name}")

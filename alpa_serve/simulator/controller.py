@@ -426,15 +426,15 @@ def approximate_one_case_one_placement(placement, model_names, prof_ress, model_
         for g_id in range(num_groups):
             value = prof_ress[m_id].para_dict.get(group_configs[g_id], None)
             if value:
-                group_max_latency[m_id][g_id] = max(value.latency[max_bs]) * (
-                    1 + 0.005 * len(value.latency[max_bs]))
-                group_sum_latency[m_id][g_id] = sum(value.latency[max_bs])
+                penalty = 0.009 * len(value.latency[max_bs])
+                group_max_latency[m_id][g_id] = max(value.latency[max_bs]) * (1 + penalty)
+                group_sum_latency[m_id][g_id] = sum(value.latency[max_bs]) * (1 + penalty)
             else:
                 group_max_latency[m_id][g_id] = group_sum_latency[m_id][g_id] = inf
 
     # Simulate
     start = arrivals
-    finish = np.empty(num_requests, dtype=np.float32)
+    finish = np.empty(num_requests, dtype=np.float64)
     good = np.empty(num_requests, dtype=bool)
     tstamps = arrivals
 
@@ -454,7 +454,7 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
     num_models = len(group_max_latency)
     num_groups = len(group_max_latency[0])
 
-    group_clocks = np.zeros(num_groups, dtype=np.float32)
+    group_clocks = np.zeros(num_groups, dtype=np.float64)
     group_num_requests = np.zeros(num_groups, dtype=np.int32)
     group_num_good_requests = np.zeros(num_groups, dtype=np.int32)
     model_num_requests = np.zeros(num_models, dtype=np.int32)
