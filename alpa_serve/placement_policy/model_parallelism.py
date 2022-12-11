@@ -469,3 +469,20 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 beam_sols[cur_num].append(next_sols[next_indices[i]])
 
         return beam_sols[num_devices]
+
+class ModelParallelismEqual(BasePlacementPolicy):
+    
+    def __init__(self, pp, op, verbose: int = 0):
+        super().__init__(verbose=verbose)
+        self.pp = pp
+        self.op = op
+
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
+        group_size = self.op * self.pp
+        num_groups = cluster_env.num_devices // group_size
+        sol = ModelPlacement([ParallelConfig(1, self.op, self.pp)] * num_groups, [[i] for i in range(num_groups)])
+
+        return sol, None

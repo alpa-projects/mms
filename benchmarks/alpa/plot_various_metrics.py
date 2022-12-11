@@ -18,6 +18,11 @@ show_name_dict = {
     "mp-greedy-2":    "Pipeline Parallelism (#stage=2)",
     "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",
     "mp-greedy-8":    "Pipeline Parallelism (#stage=8)",
+    "mp-greedy-16":   "Pipeline Parallelism (#stage=16)",
+    "mp-equal-16-1":  "Model Parallelism (pp=16, op=1)", 
+    "mp-equal-8-2":   "Model Parallelism (pp=8, op=2)",
+    "mp-equal-4-4":   "Model Parallelism (pp=4, op=4)",
+    "mp-equal-2-8":   "Model Parallelism (pp=2, op=8)",
 }
 
 def show_name(name):
@@ -46,7 +51,8 @@ method_order_list = [
 
     "mp-ilp", "mp-search",
     "mp-search-100", "mp-search-1000",
-    "mp-greedy-2", "mp-greedy-4", "mp-greedy-8",
+    "mp-greedy-2", "mp-greedy-4", "mp-greedy-8", "mp-greedy-16",
+    "mp-equal-16-1", "mp-equal-8-2", "mp-equal-4-4", "mp-equal-2-8",
 ]
 
 def method2order(name):

@@ -54,6 +54,20 @@ synthetic_suite = {
         rate_scales = [],
         cv_scales = [],
     ),
+    "bert-103.5b": BenchmarkConfig(    
+        fixed_num_devices = 64,
+        fixed_num_models = 4,
+        fixed_slo_scale = 2,
+        fixed_rate_scale = None,
+        fixed_cv_scale = None,
+        num_devices_list = [],
+        num_models_list = [],
+        slo_scales = [0.5, 1, 2, 4, 6, 8],
+        rate_list = [0.5, 2, 4, 6, 8],
+        cv_list = [1, 2, 3, 4],
+        rate_scales = [],
+        cv_scales = [],
+    ),
 }
 
 azure_v1_suite = {

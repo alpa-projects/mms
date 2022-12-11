@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
     if model_type == "bert-103.5b":
-        policies = ["mp-greedy-16", "mp-search"]
+        policies = ["mp-equal-16-1", "mp-equal-8-2", "mp-equal-4-4", "mp-equal-2-8", "mp-search"]
     else:
         policies = ["sr-greedy", "sr-replace-5400", "mp-search"]
 
@@ -126,6 +126,7 @@ if __name__ == "__main__":
                     arrival_process, arrival_process_kwargs,
                     fixed_slo_scale, duration, policy_name))
 
+
     #### goodput vs num_models #####
     if "goodput_vs_num_models" in experiments:
         print("=== Running goodput vs. #models ===")
@@ -152,6 +153,7 @@ if __name__ == "__main__":
                         arrival_process, new_arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
 
+
     #### goodput vs slo #####
     if "goodput_vs_slo" in experiments:
         print("=== Running goodput vs. SLO ===")
@@ -164,6 +166,7 @@ if __name__ == "__main__":
                     total_rate, rate_distribution,
                     arrival_process, arrival_process_kwargs,
                     slo_scale, duration, policy_name))
+
 
     #### goodput vs rate/rate_scale #####
     if "goodput_vs_rate" in experiments:
@@ -192,7 +195,7 @@ if __name__ == "__main__":
                         total_rate, rate_distribution,
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
-
+                        
 
     #### goodput vs cv/cv_scale #####
     if "goodput_vs_cv" in experiments:
@@ -208,7 +211,6 @@ if __name__ == "__main__":
                         total_rate, rate_distribution,
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
-
         else:
             print("=== Running goodput vs. cv_scale ===")
             exp_name = "goodput_vs_cv_scale"
