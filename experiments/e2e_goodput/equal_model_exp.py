@@ -39,7 +39,10 @@ if __name__ == "__main__":
     if model_type == "bert-103.5b":
         policies = ["mp-equal-16-1", "mp-equal-8-2", "mp-equal-4-4", "mp-equal-2-8", "mp-search"]
     else:
-        policies = ["sr-greedy", "sr-replace-60", "sr-replace-30", "mp-search"]
+        if args.workload == "azure_v1":
+            policies = ["sr-greedy", "sr-replace-60", "sr-replace-30", "mp-search"]
+        else:
+            policies = ["sr-greedy", "sr-replace-60", "mp-search"]
 
     # workload config
     if args.workload == "synthetic":
