@@ -56,6 +56,19 @@ class ModelPlacement:
 
 
 @dataclasses.dataclass
+class ModelPlacementWithReplacement:
+    start_times: List[float]
+    placements: List[ModelPlacement]
+
+    def verify(self, model_datas, cluster_env):
+        for p in self.placements:
+            p.verify(model_datas, cluster_env)
+
+    def __str__(self):
+        return f"ModelPlacementWithReplacement(num_segments={len(self.placements)})"
+
+
+@dataclasses.dataclass
 class ModelData:
     name: str
     slo: float
@@ -97,6 +110,9 @@ class BasePlacementPolicy:
                           cluster_env: ClusterEnv,
                           model_datas: List[ModelData],
                           placement: ModelPlacement):
+        if isinstance(placement, ModelPlacementWithReplacement):
+            return
+
         group_configs, group_models = placement.group_configs, placement.group_models
         assert len(group_configs) == len(group_models)
         num_groups = len(group_configs)

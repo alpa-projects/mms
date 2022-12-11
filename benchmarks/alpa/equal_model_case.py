@@ -11,7 +11,7 @@ from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase, ParallelConfig
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
-    SelectiveReplicationSearch,
+    SelectiveReplicationSearch, SelectiveReplicationReplacement,
     ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.trace import Trace, report_group_stats
@@ -177,6 +177,10 @@ def get_equal_model_serving_case(case, prof_database=None):
             policy = SelectiveReplicationILP(verbose=1)
         elif policy_name in "sr-greedy":
             policy = SelectiveReplicationGreedy(verbose=1)
+        elif "sr-replace" in policy_name:
+            interval = int(policy_name.split("-")[2])
+            policy = SelectiveReplicationReplacement(verbose=1,
+                 replacement_interval=interval)
         elif policy_name == "sr-search":
             policy = SelectiveReplicationSearch(verbose=1)
         elif policy_name == "mp-ilp":

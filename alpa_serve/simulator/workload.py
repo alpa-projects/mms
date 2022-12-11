@@ -288,6 +288,22 @@ class Workload:
             rets.append(self[i::number])
         return rets
 
+    def split_time_interval(self, interval: float):
+        if len(self.arrivals) < 1:
+            return []
+
+        ws = []
+        start_i = 0
+        start_time = self.arrivals[start_i]
+        for i in range(len(self.arrivals)):
+            if self.arrivals[i] > start_time + interval:
+                ws.append(self[start_i:i])
+                start_i = i
+                start_time = self.arrivals[i]
+
+        ws.append(self[start_i:])
+        return ws
+
     def compute_stats(self, start: Sequence[float], finish: Sequence[float],
                       good: Sequence[bool], warmup: float):
         """Compute the statistics of serving results."""
@@ -406,11 +422,17 @@ class Workload:
 
 if __name__ == "__main__":
     w1 = PoissonProcess(10).generate_workload("m", start=0, duration=1000, seed=0)
-    print(w1)
     w2 = GammaProcess(10, 5).generate_workload("m", start=0, duration=1000, seed=0)
-    print(w2)
 
     w3 = w1 + w2
     print(w3)
+<<<<<<< HEAD
     print(w3.split(2)[0])
     print(w3.split(2)[1])
+=======
+
+    ws = w3.split_time_interval(500)
+    print(len(ws))
+    print(ws[0])
+    print(ws[1])
+>>>>>>> ff17d19 (add sr-replace)

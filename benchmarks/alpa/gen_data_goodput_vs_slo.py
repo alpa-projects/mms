@@ -17,7 +17,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=["simulate", "run"],
                         default="simulate")
     parser.add_argument("--unequal", action="store_true")
-    parser.add_argument("--model_type", type=str, default="all_transformers",
+    parser.add_argument("--model-type", type=str, default="all_transformers",
                         choices=["all_transformers", "mixed"])
     parser.add_argument("--protocol", type=str, default="http",
                         choices=["http", "ray"])
