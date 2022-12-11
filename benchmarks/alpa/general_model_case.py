@@ -233,7 +233,7 @@ def run_general_model_cases(cases, output_file=None,
         ray.init(address="auto", runtime_env={"working_dir": os.getcwd(), "excludes": ["backup"]})
 
     if parallel:
-        run_one_case_ = ray.remote(num_cpus=2)(run_one_general_model_case).remote
+        run_one_case_ = ray.remote(num_cpus=4)(run_one_general_model_case).remote
     else:
         run_one_case_ = run_one_general_model_case
 
