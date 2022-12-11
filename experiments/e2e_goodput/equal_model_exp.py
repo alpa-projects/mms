@@ -20,7 +20,7 @@ if __name__ == "__main__":
                               "goodput_vs_slo", "goodput_vs_rate", "goodput_vs_cv",
                               "num_devices_vs_num_models"])
     parser.add_argument("--model-type", type=str, default="bert-1.3b",
-                        choices=["bert-1.3b", "bert-2.6b", "bert-6.7b"])
+                        choices=["bert-1.3b", "bert-2.6b", "bert-6.7b", "bert-103.5b"])
     parser.add_argument("--mem-budget", type=int, default=13)
     parser.add_argument("--workload", type=str, default="synthetic",
                         choices=["synthetic", "azure_v1", "azure_v2"])
@@ -32,17 +32,14 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
-    policies = ["sr-greedy", "sr-replace-5400", "mp-search"]
-    mem_budget = args.mem_budget * GB
     model_type = args.model_type
+    mem_budget = args.mem_budget * GB
 
-    # default config
-    fixed_num_devices = 32
-    fixed_num_models = 32
-    fixed_rate_scale = 1
-    fixed_cv_scale = 4
-    fixed_slo_scale = 5
+    # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
+    if model_type == "bert-103.5b":
+        policies = ["mp-greedy-16", "mp-search"]
+    else:
+        policies = ["sr-greedy", "sr-replace-5400", "mp-search"]
 
     # workload config
     if args.workload == "synthetic":
@@ -53,6 +50,8 @@ if __name__ == "__main__":
         arrival_process = "gamma"
         arrival_process_kwargs = {"cv": args.cv}
 
+        fixed_num_devices, fixed_num_models, fixed_slo_scale, \
+        fixed_rate_scale, fixed_cv_scale, \
         num_devices_list, num_models_list, slo_scales, \
         rate_list, cv_list, rate_scales, cv_scales = synthetic_suite[model_type]
     elif args.workload == "azure_v1":
@@ -61,45 +60,30 @@ if __name__ == "__main__":
         total_rate = -1
         duration = -1
 
-        fixed_rate_scale = 2e-3
-        if model_type == "bert-1.3b":
-            fixed_num_devices = 16
-            fixed_num_models = 48
-        elif model_type == "bert-2.6b":
-            fixed_num_devices = 32
-            fixed_num_models = 48
-        else:
-            fixed_num_devices = 64
-            fixed_num_models = 48
+        fixed_num_devices, fixed_num_models, fixed_slo_scale, \
+        fixed_rate_scale, fixed_cv_scale, \
+        num_devices_list, num_models_list, slo_scales, \
+        rate_list, cv_list, rate_scales, cv_scales = azure_v1_suite[model_type]
 
         arrival_process = "azure_v1"
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
                                   "cv_scale": fixed_cv_scale,
                                   "trace_dir": args.trace_dir}
-        num_devices_list, num_models_list, slo_scales, \
-        rate_list, cv_list, rate_scales, cv_scales = azure_v1_suite[model_type]
     elif args.workload == "azure_v2":
         # real trace does not need these config
         rate_distribution = None
         total_rate = -1
         duration = -1
 
+        fixed_num_devices, fixed_num_models, fixed_slo_scale, \
+        fixed_rate_scale, fixed_cv_scale, \
+        num_devices_list, num_models_list, slo_scales, \
+        rate_list, cv_list, rate_scales, cv_scales = azure_v2_suite[model_type]
+
         arrival_process = "azure_v2"
-        fixed_rate_scale = 32
         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
                                   "cv_scale": fixed_cv_scale,
                                   "trace_dir": args.trace_dir}
-        if model_type == "bert-1.3b":
-            fixed_num_devices = 16
-            fixed_num_models = 48
-        elif model_type == "bert-2.6b":
-            fixed_num_devices = 32
-            fixed_num_models = 48
-        else:
-            fixed_num_devices = 64
-            fixed_num_models = 48
-        num_devices_list, num_models_list, slo_scales, \
-        rate_list, cv_list, rate_scales, cv_scales = azure_v2_suite[model_type]
     else:
         raise ValueError("Unsupported workload!")
 
