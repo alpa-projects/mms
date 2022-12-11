@@ -405,7 +405,7 @@ def approximate_one_case(case: ServingCase,
     return stats, placement
 
 
-def approximate_one_case_one_placement(placement, model_names, prof_ress, model_ids, slos, arrivals):
+def approximate_one_case_one_placement(placement, model_names, prof_ress, model_ids, slos, arrivals, mixed = False):
     # Load constants
     group_configs, group_models = placement.group_configs, placement.group_models
 
@@ -450,6 +450,61 @@ def approximate_one_case_one_placement(placement, model_names, prof_ress, model_
 
 @numba.jit(nopython=True)
 def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
+                      group_max_latency, group_sum_latency, num_requests):
+    num_models = len(group_max_latency)
+    num_groups = len(group_max_latency[0])
+
+    group_clocks = np.zeros(num_groups, dtype=np.float64)
+    group_num_requests = np.zeros(num_groups, dtype=np.int32)
+    group_num_good_requests = np.zeros(num_groups, dtype=np.int32)
+    model_num_requests = np.zeros(num_models, dtype=np.int32)
+    model_num_good_requests = np.zeros(num_models, dtype=np.int32)
+    fixed_overhead = 0.011
+
+    for i in range(num_requests):
+        tstamp, m_id, slo = tstamps[i], model_ids[i], slos[i]
+
+        if m_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
+        model_num_requests[m_id] += 1
+
+        # Select group id
+        g_id = -1
+        min_group_clock = inf
+        for j in m_id2g_id[m_id]:
+            if j < 0:
+                break
+            if group_clocks[j] < min_group_clock:
+                min_group_clock = group_clocks[j]
+                g_id = j
+
+        if g_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
+
+        start_time = max(group_clocks[g_id], tstamp)
+        finish_time = start_time + group_sum_latency[m_id][g_id] + fixed_overhead
+        group_num_requests[g_id] += 1
+
+        if finish_time - tstamp <= slo:
+            finish[i] = finish_time
+            good[i] = True
+            group_clocks[g_id] = start_time + group_max_latency[m_id][g_id]
+            group_num_good_requests[g_id] += 1
+            model_num_good_requests[m_id] += 1
+        else:
+            finish[i] = tstamp
+            good[i] = False
+
+    return (model_num_requests, model_num_good_requests,
+            group_num_requests, group_num_good_requests)
+
+
+@numba.jit(nopython=True)
+def simulate_requests_mixed(finish, good, tstamps, model_ids, slos, m_id2g_id,
                       group_max_latency, group_sum_latency, num_requests):
     num_models = len(group_max_latency)
     num_groups = len(group_max_latency[0])
