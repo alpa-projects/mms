@@ -35,7 +35,7 @@ if __name__ == "__main__":
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8", "mp-search"}
     #policies = ["sr-greedy", "mp-search", "mp-search-sep"]
     #policies = ["mp-search", "mp-search-sep"]
-    policies = ["mp-greedy-4"]
+    policies = ["mp-search-sep"]
     mem_budget = args.mem_budget * GB
     model_type = args.model_type
     
