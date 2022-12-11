@@ -39,7 +39,7 @@ if __name__ == "__main__":
     if model_type == "bert-103.5b":
         policies = ["mp-greedy-16", "mp-search"]
     else:
-        policies = ["sr-greedy", "sr-replace-5400", "mp-search"]
+        policies = ["sr-greedy", "sr-replace-60", "sr-replace-30", "mp-search"]
 
     # workload config
     if args.workload == "synthetic":
@@ -113,11 +113,11 @@ if __name__ == "__main__":
         experiments = [args.exp_ids]
 
 
+    cases = []
     ##### goodput vs num_devices #####
     if "goodput_vs_num_devices" in experiments:
         print("=== Running goodput vs. #devices ===")
         exp_name = "goodput_vs_num_devices"
-        cases = []
         for num_devices in num_devices_list:
             for policy_name in policies:
                 cases.append(EqualModelCase(exp_name,
@@ -130,7 +130,6 @@ if __name__ == "__main__":
     if "goodput_vs_num_models" in experiments:
         print("=== Running goodput vs. #models ===")
         exp_name = "goodput_vs_num_models"
-        cases = []
         for num_models in num_models_list:
             for policy_name in policies:
                 # Note(Hao): we need to scale the rate as well to keep the total traffic unchanged.
@@ -156,7 +155,6 @@ if __name__ == "__main__":
     if "goodput_vs_slo" in experiments:
         print("=== Running goodput vs. SLO ===")
         exp_name = "goodput_vs_slo"
-        cases = []
         for slo_scale in slo_scales:
             for policy_name in policies:
                 cases.append(EqualModelCase(exp_name,
@@ -170,7 +168,6 @@ if __name__ == "__main__":
         if args.workload == "synthetic":
             print("=== Running goodput vs. rate ===")
             exp_name = "goodput_vs_rate"
-            cases = []
             for new_rate in rate_list:
                 for policy_name in policies:
                     cases.append(EqualModelCase(exp_name,
@@ -181,7 +178,6 @@ if __name__ == "__main__":
         else:
             print("=== Running goodput vs. rate_scale ===")
             exp_name = "goodput_vs_rate_scale"
-            cases = []
             for rate_scale in rate_scales:
                 for policy_name in policies:
                     arrival_process_kwargs = {"rate_scale": rate_scale,
@@ -199,7 +195,6 @@ if __name__ == "__main__":
         if args.workload == "synthetic":
             print("=== Running goodput vs. cv ===")
             exp_name = "goodput_vs_cv"
-            cases = []
             for new_cv in cv_list:
                 for policy_name in policies:
                     arrival_process_kwargs = {"cv": new_cv}
@@ -212,7 +207,6 @@ if __name__ == "__main__":
         else:
             print("=== Running goodput vs. cv_scale ===")
             exp_name = "goodput_vs_cv_scale"
-            cases = []
             for cv_scale in cv_scales:
                 for policy_name in policies:
                     arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
@@ -224,10 +218,15 @@ if __name__ == "__main__":
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
 
-    run_equal_model_cases(cases,
-                          output_file=output_file,
-                          mode=args.mode, parallel=args.parallel)
-
+    n_cases = len(cases)
+    M = 8
+    n_case_each_run = n_cases // M
+    for i in range(M):
+        start_case = i * n_case_each_run
+        end_case = (i + 1) * n_case_each_run  if (i + 1) * n_case_each_run < n_cases else n_cases
+        run_equal_model_cases(cases[start_case:end_case],
+                              output_file=output_file,
+                              mode=args.mode, parallel=args.parallel)
     # ### model vs devices ###
     # if "num_devices_vs_num_models" in experiments:
     #     print("=== Running #devices vs. #models ===")

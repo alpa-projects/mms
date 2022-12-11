@@ -102,6 +102,7 @@ def get_equal_model_serving_case(case, prof_database=None):
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        del azure_v2_trace
         ws = []
         for model_name, slo in zip(model_names, slos):
             ws.append(train_replays[model_name].to_workload(slo))
@@ -132,6 +133,7 @@ def get_equal_model_serving_case(case, prof_database=None):
                                               interval_seconds=60,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
+        del azure_v1_trace
         ws = []
         for model_name, slo in zip(model_names, slos):
             ws.append(train_replays[model_name].to_workload(slo))
