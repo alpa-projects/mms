@@ -405,7 +405,7 @@ def approximate_one_case(case: ServingCase,
     return stats, placement
 
 
-def approximate_one_case_one_placement(placement, model_names, prof_ress, model_ids, slos, arrivals):
+def approximate_one_case_one_placement(placement, model_names, prof_ress, model_ids, slos, arrivals, mixed = True):
     # Load constants
     group_configs, group_models = placement.group_configs, placement.group_models
 
@@ -432,16 +432,38 @@ def approximate_one_case_one_placement(placement, model_names, prof_ress, model_
             else:
                 group_max_latency[m_id][g_id] = group_sum_latency[m_id][g_id] = inf
 
+    if mixed:
+        # num_stages: (num_groups,)
+        num_stages = np.array([c.pp for c in group_configs], dtype=np.int32)
+        max_num_stages = np.max(num_stages)
+        # stage_latency: (num_models, num_groups, max_num_stages)
+        stage_latency = np.empty((num_models, num_groups, max_num_stages), dtype=np.float32)
+        for m_id in range(num_models):
+            for g_id in range(num_groups):
+                value = prof_ress[m_id].para_dict.get(group_configs[g_id], None)
+                if value:
+                    penalty = 0.009 * len(value.latency[max_bs])
+                    for k in range(num_stages[g_id]):
+                        stage_latency[m_id][g_id][k] = value.latency[max_bs][k] * (1 + penalty)
+                else:
+                    stage_latency[m_id][g_id][:] = inf
+
     # Simulate
     start = arrivals
     finish = np.empty(num_requests, dtype=np.float64)
     good = np.empty(num_requests, dtype=bool)
     tstamps = arrivals
 
-    (model_num_requests, model_num_good_requests,
-     group_num_requests, group_num_good_requests) = simulate_requests(
-        finish, good, tstamps, model_ids, slos, m_id2g_id,
-        group_max_latency, group_sum_latency, num_requests)
+    if mixed:
+        (model_num_requests, model_num_good_requests,
+         group_num_requests, group_num_good_requests) = simulate_requests_mixed(
+            finish, good, tstamps, model_ids, slos, m_id2g_id,
+            num_stages, stage_latency, num_requests)
+    else:
+        (model_num_requests, model_num_good_requests,
+         group_num_requests, group_num_good_requests) = simulate_requests(
+            finish, good, tstamps, model_ids, slos, m_id2g_id,
+            group_max_latency, group_sum_latency, num_requests)
 
     return (start, finish, good,
             model_num_requests, model_num_good_requests,
@@ -493,6 +515,73 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
             finish[i] = finish_time
             good[i] = True
             group_clocks[g_id] = start_time + group_max_latency[m_id][g_id]
+            group_num_good_requests[g_id] += 1
+            model_num_good_requests[m_id] += 1
+        else:
+            finish[i] = tstamp
+            good[i] = False
+
+    return (model_num_requests, model_num_good_requests,
+            group_num_requests, group_num_good_requests)
+
+
+@numba.jit(nopython=True)
+def simulate_requests_mixed(finish, good, tstamps, model_ids, slos, m_id2g_id,
+                            num_stages, stage_latency, num_requests):
+    # num_stages: num_groups
+    # stage_latency: num_models * num_groups * max_num_stages
+    num_models = len(stage_latency)
+    num_groups = len(stage_latency[0])
+    max_num_stages = len(stage_latency[0][0])
+
+    device_clocks = np.zeros((num_groups, max_num_stages), dtype=np.float64)
+    group_num_requests = np.zeros(num_groups, dtype=np.int32)
+    group_num_good_requests = np.zeros(num_groups, dtype=np.int32)
+    model_num_requests = np.zeros(num_models, dtype=np.int32)
+    model_num_good_requests = np.zeros(num_models, dtype=np.int32)
+    fixed_overhead = 0.011
+
+    tmp_time = np.zeros(max_num_stages, dtype=np.float64)
+
+    for i in range(num_requests):
+        tstamp, m_id, slo = tstamps[i], model_ids[i], slos[i]
+
+        if m_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
+
+        model_num_requests[m_id] += 1
+
+        # Select group id
+        g_id = -1
+        min_device_clock = inf
+        for j in m_id2g_id[m_id]:
+            if j < 0:
+                break
+            tmp = device_clocks[j][num_stages[j] - 1]
+            if tmp < min_device_clock:
+                min_device_clock = tmp
+                g_id = j
+
+        if g_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
+
+        t = tstamp
+        for k in range(num_stages[g_id]):
+            t = max(t, device_clocks[g_id][k]) + stage_latency[m_id][g_id][k]
+            tmp_time[k] = t
+
+        finish_time = t + fixed_overhead
+        group_num_requests[g_id] += 1
+
+        if finish_time - tstamp <= slo:
+            finish[i] = finish_time
+            good[i] = True
+            for k in range(num_stages[g_id]):
+                device_clocks[g_id][k] = tmp_time[k]
             group_num_good_requests[g_id] += 1
             model_num_good_requests[m_id] += 1
         else:

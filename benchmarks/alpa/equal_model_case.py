@@ -5,8 +5,8 @@ import os
 import numpy as np
 import ray
 
-from alpa_serve.simulator.controller import (Controller, simulate_one_case,
-    approximate_one_case)
+from alpa_serve.simulator.controller import (Controller, DummyController,
+    simulate_one_case, approximate_one_case)
 from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase, ParallelConfig
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
@@ -149,7 +149,7 @@ def get_equal_model_serving_case(case, prof_database=None):
     cvs = [a.cv() for a in arrival_processes]
 
     def register_models(controller):
-        is_simulator = isinstance(controller, Controller)
+        is_simulator = isinstance(controller, (Controller, DummyController))
 
         for model_name, model_type in zip(model_names, model_types):
             controller.register_model.remote(
