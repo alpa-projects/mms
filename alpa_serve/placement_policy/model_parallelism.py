@@ -323,6 +323,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
 
         model_id_map = {}
         eco_model_datas = []
+        cluster_latencies = []
         for model_id, model_data in enumerate(model_datas):
             cur_latency = max(model_data.profiling_result. \
                           para_dict[ParallelConfig(1, 1, 1)].latency[1])
@@ -338,12 +339,34 @@ class ModelParallelismSearch(BasePlacementPolicy):
             if not flag:
                 model_id_map[(len(eco_model_datas), 0)] = model_id
                 eco_model_datas.append([model_data])
+                cluster_latencies.append(cur_latency)
 
         # List[List[(List[ModelData], ClusterEnv)]]
         partitions = get_partitions(cluster_env.num_devices, len(eco_model_datas))
+
+        ## reduce num partitions
+        ratio = np.empty(len(eco_model_datas), dtype=np.float32)
+        for i, eco_model_data in enumerate(eco_model_datas):
+            ratio[i] = sum(x.rate for x in eco_model_data)
+        ratio = ratio / np.sum(ratio)   # q/s
+
+        for threshold in [1.0, 0.5, 0.3, 0.2, 0.1]:
+            reduced_partitions = []
+            for partition in partitions:
+                throughputs = [x / l for x, l in zip(partition, cluster_latencies)]   # q/s
+                norm_throughputs = np.array(throughputs) / sum(throughputs)
+                dis = np.max(np.abs(ratio - norm_throughputs))
+                if dis < threshold:
+                    reduced_partitions.append(partition)
+
+            if len(reduced_partitions) < 100:
+                break
+
+        print(f"original: {len(partitions)}  reduced: {len(reduced_partitions)}")
+
         separations = [[(eco_model_datas[i], ClusterEnv(device_cnt, cluster_env.mem_budget)) \
                         for i, device_cnt in enumerate(partition)] \
-                       for partition in partitions]
+                       for partition in reduced_partitions]
 
         return separations, model_id_map
 
@@ -362,6 +385,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
         if self.use_separation:
             eco_separations, model_id_map = self.enumerate_separations(model_datas, cluster_env)
             print("number of combinations: ", len(eco_separations))
+            exit(0)
 
             parallel = False
             if parallel:
