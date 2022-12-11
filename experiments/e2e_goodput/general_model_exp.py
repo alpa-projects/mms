@@ -36,7 +36,7 @@ if __name__ == "__main__":
     policies = ["sr-greedy", "mp-search"]
     mem_budget = args.mem_budget * GB
     model_type = args.model_type
-    
+
     # multi-model config
     if args.model_type == "mixed":
         model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-5.3b"] # 39.2 GB
@@ -120,29 +120,28 @@ if __name__ == "__main__":
     ##### goodput vs num_devices #####
     if "goodput_vs_num_devices" in experiments:
         print("=== Running goodput vs. #devices ===")
+        exp_name = "goodput_vs_num_devices"
         cases = []
         for num_devices in num_devices_list:
             for policy_name in policies:
-                cases.append(GeneralModelCase(
+                cases.append(GeneralModelCase(exp_name,
                     num_devices, mem_budget, model_types, model_names,
                     total_rate, rate_distribution,
                     arrival_process, arrival_process_kwargs,
                     fixed_slo_scale, duration, policy_name))
 
-        run_general_model_cases(cases, exp_name="goodput_vs_num_devices",
-                                output_file=output_file,
-                                mode=args.mode, parallel=args.parallel)
-    
+   
     ##### goodput vs num_models #####
     if "goodput_vs_num_models" in experiments:
         print("=== Running goodput vs. #models ===")
+        exp_name = "goodput_vs_num_models"
         cases = []
         for num_modelset in num_modelset_list:
             for policy_name in policies:
                 new_model_types = model_set * num_modelset
                 new_model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(num_modelset)], [])
                 if args.workload == "synthetic":
-                     cases.append(GeneralModelCase(
+                     cases.append(GeneralModelCase(exp_name,
                         fixed_num_devices, mem_budget, new_model_types, new_model_names,
                         total_rate * num_modelset / fixed_num_modelset, rate_distribution,
                         arrival_process, arrival_process_kwargs,
@@ -151,98 +150,83 @@ if __name__ == "__main__":
                     new_arrival_process_kwargs = {"rate_scale": num_modelset / fixed_num_modelset,
                                                  "cv_scale": fixed_cv_scale,
                                                  "trace_dir": args.trace_dir}
-                    cases.append(GeneralModelCase(
+                    cases.append(GeneralModelCase(exp_name,
                         fixed_num_devices, mem_budget, new_model_types, new_model_names,
                         total_rate, rate_distribution,
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
 
-        run_general_model_cases(cases, exp_name="goodput_vs_num_models",
-                                output_file=output_file,
-                                mode=args.mode, parallel=args.parallel)
-
-
     ##### goodput vs slo #####
     if "goodput_vs_slo" in experiments:
         print("=== Running goodput vs. SLO ===")
+        exp_name = "goodput_vs_slo"
         cases = []
         for slo_scale in slo_scales:
             for policy_name in policies:
-                cases.append(GeneralModelCase(
+                cases.append(GeneralModelCase(exp_name,
                     fixed_num_devices, mem_budget, model_types, model_names,
                     total_rate, rate_distribution,
                     arrival_process, arrival_process_kwargs,
                     slo_scale, duration, policy_name))
 
-        run_general_model_cases(cases, exp_name="goodput_vs_slo",
-                                output_file=output_file,
-                                mode=args.mode, parallel=args.parallel)
-
     ##### goodput vs rate/rate_scale #####
     if "goodput_vs_rate" in experiments:
         if args.workload == "synthetic":
             print("=== Running goodput vs. rate ===")
+            exp_name = "goodput_vs_rate"
             cases = []
             for new_rate in rate_list:
                 for policy_name in policies:
-                    cases.append(GeneralModelCase(
+                    cases.append(GeneralModelCase(exp_name,
                         fixed_num_devices, mem_budget, model_types, model_names,
                         new_rate, rate_distribution,
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
-            run_general_model_cases(cases, exp_name="goodput_vs_rate",
-                                    output_file=output_file,
-                                    mode=args.mode, parallel=args.parallel)
         else:
             print("=== Running goodput vs. rate_scale ===")
+            exp_name = "goodput_vs_rate_scale"
             cases = []
             for rate_scale in rate_scales:
                 for policy_name in policies:
                     new_arrival_process_kwargs = {"rate_scale": rate_scale,
                                                   "cv_scale": fixed_cv_scale,
                                                   "trace_dir": args.trace_dir}
-                    cases.append(GeneralModelCase(
+                    cases.append(GeneralModelCase(exp_name,
                         fixed_num_devices, mem_budget, model_types, model_names,
                         total_rate, rate_distribution,
                         arrival_process, new_arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
-
-            run_general_model_cases(cases, exp_name="goodput_vs_rate_scale",
-                                    output_file=output_file,
-                                    mode=args.mode, parallel=args.parallel)
 
 
     ##### goodput vs cv/cv_scale #####
     if "goodput_vs_cv" in experiments:
         if args.workload == "synthetic":
             print("=== Running goodput vs. cv ===")
+            exp_name = "goodput_vs_cv"
             cases = []
             for new_cv in cv_list:
                 for policy_name in policies:
                     new_arrival_process_kwargs = {"cv": new_cv}
-                    cases.append(GeneralModelCase(
+                    cases.append(GeneralModelCase(exp_name,
                         fixed_num_devices, mem_budget, model_types, model_names,
                         total_rate, rate_distribution,
                         arrival_process, new_arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
-
-            run_general_model_cases(cases, exp_name="goodput_vs_cv",
-                                    output_file=output_file,
-                                    mode=args.mode, parallel=args.parallel)
         else:
             print("=== Running goodput vs. cv_scale ===")
+            exp_name = "goodput_vs_cv_scale"
             cases = []
             for cv_scale in cv_scales:
                 for policy_name in policies:
                     new_arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
                                                   "cv_scale": cv_scale,
                                                   "trace_dir": args.trace_dir}
-                    cases.append(GeneralModelCase(
+                    cases.append(GeneralModelCase(exp_name,
                         fixed_num_devices, mem_budget, model_types, model_names,
                         total_rate, rate_distribution,
                         arrival_process, new_arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
 
-            run_general_model_cases(cases, exp_name="goodput_vs_cv_scale",
-                                    output_file=output_file,
-                                    mode=args.mode, parallel=args.parallel)
+    run_general_model_cases(cases,
+                            output_file=output_file,
+                            mode=args.mode, parallel=args.parallel)
