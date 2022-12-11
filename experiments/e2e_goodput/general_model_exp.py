@@ -116,12 +116,12 @@ if __name__ == "__main__":
                        "goodput_vs_rate", "goodput_vs_cv", "device_vs_model"]
         experiments = [args.exp_ids]
 
+    cases = []
 
     ##### goodput vs num_devices #####
     if "goodput_vs_num_devices" in experiments:
         print("=== Running goodput vs. #devices ===")
         exp_name = "goodput_vs_num_devices"
-        cases = []
         for num_devices in num_devices_list:
             for policy_name in policies:
                 cases.append(GeneralModelCase(exp_name,
@@ -135,7 +135,6 @@ if __name__ == "__main__":
     if "goodput_vs_num_models" in experiments:
         print("=== Running goodput vs. #models ===")
         exp_name = "goodput_vs_num_models"
-        cases = []
         for num_modelset in num_modelset_list:
             for policy_name in policies:
                 new_model_types = model_set * num_modelset
@@ -160,7 +159,6 @@ if __name__ == "__main__":
     if "goodput_vs_slo" in experiments:
         print("=== Running goodput vs. SLO ===")
         exp_name = "goodput_vs_slo"
-        cases = []
         for slo_scale in slo_scales:
             for policy_name in policies:
                 cases.append(GeneralModelCase(exp_name,
@@ -174,7 +172,6 @@ if __name__ == "__main__":
         if args.workload == "synthetic":
             print("=== Running goodput vs. rate ===")
             exp_name = "goodput_vs_rate"
-            cases = []
             for new_rate in rate_list:
                 for policy_name in policies:
                     cases.append(GeneralModelCase(exp_name,
@@ -185,7 +182,6 @@ if __name__ == "__main__":
         else:
             print("=== Running goodput vs. rate_scale ===")
             exp_name = "goodput_vs_rate_scale"
-            cases = []
             for rate_scale in rate_scales:
                 for policy_name in policies:
                     new_arrival_process_kwargs = {"rate_scale": rate_scale,
@@ -203,7 +199,6 @@ if __name__ == "__main__":
         if args.workload == "synthetic":
             print("=== Running goodput vs. cv ===")
             exp_name = "goodput_vs_cv"
-            cases = []
             for new_cv in cv_list:
                 for policy_name in policies:
                     new_arrival_process_kwargs = {"cv": new_cv}
@@ -215,7 +210,6 @@ if __name__ == "__main__":
         else:
             print("=== Running goodput vs. cv_scale ===")
             exp_name = "goodput_vs_cv_scale"
-            cases = []
             for cv_scale in cv_scales:
                 for policy_name in policies:
                     new_arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
