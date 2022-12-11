@@ -7,7 +7,6 @@ from alpa_serve.util import GB
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exp-name", type=str, default="default")
     parser.add_argument("--output", type=str, default="res_goodput_vs_slo.tsv")
     parser.add_argument("--parallel", action="store_true")
     parser.add_argument("--policy", type=str)
@@ -33,6 +32,7 @@ if __name__ == "__main__":
         policies = [args.policy]
     else:
         policies = ["sr-greedy", "mp-search"]
+    exp_name = "goodput_vs_slo"
     num_devices = 16
     mem_budget = 13 * GB
     model_type = "bert-2.6b"
@@ -70,13 +70,12 @@ if __name__ == "__main__":
         for slo_scale in slo_scales:
             for policy_name in policies:
                 cases.append(GeneralModelCase(
-                    num_devices, mem_budget, model_types, model_names,
+                    exp_name, num_devices, mem_budget, model_types, model_names,
                     total_rate, rate_distribution,
                     arrival_process, arrival_process_kwargs,
                     slo_scale, duration, policy_name))
 
         run_general_model_cases(cases,
-                                exp_name=args.exp_name,
                                 output_file=args.output,
                                 mode=args.mode,
                                 debug_tstamp=args.debug_tstamp,
@@ -86,14 +85,13 @@ if __name__ == "__main__":
         for slo_scale in slo_scales:
             for policy_name in policies:
                 cases.append(EqualModelCase(
-                    num_devices, mem_budget, model_type, num_models,
+                    exp_name, num_devices, mem_budget, model_type, num_models,
                     total_rate, rate_distribution,
                     arrival_process, arrival_process_kwargs,
                     slo_scale, duration, policy_name))
 
 
         run_equal_model_cases(cases,
-                              exp_name=args.exp_name,
                               output_file=args.output,
                               mode=args.mode,
                               relax_slo=args.relax_slo,
