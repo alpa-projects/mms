@@ -310,6 +310,9 @@ def approximate_one_case(case: ServingCase,
                          debug: bool = False,
                          fast_stats: bool = False):
     """A fast simulator that only simulates one stage for a pipeline."""
+    from alpa_serve.placement_policy.base_policy import (
+        ModelPlacement, ModelPlacementWithReplacement)
+
     tic = time.time()
     register_models, generate_workload, place_models = case
 
@@ -333,12 +336,82 @@ def approximate_one_case(case: ServingCase,
         if workload.enable_simulator_cache:
             workload.cached_data = (model_ids, slos, model_names, prof_ress)
 
+    if isinstance(placement, ModelPlacement):
+        (start, finish, good, model_num_requests, model_num_good_requests,
+         group_num_requests, group_num_good_requests) = approximate_one_case_one_placement(
+             placement, model_names, prof_ress, model_ids, slos, workload.arrivals)
+    elif isinstance(placement, ModelPlacementWithReplacement):
+        arrivals = workload.arrivals
+        change_times = placement.start_times[1:] + [inf]
+
+        start_list, finish_list, good_list = [], [], []
+        model_num_requests_list, model_num_good_requests_list = [], []
+        group_num_requests_list, group_num_good_requests_list = [], []
+
+        start_i = 0
+        pt = 0
+
+        for i in range(len(arrivals)):
+            if arrivals[i] > change_times[pt]:
+                (start, finish, good, model_num_requests, model_num_good_requests,
+                 group_num_requests, group_num_good_requests) = approximate_one_case_one_placement(
+                     placement.placements[pt], model_names, prof_ress,
+                     model_ids[start_i:i], slos[start_i:i], arrivals[start_i:i])
+                start_list.append(start)
+                finish_list.append(finish)
+                good_list.append(good)
+                group_num_requests_list.append(group_num_requests)
+                group_num_good_requests_list.append(group_num_good_requests)
+                model_num_requests_list.append(model_num_requests)
+                model_num_good_requests_list.append(model_num_good_requests)
+
+                start_i = i
+                pt += 1
+
+        (start, finish, good, model_num_requests, model_num_good_requests,
+         group_num_requests, group_num_good_requests) = approximate_one_case_one_placement(
+             placement.placements[pt], model_names, prof_ress,
+             model_ids[start_i:], slos[start_i:], arrivals[start_i:])
+        start_list.append(start)
+        finish_list.append(finish)
+        good_list.append(good)
+        group_num_requests_list.append(group_num_requests)
+        group_num_good_requests_list.append(group_num_good_requests)
+        model_num_requests_list.append(model_num_requests)
+        model_num_good_requests_list.append(model_num_good_requests)
+
+        start = np.concatenate(start_list)
+        finish = np.concatenate(finish_list)
+        good = np.concatenate(good_list)
+        group_num_requests = np.sum(group_num_requests_list, axis=0)
+        group_num_good_requests = np.sum(group_num_good_requests_list, axis=0)
+        model_num_requests = np.sum(model_num_requests_list, axis=0)
+        model_num_good_requests = np.sum(model_num_good_requests_list, axis=0)
+
+    if fast_stats:
+        # Note: no warmup
+        interval = start[-1] - start[0]
+        per_model_stats = [PerModelStatsResult(
+            model_names[i], model_num_requests[i],
+            model_num_good_requests[i] / (model_num_requests[i] + eps),
+            model_num_requests[i] / interval,
+            0, 0, 0, 0) for i in range(len(model_names))]
+        stats = StatsResult(per_model_stats, tuple(group_num_requests),
+                            np.mean(good), np.mean(finish - start),
+                            len(start), len(start) / interval)
+    else:
+        stats = workload.compute_stats(start, finish, good, warmup)
+        stats.group_num_requests = tuple(group_num_requests)
+    return stats, placement
+
+
+def approximate_one_case_one_placement(placement, model_names, prof_ress, model_ids, slos, arrivals):
     # Load constants
     group_configs, group_models = placement.group_configs, placement.group_models
 
     num_groups = len(group_configs)
     num_models = len(model_names)
-    num_requests = len(workload)
+    num_requests = len(arrivals)
     num_replicas = [0] * num_models
     m_id2g_id = np.full((num_models, num_groups), -1, dtype=np.int32)
     for g_id, m_ids in enumerate(group_models):
@@ -360,31 +433,19 @@ def approximate_one_case(case: ServingCase,
                 group_max_latency[m_id][g_id] = group_sum_latency[m_id][g_id] = inf
 
     # Simulate
-    start = workload.arrivals
+    start = arrivals
     finish = np.empty(num_requests, dtype=np.float32)
     good = np.empty(num_requests, dtype=bool)
-    tstamps = workload.arrivals
+    tstamps = arrivals
 
     (model_num_requests, model_num_good_requests,
      group_num_requests, group_num_good_requests) = simulate_requests(
         finish, good, tstamps, model_ids, slos, m_id2g_id,
         group_max_latency, group_sum_latency, num_requests)
 
-    if fast_stats:
-        # Note: no warmup
-        interval = start[-1] - start[0]
-        per_model_stats = [PerModelStatsResult(
-            model_names[i], model_num_requests[i],
-            model_num_good_requests[i] / (model_num_requests[i] + eps),
-            model_num_requests[i] / interval,
-            0, 0, 0, 0) for i in range(num_models)]
-        stats = StatsResult(per_model_stats, tuple(group_num_requests),
-                            np.mean(good), np.mean(finish - start),
-                            len(start), len(start) / interval)
-    else:
-        stats = workload.compute_stats(start, finish, good, warmup)
-        stats.group_num_requests = group_num_requests
-    return stats, placement
+    return (start, finish, good,
+            model_num_requests, model_num_good_requests,
+            group_num_requests, group_num_good_requests)
 
 
 @numba.jit(nopython=True)
@@ -407,6 +468,7 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
             finish[i] = tstamp
             good[i] = False
             continue
+        model_num_requests[m_id] += 1
 
         # Select group id
         g_id = -1
@@ -426,7 +488,6 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
         start_time = max(group_clocks[g_id], tstamp)
         finish_time = start_time + group_sum_latency[m_id][g_id] + fixed_overhead
         group_num_requests[g_id] += 1
-        model_num_requests[m_id] += 1
 
         if finish_time - tstamp <= slo:
             finish[i] = finish_time

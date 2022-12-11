@@ -159,6 +159,10 @@ def get_general_model_serving_case(case, prof_database=None):
             policy = SelectiveReplicationILP(verbose=1)
         elif policy_name == "sr-greedy":
             policy = SelectiveReplicationGreedy(verbose=1)
+        elif "sr-replace" in policy_name:
+            interval = int(policy_name.split("-")[2])
+            policy = SelectiveReplicationReplacement(verbose=1,
+                 replacement_interval=interval)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
         elif policy_name in ["mp-search", "mp-search-evo", "mp-search-sep"]:

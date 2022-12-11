@@ -10,7 +10,7 @@ import ray
 from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelPlacement, ModelData, ClusterEnv,
-    PlacementEvaluator, gen_train_workload,
+    PlacementEvaluator, gen_train_workload, ModelPlacementWithReplacement,
     replica_placement_fast_greedy, replica_placement_beam_search)
 from alpa_serve.simulator.workload import Workload
 from alpa_serve.util import eps, inf, to_str_round
@@ -125,8 +125,10 @@ class SelectiveReplicationILP(BasePlacementPolicy):
 
 class SelectiveReplicationGreedy(BasePlacementPolicy):
 
-    def __init__(self, verbose: int = 0):
+    def __init__(self, use_evo_search: bool = False, verbose: int = 0):
         super().__init__(verbose=verbose)
+
+        self.use_evo_search = use_evo_search
 
     def solve_placement(self,
                         model_datas: List[ModelData],
@@ -146,14 +148,14 @@ class SelectiveReplicationGreedy(BasePlacementPolicy):
             sol, model_datas, cluster_env, train_workload,
             evaluator, self.verbose)
 
-        #sol = evolutionary_search([sol], model_datas, evaluator, self.verbose)
+        if self.use_evo_search:
+            sol = evolutionary_search([sol], model_datas, evaluator, self.verbose)
         return sol, None
 
 
 class SelectiveReplicationSearch(BasePlacementPolicy):
 
-    def __init__(self,
-                 verbose: int = 0):
+    def __init__(self, verbose: int = 0):
         super().__init__(verbose=verbose)
 
         self.beam_size = 3
@@ -176,3 +178,45 @@ class SelectiveReplicationSearch(BasePlacementPolicy):
             sol, model_datas, cluster_env, train_workload,
             evaluator, self.beam_size, self.verbose)
         return sol, None
+
+
+class SelectiveReplicationReplacement(BasePlacementPolicy):
+
+    def __init__(self, replacement_interval: int,
+                 use_evo_search: bool = False, verbose: int = 0):
+        super().__init__(verbose=verbose)
+
+        self.replacement_interval = replacement_interval
+        self.use_evo_search = use_evo_search
+
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
+        # Generate workloads
+        if train_workload is None:
+            train_workload = gen_train_workload(model_datas)
+
+        ws = train_workload.split_time_interval(self.replacement_interval)
+
+        start_times = []
+        placements = []
+        for i in range(len(ws)):
+            # Run greedy placement
+            evaluator = PlacementEvaluator(model_datas, cluster_env, ws[i],
+                                           "fast_simulator", False)
+            num_groups = cluster_env.num_devices
+            sol = ModelPlacement([ParallelConfig(1,1,1)] * num_groups, [[] for _ in range(num_groups)])
+
+            sol = replica_placement_fast_greedy(
+                sol, model_datas, cluster_env, ws[i],
+                evaluator, self.verbose)
+
+            if self.use_evo_search:
+                sol = evolutionary_search([sol], model_datas, evaluator, self.verbose)
+
+            start_times.append(ws[i].arrivals[0])
+            placements.append(sol)
+
+        return ModelPlacementWithReplacement(start_times, placements), None
+
