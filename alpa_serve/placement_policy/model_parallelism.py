@@ -385,6 +385,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
         if self.use_separation:
             eco_separations, model_id_map = self.enumerate_separations(model_datas, cluster_env)
             print("number of combinations: ", len(eco_separations))
+            exit(0)
 
             parallel = False
             if parallel:

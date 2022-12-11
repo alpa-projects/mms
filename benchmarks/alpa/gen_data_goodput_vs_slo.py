@@ -62,6 +62,7 @@ if __name__ == "__main__":
             model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-5.3b"]
         else:
             model_set = ["bert-6.7b", "moe-1.3b"]
+        num_devices = 64
         total_rate = 70
         fixed_num_modelset = 8
         model_types = model_set * fixed_num_modelset
