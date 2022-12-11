@@ -71,18 +71,18 @@ def get_general_model_serving_case(case, prof_database=None):
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
                                               start_time='13.0.0',
-                                              end_time='13.23.60',
+                                              end_time='13.0.10',
                                               # end_time='13.1.0',
-                                              interval_seconds=5400,
+                                              interval_seconds=300,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
         test_replays = azure_v2_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
                                               start_time='13.0.0',
-                                              end_time='13.23.60',
+                                              end_time='13.0.10',
                                               # end_time='13.1.0',
-                                              interval_seconds=5400,
+                                              interval_seconds=300,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
         ws = []
@@ -91,7 +91,6 @@ def get_general_model_serving_case(case, prof_database=None):
         train_workload = Workload.merge(*ws)
 
         # for debugging:
-
         for m in test_replays:
             test_replays[m].report_stats()
         report_group_stats(list(test_replays.values()))

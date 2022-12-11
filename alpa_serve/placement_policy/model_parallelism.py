@@ -5,7 +5,7 @@ import logging
 import math
 import multiprocessing
 import time
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import ray
@@ -240,6 +240,20 @@ class ModelParallelismGreedy(BasePlacementPolicy):
         return sol, None
 
 
+def solve_separation_placement(self,
+                               eco_separation: List[Tuple[List[ModelData], ClusterEnv]],
+                               model_id_map,
+                               train_workload: Workload):
+    sol = ModelPlacement([],[])
+    for i, eco in enumerate(eco_separation):
+        sub_model_datas, sub_cluster_env = eco
+        eco_sol, _ = self.solve_placement_one_eco(sub_model_datas, sub_cluster_env, train_workload)
+        sol.group_configs += eco_sol.group_configs
+        sol.group_models += [[model_id_map[(i, model_id)] for model_id in group]
+                             for group in eco_sol.group_models]
+    return sol
+
+
 class ModelParallelismSearch(BasePlacementPolicy):
 
     def __init__(self,
@@ -347,30 +361,34 @@ class ModelParallelismSearch(BasePlacementPolicy):
         # Separate unequal model
         if self.use_separation:
             eco_separations, model_id_map = self.enumerate_separations(model_datas, cluster_env)
+            print("number of combinations: ", len(eco_separations))
+
+            parallel = False
+            if parallel:
+                func = ray.remote(solve_separation_placement).remote
+            else:
+                func = solve_separation_placement
+
+            # print("solve all seps")
             sols = []
             for eco_separation in eco_separations:
-                sol = ModelPlacement([],[])
-                for i, eco in enumerate(eco_separation):
-                    sub_model_datas, sub_cluster_env = eco
-                    eco_sol, _ = self.solve_placement_one_eco(sub_model_datas, sub_cluster_env, train_workload)
-                    sol.group_configs += eco_sol.group_configs
-                    sol.group_models += [[model_id_map[(i, model_id)] for model_id in group]
-                                         for group in eco_sol.group_models]
-                sols.append(sol)
+                sols.append(func(self, eco_separation, model_id_map, train_workload))
 
+            if parallel:
+                sols = ray.get(sols)
+
+            # print("eval all seps")
             evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
                 self.evaluator_method, self.parallel_evaluator)
             scores = evaluator.get_scores(sols)
             best_idx = np.argmax(scores)
 
-            tic = time.time()
+            # print("eval mixed")
             evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
                 self.evaluator_method, self.parallel_evaluator)
             score_mixed = evaluator.get_scores([best_sol])[0]
 
-            if self.verbose >= 2:
-                print(f"score_mixed: {score_mixed:.3f}, score_separate: {scores[best_idx]:.3f}")
-
+            print(f"score_mixed: {score_mixed:.3f}, score_separate: {scores[best_idx]:.3f}")
             if scores[best_idx] > score_mixed:
                 best_sol = sols[best_idx]
 

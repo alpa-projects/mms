@@ -15,6 +15,10 @@ show_name_dict = {
 
     "mp-ilp":         "Model Parallelism (ilp)",
     "mp-search":      "Model Parallelism (search)",
+    "mp-search-sep":  "Model Parallelism (search model separation)",
+    "mp-search-100":  "Model Parallelism (search 100s)",
+    "mp-search-1000": "Model Parallelism (search 1000s)",
+
     "mp-greedy-2":    "Pipeline Parallelism (#stage=2)",
     "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",
     "mp-greedy-8":    "Pipeline Parallelism (#stage=8)",
@@ -49,7 +53,7 @@ def method2color(name):
 method_order_list = [
     "sr-greedy", "sr-search", "sr-ilp", "sr-replace-5400",
 
-    "mp-ilp", "mp-search",
+    "mp-ilp", "mp-search", "mp-search-sep",
     "mp-search-100", "mp-search-1000",
     "mp-greedy-2", "mp-greedy-4", "mp-greedy-8", "mp-greedy-16",
     "mp-equal-16-1", "mp-equal-8-2", "mp-equal-4-4", "mp-equal-2-8",

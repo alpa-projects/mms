@@ -265,9 +265,9 @@ class PlacementEvaluator:
 
 
 def gen_train_workload(model_datas: List[ModelData],
-                       seed: int = 1234,
-                       simulation_min_duration: float = 100,
-                       simulation_min_samples: int = 30000):
+                       seed: int = 0,
+                       simulation_min_duration: float = 200,
+                       simulation_min_samples: int = 0):
     """Generate a training workload for search."""
     total_rate = sum(d.rate for d in model_datas)
     duration = max(simulation_min_duration, simulation_min_samples / total_rate)
@@ -320,6 +320,9 @@ def replica_placement_fast_greedy(init_sol: ModelPlacement,
         model_num_unserved = [
             (s.num_requests * (1 - goodput))
             for s, goodput in zip(fullstats.per_model_stats, goodputs)]
+        #model_num_unserved = [
+        #    (x.rate * (1 - goodput))
+        #    for x, goodput in zip(model_datas, goodputs)]
         model_ids = np.argsort(model_num_unserved)[::-1]
         group_ids = np.argsort(group_num_requests)
         group_mem = [

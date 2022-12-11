@@ -109,19 +109,31 @@ def is_valid_size(n: int, i: int):
 
 # partition n into k parts that summed to n
 # each part could only be 2^k
-def get_partitions(n: int, k: int, lb: int = 1):
+def get_partitions(n: int, k: int):
     if k == 1:
-        if n >= lb:
-            return [[n]]
-        else:
-            return []
+        return [[n]]
 
     ret = []
-    for i in range(lb, n):
+    for i in range(1, n):
         if not is_valid_size(n, i): continue
-        pre_partitions = get_partitions(n - i, k - 1, i)
+        pre_partitions = get_partitions(n - i, k - 1)
         ret += [partition + [i] for partition in pre_partitions]
     return ret
+
+
+#def get_partitions(n: int, k: int, lb: int = 1):
+#    if k == 1:
+#        if n >= lb:
+#            return [[n]]
+#        else:
+#            return []
+#
+#    ret = []
+#    for i in range(lb, n):
+#        if not is_valid_size(n, i): continue
+#        pre_partitions = get_partitions(n - i, k - 1, i)
+#        ret += [partition + [i] for partition in pre_partitions]
+#    return ret
 
 
 def get2tok(n: int):

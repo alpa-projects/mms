@@ -62,6 +62,7 @@ if __name__ == "__main__":
             model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-7.1b"]
         else:
             model_set = ["bert-6.7b", "moe-1.3b"]
+        total_rate = 70
         fixed_num_modelset = 8
         model_types = model_set * fixed_num_modelset
         model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(fixed_num_modelset)], [])
