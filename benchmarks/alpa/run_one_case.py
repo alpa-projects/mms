@@ -73,7 +73,7 @@ def submit_one(arg):
 
 
 class ProcessPoolClient:
-    def __init__(self, url, relax_slo=False, debug=False, max_workers=40):
+    def __init__(self, url, relax_slo=False, debug=False, max_workers=30):
         self.url = url
         self.relax_slo = relax_slo
         self.debug = debug
@@ -215,10 +215,13 @@ def run_one_case(case: ServingCase, warmup=DEFAULT_WARMUP,
     controller.sync()
 
     # Launch the client
-    url = f"http://localhost:{port}" if protocol == "http" else None
-    #client = ParallelThreadClient(url, relax_slo, debug, max_workers=2)
-    client = ThreadClient(url, relax_slo, debug)
     workload = generate_workload(start=time.time() + 5)
+    url = f"http://localhost:{port}" if protocol == "http" else None
+    slo = np.mean([r.slo for r in workload.requests[0:10]])
+    if slo < 0.4:
+        client = ProcessPoolClient(url, relax_slo, debug)
+    else:
+        client = ThreadClient(url, relax_slo, debug)
 
     # Run workloads
     stats = asyncio.run(run_workload(client, workload, warmup))
