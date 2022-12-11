@@ -363,8 +363,9 @@ class ModelParallelismSearch(BasePlacementPolicy):
             scores = evaluator.get_scores(sols)
             best_idx = np.argmax(scores)
 
+            tic = time.time()
             evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
-                "simulator", self.parallel_evaluator)
+                self.evaluator_method, self.parallel_evaluator)
             score_mixed = evaluator.get_scores([best_sol])[0]
 
             if self.verbose >= 2:
