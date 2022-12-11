@@ -434,7 +434,7 @@ def approximate_one_case_one_placement(placement, model_names, prof_ress, model_
 
     # Simulate
     start = arrivals
-    finish = np.empty(num_requests, dtype=np.float32)
+    finish = np.empty(num_requests, dtype=np.float64)
     good = np.empty(num_requests, dtype=bool)
     tstamps = arrivals
 
@@ -454,7 +454,7 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
     num_models = len(group_max_latency)
     num_groups = len(group_max_latency[0])
 
-    group_clocks = np.zeros(num_groups, dtype=np.float32)
+    group_clocks = np.zeros(num_groups, dtype=np.float64)
     group_num_requests = np.zeros(num_groups, dtype=np.int32)
     group_num_good_requests = np.zeros(num_groups, dtype=np.int32)
     model_num_requests = np.zeros(num_models, dtype=np.int32)
