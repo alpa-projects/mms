@@ -468,6 +468,7 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
             finish[i] = tstamp
             good[i] = False
             continue
+        model_num_requests[m_id] += 1
 
         # Select group id
         g_id = -1
@@ -487,7 +488,6 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
         start_time = max(group_clocks[g_id], tstamp)
         finish_time = start_time + group_sum_latency[m_id][g_id] + fixed_overhead
         group_num_requests[g_id] += 1
-        model_num_requests[m_id] += 1
 
         if finish_time - tstamp <= slo:
             finish[i] = finish_time
