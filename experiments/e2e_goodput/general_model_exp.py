@@ -33,15 +33,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8", "mp-search"}
-    #policies = ["sr-greedy", "mp-search", "mp-search-sep"]
-    #policies = ["mp-search", "mp-search-sep"]
-    policies = ["mp-search-sep"]
+    policies = ["sr-greedy", "mp-search", "mp-search-sep"]
     mem_budget = args.mem_budget * GB
     model_type = args.model_type
-    
+
     # multi-model config
     if args.model_type == "mixed":
-        model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-5.3b"] # 39.2 GB
+        #model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-5.3b"] # 39.2 GB
         model_set = ["bert-6.7b", "bert-2.6b", "bert-1.3b", "moe-5.3b", "moe-2.4b", "moe-1.3b"] # 39.2 GB
     else:
         #model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"] # 21.2 G
@@ -95,8 +93,8 @@ if __name__ == "__main__":
 
     # default models to be served
     model_types = model_set * fixed_num_modelset
-    #model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(fixed_num_modelset)], [])
-    model_names = [f"m{i}" for i in range(len(model_types))]
+    model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(fixed_num_modelset)], [])
+    #model_names = [f"m{i}" for i in range(len(model_types))]
 
     if args.output.endswith(".tsv"):
         output_file_name = args.output
