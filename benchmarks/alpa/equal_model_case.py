@@ -12,7 +12,8 @@ from alpa_serve.profiling import ProfilingDatabase, ParallelConfig
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
     SelectiveReplicationSearch, SelectiveReplicationReplacement,
-    ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
+    ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch,
+    ModelParallelismEqual)
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.trace import Trace, report_group_stats
 from alpa_serve.util import GB, write_tsv, ServingCase
@@ -42,7 +43,7 @@ def get_equal_model_serving_case(case, prof_database=None):
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
     single_latency = {
-        model_type: sum(prof_database.get(model_type).para_dict[ParallelConfig(1,1,1)
+        model_type: sum(prof_database.get(model_type).para_dict[ParallelConfig(1,1,32)
         ].latency[1]) for model_type in set(model_types)}
     slos = [slo_scale * single_latency[model_type]] * num_models
 
@@ -195,6 +196,10 @@ def get_equal_model_serving_case(case, prof_database=None):
             policy = ModelParallelismGreedy(
                 use_evo_search=use_evo_search,
                 group_size=group_size, verbose=1)
+        elif "mp-equal" in policy_name:
+            pp = int(policy_name.split("-")[2])
+            op = int(policy_name.split("-")[3])
+            policy = ModelParallelismEqual(pp=pp, op=op)
         else:
             raise ValueError(f"Invalid placement policy: {policy_name}")
 

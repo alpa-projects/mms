@@ -32,6 +32,7 @@ bert_specs = {
     "15B":  BertModelConfig(2048, 5120, 48, 40, 51200),
     "39B":  BertModelConfig(2048, 8192, 48, 64, 51200),
     "76B":  BertModelConfig(2048, 10240, 60, 80, 51200),
+    "103.5B": BertModelConfig(1024, 8192, 128, 64, 51200),
 }
 
 
