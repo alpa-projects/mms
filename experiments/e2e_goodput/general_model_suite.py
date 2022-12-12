@@ -14,14 +14,14 @@ BenchmarkConfig = namedtuple(
 synthetic_suite = {
     "all_transformers": BenchmarkConfig(    
         fixed_num_devices = 24,
-        fixed_num_modelset = 20,
+        fixed_num_modelset = 14,
         fixed_slo_scale = 5,
         fixed_rate_scale = None,
         fixed_cv_scale = None,
         num_devices_list = [8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120],
         num_modelset_list = [1, 4, 6, 8, 10, 12, 14, 16],
         slo_scales = [1, 1.5, 2, 2.5, 3, 3.5, 4, 6, 8, 10, 12, 14, 16],
-        rate_list = [8, 16, 24, 32, 48, 64, 80, 96],
+        rate_list = [16, 24, 32, 48, 64, 80, 96],
         cv_list = [1, 2, 4, 6, 8],
         rate_scales = [],
         cv_scales = [],
