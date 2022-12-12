@@ -13,7 +13,7 @@ BenchmarkConfig = namedtuple(
 
 synthetic_suite = {
     "all_transformers": BenchmarkConfig(    
-        fixed_num_devices = 32,
+        fixed_num_devices = 24,
         fixed_num_modelset = 20,
         fixed_slo_scale = 5,
         fixed_rate_scale = None,
