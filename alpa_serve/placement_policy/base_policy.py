@@ -281,6 +281,50 @@ def gen_train_workload(model_datas: List[ModelData],
     return train_workload
 
 
+def replica_placement_round_robin(init_sol: ModelPlacement,
+                                  model_datas: List[ModelData],
+                                  cluster_env: ClusterEnv,
+                                  workload: Workload,
+                                  verbose: int):
+    """Use round robin to place replicas on groups (PP=4)."""
+
+    assert len(init_sol.group_configs) == len(init_sol.group_models)
+
+    # Load constants
+    num_models = len(model_datas)
+    num_groups = len(init_sol.group_configs)
+    mem_budget = cluster_env.mem_budget
+    num_devices = cluster_env.num_devices
+
+    weight_mem = {}  # Dict[parallel_config -> [model_idx -> weight_mem]]
+    for parallel_config in init_sol.group_configs:
+        weight_mem[parallel_config] = [
+            max(x.profiling_result.para_dict[parallel_config].weight_mem)
+            if parallel_config in x.profiling_result.para_dict
+            else inf
+            for x in model_datas]
+
+    sol = init_sol
+    group_mem = [
+        sum(weight_mem[c][m_id] for m_id in group_ms)
+        for c, group_ms in zip(sol.group_configs, sol.group_models)
+    ]
+    group_id = 0
+    found = True
+    while found:
+        found = False
+        for model_id in range(num_models):
+            c = sol.group_configs[group_id]
+            if (model_id not in sol.group_models[group_id] and
+                weight_mem[c][model_id] + group_mem[group_id] <= mem_budget):
+                found = True
+                sol = sol.add_model(group_id, model_id).normalize()
+                group_mem[group_id] += weight_mem[c][model_id]
+                group_id += 1
+
+    return sol
+
+
 def replica_placement_fast_greedy(init_sol: ModelPlacement,
                                   model_datas: List[ModelData],
                                   cluster_env: ClusterEnv,

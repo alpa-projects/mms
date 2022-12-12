@@ -38,7 +38,7 @@ if __name__ == "__main__":
     if args.policy:
         policies = [args.policy]
     else:
-        policies = ["sr-greedy", "mp-search", "mp-search-sep"]
+        policies = ["mp-round-robin", "mp-search", "mp-search-sep"]
     mem_budget = args.mem_budget * GB
     model_type = args.model_type
 
