@@ -320,6 +320,9 @@ def replica_placement_fast_greedy(init_sol: ModelPlacement,
         model_num_unserved = [
             (s.num_requests * (1 - goodput))
             for s, goodput in zip(fullstats.per_model_stats, goodputs)]
+        #model_num_unserved = [
+        #    (x.rate * (1 - goodput))
+        #    for x, goodput in zip(model_datas, goodputs)]
         model_ids = np.argsort(model_num_unserved)[::-1]
         group_ids = np.argsort(group_num_requests)
         group_mem = [
