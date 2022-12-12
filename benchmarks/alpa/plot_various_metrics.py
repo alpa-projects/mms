@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
 
 show_name_dict = {
-    "sr-greedy":   "Selective Replication (greedy)",
+    "sr-greedy":   "Selective Replication",
     "sr-search":   "Selective Replication (search)",
     "sr-ilp":      "Selective Replication (ilp)",
     "sr-replace-30": "Clockwork++ (30)",
@@ -26,10 +26,10 @@ show_name_dict = {
     "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",
     "mp-greedy-8":    "Pipeline Parallelism (#stage=8)",
     "mp-greedy-16":   "Pipeline Parallelism (#stage=16)",
-    "mp-equal-16-1":  "Model Parallelism (pp=16, op=1)", 
-    "mp-equal-8-2":   "Model Parallelism (pp=8, op=2)",
-    "mp-equal-4-4":   "Model Parallelism (pp=4, op=4)",
-    "mp-equal-2-8":   "Model Parallelism (pp=2, op=8)",
+    "mp-equal-16-1":  "(16,1)", 
+    "mp-equal-8-2":   "(8,2)",
+    "mp-equal-4-4":   "(4,4)",
+    "mp-equal-2-8":   "(2,8)",
 }
 
 def show_name(name):
