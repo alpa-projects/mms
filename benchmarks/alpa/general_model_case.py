@@ -206,7 +206,7 @@ def run_one_general_model_case(case, mode,
         stats, placement = run_one_case(serving_case, debug=debug)
 
     #Workload.print_stats(stats)
-    print(f"group #req: {stats.group_num_requests}")
+    #print(f"group #req: {stats.group_num_requests}")
 
     (exp_name, num_devices, mem_budget, model_types, model_names,
     total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
