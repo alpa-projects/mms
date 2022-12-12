@@ -319,7 +319,7 @@ class ModelParallelismSearch(BasePlacementPolicy):
     def enumerate_separations(self,
                               model_datas: List[ModelData],
                               cluster_env: ClusterEnv):
-        same_model_threshold = 0.1
+        same_model_threshold = 0.38
 
         model_id_map = {}
         eco_model_datas = []

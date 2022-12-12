@@ -48,8 +48,8 @@ if __name__ == "__main__":
         model_set = ["bert-6.7b", "moe-5.3b", "bert-2.6b", "moe-2.4b", "bert-1.3b", "moe-1.3b"] # 39.2 GB
     else:
         #model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"] # 21.2 G
-        model_set = ["bert-6.7b", "bert-1.3b"]
-        #model_set = ["bert-6.7b", "bert-2.6b", "bert-1.3b"]
+        #model_set = ["bert-6.7b", "bert-1.3b"]
+        model_set = ["bert-6.7b", "bert-2.6b", "bert-1.3b"]
     
     # workload config
     if args.workload == "synthetic":
