@@ -50,7 +50,7 @@ if __name__ == "__main__":
         #model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"] # 21.2 G
         #model_set = ["bert-6.7b", "bert-1.3b"]
         model_set = ["bert-6.7b", "bert-2.6b", "bert-1.3b"]
-    
+   
     # workload config
     if args.workload == "synthetic":
         rate_distribution = args.rate_distribution
@@ -151,7 +151,7 @@ if __name__ == "__main__":
                 if args.workload == "synthetic":
                      cases.append(GeneralModelCase(exp_name,
                         fixed_num_devices, mem_budget, new_model_types, new_model_names,
-                        total_rate * num_modelset / fixed_num_modelset, rate_distribution,
+                        total_rate, rate_distribution,
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
                 else:
