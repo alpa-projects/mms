@@ -14,6 +14,7 @@ from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelData, ClusterEnv, ModelPlacement,
     PlacementEvaluator, gen_train_workload,
+    replica_placement_round_robin,
     replica_placement_fast_greedy, replica_placement_beam_search,
     replica_placement_on_last_group, evolutionary_search)
 from alpa_serve.simulator.controller import simulate_one_case
@@ -278,14 +279,16 @@ class ModelParallelismRR(BasePlacementPolicy):
             train_workload = gen_train_workload(model_datas)
 
         # parallel config (dp = 1, op = 1, pp = 4)
-        num_reg_groups = num_devices // 4
-        quo_groups = decompose2tok(num_devices % 4)
+        num_reg_groups = cluster_env.num_devices // 4
+        quo_groups = decompose2tok(cluster_env.num_devices % 4)
         init_sol = ModelPlacement([ParallelConfig(1, 1, 4)] * num_reg_groups +
                                   [ParallelConfig(1, 1, s) for s in quo_groups],
-                                  [[] for _ in range(num_reg_groups + len(quo_groups))]))
+                                  [[] for _ in range(num_reg_groups + len(quo_groups))])
 
-        return replica_placement_round_robin(
+        sol = replica_placement_round_robin(
                    init_sol, model_datas, cluster_env, train_workload, self.verbose)
+
+        return sol, {}
 
 
 class ModelParallelismSearch(BasePlacementPolicy):

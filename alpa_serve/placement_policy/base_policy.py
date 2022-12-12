@@ -318,9 +318,10 @@ def replica_placement_round_robin(init_sol: ModelPlacement,
             if (model_id not in sol.group_models[group_id] and
                 weight_mem[c][model_id] + group_mem[group_id] <= mem_budget):
                 found = True
-                sol = sol.add_model(group_id, model_id).normalize()
                 group_mem[group_id] += weight_mem[c][model_id]
-                group_id += 1
+                sol = sol.add_model(group_id, model_id)
+                sol.verify(model_datas, cluster_env)
+                group_id = (group_id + 1) % num_groups
 
     return sol
 
