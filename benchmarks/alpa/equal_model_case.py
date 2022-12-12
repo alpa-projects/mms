@@ -26,7 +26,8 @@ from benchmarks.alpa.run_one_case import run_one_case
 EqualModelCase = namedtuple("EqualModelCase", [
     "exp_name", "num_devices", "mem_budget", "model_type", "num_models",
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
-    "slo_scale", "duration", "policy_name"])
+    "slo_scale", "duration", "policy_name", "train_start", "train_end",
+    "test_start", "test_end"])
 
 
 def get_equal_model_serving_case(case, prof_database=None):
@@ -35,7 +36,7 @@ def get_equal_model_serving_case(case, prof_database=None):
 
     (exp_name, num_devices, mem_budget, model_type, num_models,
      total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
-     slo_scale, duration, policy_name) = case
+     slo_scale, duration, policy_name, train_start, train_end, test_start, test_end) = case
 
     cluster_env = ClusterEnv(num_devices=num_devices, mem_budget=mem_budget)
     num_models = num_models
@@ -85,21 +86,27 @@ def get_equal_model_serving_case(case, prof_database=None):
             for _ in range(num_models)
         ]
     elif arrival_process == "azure_v2":
+        if train_start is None or train_end is None:
+            train_start = "13.0.0"
+            train_end = "13.23.60"
+        if test_start is None or test_end is None:
+            test_start = "13.0.0"
+            test_end = "13.23.60"
         azure_v2_trace_dir = arrival_process_kwargs["trace_dir"]
         azure_v2_trace = Trace("azure_v2", azure_v2_trace_dir)
         train_replays = azure_v2_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
-                                              start_time='13.0.0',
-                                              end_time='13.23.60',
+                                              start_time=train_start,
+                                              end_time=train_end,
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
         test_replays = azure_v2_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
-                                              start_time='13.0.0',
-                                              end_time='13.23.60',
+                                              start_time=test_start,
+                                              end_time=test_end,
                                               interval_seconds=5400,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
@@ -116,21 +123,27 @@ def get_equal_model_serving_case(case, prof_database=None):
         report_group_stats(list(test_replays.values()))
         arrival_processes = [test_replays[model_name] for model_name in model_names]
     elif arrival_process == "azure_v1":
+        if train_start is None or train_end is None:
+            train_start = "0.0.0"
+            train_end = "0.1.0"
+        if test_start is None or test_end is None:
+            test_start = "0.0.0"
+            test_end = "0.1.0"
         azure_v1_trace_dir = arrival_process_kwargs["trace_dir"]
         azure_v1_trace = Trace("azure_v1", azure_v1_trace_dir)
         train_replays = azure_v1_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
-                                              start_time="0.0.0",
-                                              end_time="0.1.0",
+                                              start_time=train_start,
+                                              end_time=train_end,
                                               interval_seconds=60,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
         test_replays = azure_v1_trace.replay(model_names,
                                               model_mapping_strategy="stripe",
                                               arrival_distribution="gamma",
-                                              start_time="0.0.0",
-                                              end_time="0.1.0",
+                                              start_time=test_start,
+                                              end_time=test_end,
                                               interval_seconds=60,
                                               rate_scale_factor=arrival_process_kwargs["rate_scale"],
                                               cv_scale_factor=arrival_process_kwargs["cv_scale"])
@@ -216,7 +229,7 @@ _DATA_HEADS = ("exp_name",
                "num_devices", "mem_budget", "model_type", "num_models",
                "total_rate", "rate_distribution",
                "arrival_process", "arrival_process_kwargs",
-               "slo_scale", "duration", "policy_name",
+               "slo_scale", "duration", "policy_name", "train_start", "train_end", "test_start", "test_end",
                "placement", "goodput", "mode")
 
 
@@ -281,7 +294,7 @@ def read_equal_model_case_tsv(filename):
          num_devices, mem_budget, model_type, num_models,
          total_rate, rate_distribution,
          arrival_process, arrival_process_kwargs,
-         slo_scale, duration, policy_name,
+         slo_scale, duration, policy_name, train_start, train_end, test_start, test_end,
          placement, goodput, mode) = line.split("\t")
 
         num_devices = int(num_devices)
@@ -325,7 +338,7 @@ if __name__ == "__main__":
         EqualModelCase(exp_name, num_devices, mem_budget, model_type, num_models,
                        total_rate, rate_distribution,
                        arrival_process, arrival_process_kwargs,
-                       slo, duration, policy_name)
+                       slo, duration, policy_name, None, None, None, None)
     ]
 
     if args.run:

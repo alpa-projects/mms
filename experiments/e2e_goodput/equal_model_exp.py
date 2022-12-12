@@ -127,7 +127,7 @@ if __name__ == "__main__":
                     num_devices, mem_budget, model_type, fixed_num_models,
                     total_rate, rate_distribution,
                     arrival_process, arrival_process_kwargs,
-                    fixed_slo_scale, duration, policy_name))
+                    fixed_slo_scale, duration, policy_name, None, None, None, None))
 
     #### goodput vs num_models #####
     if "goodput_vs_num_models" in experiments:
@@ -142,7 +142,7 @@ if __name__ == "__main__":
                         fixed_num_devices, mem_budget, model_type, num_models,
                         total_rate * num_models / fixed_num_models, rate_distribution,
                         arrival_process, arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name))
+                        fixed_slo_scale, duration, policy_name, None, None, None, None))
                 else:
                     scale_factor = num_models / fixed_num_models
                     new_arrival_process_kwargs = {"rate_scale": scale_factor * fixed_rate_scale,
@@ -152,7 +152,7 @@ if __name__ == "__main__":
                         fixed_num_devices, mem_budget, model_type, num_models,
                         total_rate, rate_distribution,
                         arrival_process, new_arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name))
+                        fixed_slo_scale, duration, policy_name, None, None, None, None))
 
     #### goodput vs slo #####
     if "goodput_vs_slo" in experiments:
@@ -164,7 +164,7 @@ if __name__ == "__main__":
                     fixed_num_devices, mem_budget, model_type, fixed_num_models,
                     total_rate, rate_distribution,
                     arrival_process, arrival_process_kwargs,
-                    slo_scale, duration, policy_name))
+                    slo_scale, duration, policy_name, None, None, None, None))
 
     #### goodput vs rate/rate_scale #####
     if "goodput_vs_rate" in experiments:
@@ -177,7 +177,7 @@ if __name__ == "__main__":
                         fixed_num_devices, mem_budget, model_type, fixed_num_models,
                         new_rate, rate_distribution,
                         arrival_process, arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name))
+                        fixed_slo_scale, duration, policy_name, None, None, None, None))
         else:
             print("=== Running goodput vs. rate_scale ===")
             exp_name = "goodput_vs_rate_scale"
@@ -190,7 +190,7 @@ if __name__ == "__main__":
                         fixed_num_devices, mem_budget, model_type, fixed_num_models,
                         total_rate, rate_distribution,
                         arrival_process, arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name))
+                        fixed_slo_scale, duration, policy_name, None, None, None, None))
 
 
     #### goodput vs cv/cv_scale #####
@@ -205,7 +205,7 @@ if __name__ == "__main__":
                         fixed_num_devices, mem_budget, model_type, fixed_num_models,
                         total_rate, rate_distribution,
                         arrival_process, arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name))
+                        fixed_slo_scale, duration, policy_name, None, None, None, None))
         else:
             print("=== Running goodput vs. cv_scale ===")
             exp_name = "goodput_vs_cv_scale"
@@ -218,7 +218,7 @@ if __name__ == "__main__":
                         fixed_num_devices, mem_budget, model_type, fixed_num_models,
                         total_rate, rate_distribution,
                         arrival_process, arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name))
+                        fixed_slo_scale, duration, policy_name, None, None, None, None))
 
     n_cases = len(cases)
     M = 8
