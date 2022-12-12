@@ -1,6 +1,7 @@
 import argparse
 import glob
 import math
+import pickle
 
 import warnings
 
@@ -309,7 +310,8 @@ if __name__ == "__main__":
         print(f"exp_name {exp_name}, policy {policy_name}, goodput {goodputs}")
         avg_goodput = sum(goodputs) / len(goodputs)
         line["goodput"] = avg_goodput
-
+    with open(args.input_folder + "/final_results.pkl", "wb") as f:
+        pickle.dump(avg_results, f)
     plot_goodput_vs_num_devices(avg_results, threshold, args.show, folder, args.pdf)
     plot_goodput_vs_num_models(avg_results, threshold, args.show, folder, args.pdf)
     plot_goodput_vs_slo(avg_results, threshold, args.show, folder, args.pdf)
