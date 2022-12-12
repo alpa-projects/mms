@@ -32,7 +32,7 @@ def plot_goodput_vs_num_devices(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_num_devices.png")
 
     plot_goodput_common(data, threshold, True, "#devices",
-                        "Goodput vs. #devices", output, args.show)
+                        "Workload satisfaction vs. #devices", output, args.show)
 
 
 def plot_goodput_vs_num_models(lines, threshold, show, folder, pdf):
@@ -53,7 +53,7 @@ def plot_goodput_vs_num_models(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_num_models.png")
 
     plot_goodput_common(data, threshold, False, "#models",
-                        "Goodput vs. #models", output, args.show)
+                        "Workload satisfaction vs. #models", output, args.show)
 
 
 def plot_goodput_vs_slo(lines, threshold, show, folder, pdf):
@@ -74,7 +74,7 @@ def plot_goodput_vs_slo(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_slo.png")
 
     plot_goodput_common(data, threshold, True, "SLO Scale",
-                        "Goodput vs. SLO Scale", output, args.show)
+                        "Workload satisfaction vs. SLO Scale", output, args.show)
 
 
 def plot_goodput_vs_rate(lines, threshold, show, folder, pdf):
@@ -95,7 +95,7 @@ def plot_goodput_vs_rate(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_rate.png")
 
     plot_goodput_common(data, threshold, False, "Rate(r/s)",
-                        "Goodput vs. Rate", output, args.show)
+                        "Workload satisfaction vs. Rate", output, args.show)
 
 
 def plot_goodput_vs_rate_scale(lines, threshold, show, folder, pdf):
@@ -116,7 +116,7 @@ def plot_goodput_vs_rate_scale(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_rate_scale.png")
 
     plot_goodput_common(data, threshold, False, "Rate Scale",
-                        "Goodput vs. Rate Scale", output, args.show)
+                        "Workload satisfaction vs. Rate Scale", output, args.show)
 
 
 def plot_goodput_vs_cv(lines, threshold, show, folder, pdf):
@@ -138,7 +138,7 @@ def plot_goodput_vs_cv(lines, threshold, show, folder, pdf):
 
 
     plot_goodput_common(data, threshold, False, "CV",
-                        "Goodput vs. CV", output, args.show)
+                        "Workload satisfaction vs. CV", output, args.show)
 
 
 
@@ -160,7 +160,7 @@ def plot_goodput_vs_cv_scale(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_cv_scale.png")
 
     plot_goodput_common(data, threshold, False, "CV Scale",
-                        "Goodput vs. CV Scale", output, args.show)
+                        "Workload satisfaction vs. CV Scale", output, args.show)
 
 
 def plot_num_devices_vs_num_models(lines, threshold, show, folder, pdf):

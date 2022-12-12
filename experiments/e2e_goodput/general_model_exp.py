@@ -29,19 +29,27 @@ if __name__ == "__main__":
     parser.add_argument('--duration', type=float, default=200)
     parser.add_argument("--model-type", type=str, default="all_transformers",
                         choices=["all_transformers", "mixed"])
+    parser.add_argument("--policy", type=str)
+    parser.add_argument("--single", action="store_true")
 
     args = parser.parse_args()
 
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8", "mp-search"}
-    policies = ["sr-greedy", "mp-search"]
+    if args.policy:
+        policies = [args.policy]
+    else:
+        policies = ["sr-greedy", "mp-search", "mp-search-sep"]
     mem_budget = args.mem_budget * GB
     model_type = args.model_type
 
     # multi-model config
     if args.model_type == "mixed":
-        model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-5.3b"] # 39.2 GB
+        #model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b", "moe-1.3b", "moe-2.4b", "moe-5.3b"] # 39.2 GB
+        model_set = ["bert-6.7b", "moe-5.3b", "bert-2.6b", "moe-2.4b", "bert-1.3b", "moe-1.3b"] # 39.2 GB
     else:
-        model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"] # 21.2 G
+        #model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"] # 21.2 G
+        #model_set = ["bert-6.7b", "bert-1.3b"]
+        model_set = ["bert-6.7b", "bert-2.6b", "bert-1.3b"]
     
     # workload config
     if args.workload == "synthetic":
@@ -221,6 +229,12 @@ if __name__ == "__main__":
                         arrival_process, new_arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
 
+    if args.single:
+        cases = [cases[0]]
+        args.parallel = False
+
     run_general_model_cases(cases,
                             output_file=output_file,
                             mode=args.mode, parallel=args.parallel)
+
+
