@@ -516,18 +516,20 @@ class Trace:
                                      cv_scale_factor=cv_scale_factor,
                                      time_scale_factor=time_scale_factor)
 
+        return replays
+
         # sort models
-        keys = list(replays.keys())
-        num_models = len(models)
-        indices = list(range(num_models))
-        indices.sort(key=lambda i: -len(replays[keys[i]].arrivals))
+        # keys = list(replays.keys())
+        # num_models = len(models)
+        # indices = list(range(num_models))
+        # indices.sort(key=lambda i: -len(replays[keys[i]].arrivals))
 
-        new_replay = OrderedDict()
-        for i in range(num_models):
-            new_replay[models[i]] = replays[keys[indices[i]]]
-            new_replay[models[i]].model = models[i]
+        # new_replay = OrderedDict()
+        # for i in range(num_models):
+        #     new_replay[models[i]] = replays[keys[indices[i]]]
+        #     new_replay[models[i]].model = models[i]
 
-        return new_replay
+        # return new_replay
 
     def replay_vanilla(self,
                        models: List[str],

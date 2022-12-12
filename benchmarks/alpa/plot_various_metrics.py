@@ -16,8 +16,6 @@ show_name_dict = {
     "mp-ilp":         "Model Parallelism (ilp)",
     "mp-search":      "Model Parallelism (search)",
     "mp-search-sep":  "Model Parallelism (search model separation)",
-    "mp-search-100":  "Model Parallelism (search 100s)",
-    "mp-search-1000": "Model Parallelism (search 1000s)",
 
     "mp-greedy-2":    "Pipeline Parallelism (#stage=2)",
     "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",

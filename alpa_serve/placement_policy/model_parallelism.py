@@ -392,7 +392,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
             else:
                 func = solve_separation_placement
 
-            # print("solve all seps")
             sols = []
             for eco_separation in eco_separations:
                 sols.append(func(self, eco_separation, model_id_map, train_workload))
@@ -400,13 +399,11 @@ class ModelParallelismSearch(BasePlacementPolicy):
             if parallel:
                 sols = ray.get(sols)
 
-            # print("eval all seps")
             evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
                 self.evaluator_method, self.parallel_evaluator)
             scores = evaluator.get_scores(sols)
             best_idx = np.argmax(scores)
 
-            # print("eval mixed")
             evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
                 self.evaluator_method, self.parallel_evaluator)
             score_mixed = evaluator.get_scores([best_sol])[0]
