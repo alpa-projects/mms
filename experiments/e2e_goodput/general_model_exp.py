@@ -233,6 +233,7 @@ if __name__ == "__main__":
     if args.single:
         cases = [cases[0]]
         args.parallel = False
+
     n_cases = len(cases)
     M = 8
     n_case_each_run = (n_cases + M - 1) // M
@@ -242,5 +243,4 @@ if __name__ == "__main__":
         run_general_model_cases(cases[start_case:end_case],
                                 output_file=output_file,
                                 mode=args.mode, parallel=args.parallel)
-
 
