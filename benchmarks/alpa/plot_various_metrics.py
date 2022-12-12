@@ -63,10 +63,6 @@ method_order_list = [
     "sr-replace-30", "sr-replace-60", "sr-replace-3600", "sr-replace-5400", "sr-replace-10800", "sr-replace-21600",
     "sr-greedy", "sr-search", "sr-ilp",
 
-<<<<<<< HEAD
-=======
-    "mp-ilp", "mp-search", "mp-search-sep",
->>>>>>> 58dbe92 (checkin all)
     "mp-search-100", "mp-search-1000",
     "mp-greedy-2", "mp-greedy-4", "mp-greedy-8", "mp-greedy-16",
     "mp-equal-16-1", "mp-equal-8-2", "mp-equal-4-4", "mp-equal-2-8",
@@ -124,7 +120,11 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
         x_max = max(x_max, *xs)
         y_max = max(y_max, *ys)
 
+<<<<<<< HEAD
     ax.set_ylim(bottom=0, top=max(y_max * 1.02, 100))
+=======
+    ax.set_ylim(bottom=80, top=max(y_max * 1.02, 100))
+>>>>>>> 15f7f9c (fix)
     ax.set_ylabel("Workload satisfaction (%)")
     ax.set_xlabel(xlabel)
     ax.legend(curves, legends)
