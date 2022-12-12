@@ -436,7 +436,6 @@ class ModelParallelismSearch(BasePlacementPolicy):
             if parallel:
                 sols = ray.get(sols)
 
-            # print("eval all seps")
             evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
                 self.evaluator_method, self.parallel_evaluator)
             scores = evaluator.get_scores(sols)
