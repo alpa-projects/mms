@@ -151,7 +151,7 @@ if __name__ == "__main__":
                 if args.workload == "synthetic":
                      cases.append(GeneralModelCase(exp_name,
                         fixed_num_devices, mem_budget, new_model_types, new_model_names,
-                        total_rate, rate_distribution,
+                        total_rate * num_modelset / fixed_num_modelset, rate_distribution,
                         arrival_process, arrival_process_kwargs,
                         fixed_slo_scale, duration, policy_name))
                 else:
