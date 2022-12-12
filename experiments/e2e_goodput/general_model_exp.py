@@ -50,7 +50,6 @@ if __name__ == "__main__":
         #model_set = ["bert-1.3b", "bert-2.6b", "bert-6.7b"] # 21.2 G
         #model_set = ["bert-6.7b", "bert-1.3b"]
         model_set = ["bert-6.7b", "bert-2.6b", "bert-1.3b"]
-   
     # workload config
     if args.workload == "synthetic":
         rate_distribution = args.rate_distribution
