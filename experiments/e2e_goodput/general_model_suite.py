@@ -83,9 +83,9 @@ azure_v2_suite = {
         num_devices_list = [8, 16, 20, 24, 32, 40, 48],
         num_modelset_list =  [8, 12, 16, 20, 24],
         slo_scales = [0.75, 1, 1.25, 1.5, 2, 2.5, 5, 10],
-        rate_list = [],
-        cv_list = [],
-        rate_scales = [1, 4, 8, 16, 32, 64, 128],
+        rate_list = None,
+        cv_list = None,
+        rate_scales = [1, 4, 8, 16, 32, 64],
         cv_scales = [1, 2, 3, 4, 5, 6, 8],
     ),
     "mixed": BenchmarkConfig(    
