@@ -42,7 +42,7 @@ if __name__ == "__main__":
         if args.workload == "azure_v1":
             policies = ["sr-greedy", "sr-replace-60", "sr-replace-30", "mp-search"]
         else:
-            policies = ["sr-greedy", "sr-replace-5400", "mp-search"]
+            policies = ["sr-greedy", "sr-replace-21600", "mp-search"]
 
     # workload config
     if args.workload == "synthetic":
