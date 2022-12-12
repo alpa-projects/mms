@@ -11,7 +11,12 @@ show_name_dict = {
     "sr-greedy":   "Selective Replication (greedy)",
     "sr-search":   "Selective Replication (search)",
     "sr-ilp":      "Selective Replication (ilp)",
-    "sr-replace-5400": "Clockwork++",
+    "sr-replace-30": "Clockwork++ (30)",
+    "sr-replace-60": "Clockwork++ (60)",
+    "sr-replace-3600": "Clockwork++ (3600)",
+    "sr-replace-5400": "Clockwork++ (5400)",
+    "sr-replace-10800": "Clockwork++ (10800)",
+    "sr-replace-21600": "Clockwork++ (21600)",
 
     "mp-ilp":         "Model Parallelism (ilp)",
     "mp-search":      "Model Parallelism (search)",
@@ -49,7 +54,8 @@ def method2color(name):
 
 
 method_order_list = [
-    "sr-greedy", "sr-search", "sr-ilp", "sr-replace-5400",
+    "sr-greedy", "sr-search", "sr-ilp",
+    "sr-replace-30", "sr-replace-60", "sr-replace-3600", "sr-replace-5400", "sr-replace-10800", "sr-replace-21600",
 
     "mp-ilp", "mp-search", "mp-search-sep",
     "mp-search-100", "mp-search-1000",

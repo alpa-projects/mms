@@ -232,9 +232,14 @@ if __name__ == "__main__":
     if args.single:
         cases = [cases[0]]
         args.parallel = False
-
-    run_general_model_cases(cases,
-                            output_file=output_file,
-                            mode=args.mode, parallel=args.parallel)
+    n_cases = len(cases)
+    M = 8
+    n_case_each_run = (n_cases + M - 1) // M
+    for i in range(M):
+        start_case = i * n_case_each_run
+        end_case = (i + 1) * n_case_each_run  if (i + 1) * n_case_each_run < n_cases else n_cases
+        run_general_model_cases(cases[start_case:end_case],
+                                output_file=output_file,
+                                mode=args.mode, parallel=args.parallel)
 
 
