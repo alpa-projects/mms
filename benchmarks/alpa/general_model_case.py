@@ -93,6 +93,7 @@ def get_general_model_serving_case(case, prof_database=None):
         # for debugging:
         for m in test_replays:
             test_replays[m].report_stats()
+
         report_group_stats(list(test_replays.values()))
         arrival_processes = [test_replays[model_name] for model_name in model_names]
     elif arrival_process == "azure_v1":
