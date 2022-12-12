@@ -42,7 +42,7 @@ if __name__ == "__main__":
         if args.workload == "azure_v1":
             policies = ["sr-greedy", "sr-replace-60", "sr-replace-30", "mp-search"]
         else:
-            policies = ["sr-greedy", "sr-replace-60", "mp-search"]
+            policies = ["sr-greedy", "sr-replace-5400", "mp-search"]
 
     # workload config
     if args.workload == "synthetic":
@@ -222,7 +222,7 @@ if __name__ == "__main__":
 
     n_cases = len(cases)
     M = 8
-    n_case_each_run = n_cases // M
+    n_case_each_run = (n_cases + M - 1) // M
     for i in range(M):
         start_case = i * n_case_each_run
         end_case = (i + 1) * n_case_each_run  if (i + 1) * n_case_each_run < n_cases else n_cases
