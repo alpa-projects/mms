@@ -111,7 +111,7 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
         x_max = max(x_max, *xs)
         y_max = max(y_max, *ys)
 
-    ax.set_ylim(bottom=80, top=max(y_max * 1.02, 100))
+    ax.set_ylim(bottom=60, top=max(y_max * 1.02, 100))
     ax.set_ylabel("Workload satisfaction (%)")
     ax.set_xlabel(xlabel)
     ax.legend(curves, legends)
