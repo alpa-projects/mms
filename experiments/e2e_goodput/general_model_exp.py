@@ -235,7 +235,7 @@ if __name__ == "__main__":
         args.parallel = False
 
     n_cases = len(cases)
-    M = 8
+    M = 1
     n_case_each_run = (n_cases + M - 1) // M
     for i in range(M):
         start_case = i * n_case_each_run
