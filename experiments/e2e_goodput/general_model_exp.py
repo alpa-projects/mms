@@ -34,11 +34,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8", "mp-search"}
+    # choices: {"sr-greedy", "sr-ilp", "mp-ilp", 
+    #           "mp-round-robin", "mp-greedy-2", "mp-greedy-8", "mp-search", "mp-search-sep"}
     if args.policy:
         policies = [args.policy]
     else:
-        policies = ["mp-round-robin", "mp-greedy-4", "mp-search-sep"]
+        policies = ["sr-greedy", "mp-search"]
     mem_budget = args.mem_budget * GB
     model_type = args.model_type
 
