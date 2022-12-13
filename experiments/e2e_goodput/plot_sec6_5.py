@@ -99,9 +99,9 @@ def plot_goodput(lines, threshold, folder, pdf):
     fig.text(0.07, 0.5, "Workload Satisfaction (%)", va='center', rotation='vertical', fontsize=20)
 
     if pdf:
-        output = os.path.join(folder, "robustness.pdf")
+        output = os.path.join(folder, "ablation.pdf")
     else:
-        output = os.path.join(folder, "robustness.png")
+        output = os.path.join(folder, "ablation.png")
 
     figure_size = (30, 5)
     fig.set_size_inches(figure_size)
