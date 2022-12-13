@@ -23,7 +23,7 @@ paper_name = {
 
 def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     methods = list(data.keys())
-    methods.sort(key=lambda x: method2order(x))
+    # methods.sort(key=lambda x: method2order(x))
 
     curves = []
     legends = []
@@ -57,13 +57,13 @@ def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
         x_max = max(x_max, *xs)
         y_max = max(y_max, *ys)
 
-    ax.tick_params(axis='both', which='major', labelsize=15)
-    ax.tick_params(axis='both', which='minor', labelsize=15)
+    ax.tick_params(axis='both', which='major', labelsize=20)
+    ax.tick_params(axis='both', which='minor', labelsize=20)
     ax.set_ylim(bottom=ybottom, top=max(y_max * 1.02, 100))
     ax.set_xlabel(xlabel, fontsize=20)
     ax.grid()
 
-    ax.legend(curves, legends, fontsize=13, loc="lower left")
+    ax.legend(curves, legends, fontsize=18.5, loc="lower left")
 
     for i in range(len(methods)):
         if first_good[i] == 0:
@@ -103,7 +103,7 @@ def plot_goodput(lines, threshold, folder, pdf):
     else:
         output = os.path.join(folder, "ablation.png")
 
-    figure_size = (18, 5)
+    figure_size = (18, 7)
     fig.set_size_inches(figure_size)
     fig.savefig(output, bbox_inches='tight')
     print(f"Output the plot to {output}")
