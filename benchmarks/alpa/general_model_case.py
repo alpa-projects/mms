@@ -9,7 +9,7 @@ from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase, ParallelConfig
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy, SelectiveReplicationReplacement,
-    ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
+    ModelParallelismILP, ModelParallelismGreedy, ModelParallelismRR, ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.trace import Trace, report_group_stats
 from alpa_serve.util import GB, write_tsv, ServingCase
@@ -167,6 +167,8 @@ def get_general_model_serving_case(case, prof_database=None):
                  replacement_interval=interval)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
+        elif policy_name == "mp-round-robin":
+            policy = ModelParallelismRR(verbose=0)
         elif policy_name in ["mp-search", "mp-search-evo", "mp-search-sep"]:
             use_evo_search = "evo" in policy_name
             use_separation = "sep" in policy_name
