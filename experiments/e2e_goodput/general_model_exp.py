@@ -40,9 +40,9 @@ if __name__ == "__main__":
         policies = [args.policy]
     else:
         if args.workload == "azure_v1":
-            policies = ["sr-greedy", "sr-replace-60", "mp-search", "mp-search-sep"]
+            policies = ["sr-greedy", "sr-replace-60", "mp-search-sep"]
         else:
-            policies = ["sr-greedy", "sr-replace-21600", "mp-search", "mp-search-sep"]
+            policies = ["sr-greedy", "sr-replace-21600", "mp-search-sep"]
     mem_budget = args.mem_budget * GB
     model_type = args.model_type
 
