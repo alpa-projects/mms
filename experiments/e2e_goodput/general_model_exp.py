@@ -100,7 +100,6 @@ if __name__ == "__main__":
     # default models to be served
     model_types = model_set * fixed_num_modelset
     model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(fixed_num_modelset)], [])
-    #model_names = [f"m{i}" for i in range(len(model_types))]
 
     if args.output.endswith(".tsv"):
         output_file_name = args.output
@@ -236,7 +235,7 @@ if __name__ == "__main__":
         args.parallel = False
 
     n_cases = len(cases)
-    M = 1
+    M = 8
     n_case_each_run = (n_cases + M - 1) // M
     for i in range(M):
         start_case = i * n_case_each_run
