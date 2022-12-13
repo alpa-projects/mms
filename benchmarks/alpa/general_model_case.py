@@ -174,7 +174,7 @@ def get_general_model_serving_case(case, prof_database=None):
             use_evo_search = "evo" in policy_name
             use_separation = "sep" in policy_name
             policy = ModelParallelismSearch(
-                use_evo_search=use_evo_search, use_separation=use_separation, verbose=0)
+                use_evo_search=use_evo_search, use_separation=use_separation, verbose=2)
         elif "mp-greedy" in policy_name:
             group_size = int(policy_name.split("-")[2])
             use_evo_search = "evo" in policy_name
@@ -211,7 +211,7 @@ def run_one_general_model_case(case, mode,
         stats, placement = run_one_case(serving_case, debug=debug)
 
     #Workload.print_stats(stats)
-    #print(f"group #req: {stats.group_num_requests}")
+    print(f"group #req: {stats.group_num_requests}")
 
     (exp_name, num_devices, mem_budget, model_types, model_names,
     total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
