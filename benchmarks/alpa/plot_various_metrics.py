@@ -23,6 +23,11 @@ show_name_dict = {
     "sr-search":   "Selective Replication (search)",
     "sr-ilp":      "Selective Replication (ilp)",
 
+    "mp-ilp":         "Model Parallelism (ilp)",
+    "mp-round-robin": "Model Parallelism (round-robin)",
+    "mp-search":      "Model Parallelism (search)",
+    "mp-search-sep":  "Model Parallelism (search model separation)",
+
     "mp-greedy-2":    "Pipeline Parallelism (#stage=2)",
     "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",
     "mp-greedy-8":    "Pipeline Parallelism (#stage=8)",
@@ -55,7 +60,7 @@ def method2color(name):
 
 
 method_order_list = [
-    "mp-ilp", "mp-search", "mp-search-sep",
+    "mp-ilp", "mp-round-robin", "mp-search", "mp-search-sep",
     "sr-replace-30", "sr-replace-60", "sr-replace-3600", "sr-replace-5400", "sr-replace-10800", "sr-replace-21600",
     "sr-greedy", "sr-search", "sr-ilp",
 

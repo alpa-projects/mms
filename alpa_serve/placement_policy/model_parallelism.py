@@ -14,6 +14,7 @@ from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelData, ClusterEnv, ModelPlacement,
     PlacementEvaluator, gen_train_workload,
+    replica_placement_round_robin,
     replica_placement_fast_greedy, replica_placement_beam_search,
     replica_placement_on_last_group, evolutionary_search)
 from alpa_serve.simulator.controller import simulate_one_case
@@ -252,6 +253,39 @@ def solve_separation_placement(self,
         sol.group_models += [[model_id_map[(i, model_id)] for model_id in group]
                              for group in eco_sol.group_models]
     return sol
+
+
+class ModelParallelismRR(BasePlacementPolicy):
+
+    def __init__(self,
+                 verbose: int = 0):
+        super().__init__(verbose=verbose)
+        self.max_bs = max_bs
+        self.max_pp = max_pp
+        self.max_op = max_op
+
+        self.evaluator_method = "fast_simulator"
+
+
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
+        # Generate workloads
+        if train_workload is None:
+            train_workload = gen_train_workload(model_datas)
+
+        # parallel config (dp = 1, op = 1, pp = 4)
+        num_reg_groups = cluster_env.num_devices // 4
+        quo_groups = decompose2tok(cluster_env.num_devices % 4)
+        init_sol = ModelPlacement([ParallelConfig(1, 1, 4)] * num_reg_groups +
+                                  [ParallelConfig(1, 1, s) for s in quo_groups],
+                                  [[] for _ in range(num_reg_groups + len(quo_groups))])
+
+        sol = replica_placement_round_robin(
+                   init_sol, model_datas, cluster_env, train_workload, self.verbose)
+
+        return sol, {}
 
 
 class ModelParallelismSearch(BasePlacementPolicy):
