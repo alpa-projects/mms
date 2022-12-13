@@ -2,13 +2,14 @@ import pickle
 import numpy as np
 import argparse
 import matplotlib.pyplot as plt
+from alpa_serve.util import GB
 
 def get_latency_and_throughput(all_latency):
     latency = sum(all_latency)
     throughput = 1 / max(all_latency)
     return latency, throughput
 
-def plot_database(database, model_name="bert-6.7b"):
+def plot_database(database, model_name="bert-2.6b"):
     n_gpus = [1, 2, 4, 8]
     pp_latency = []
     pp_throughput = []
@@ -23,42 +24,45 @@ def plot_database(database, model_name="bert-6.7b"):
         pp_all_latency = database[model_name].para_dict[(1, 1, n)].latency[1]
         pp_latency.append(get_latency_and_throughput(pp_all_latency)[0])
         pp_throughput.append(get_latency_and_throughput(pp_all_latency)[1])
-        pp_memory.append(sum(database[model_name].para_dict[(1, 1, n)].weight_mem))
+        pp_memory.append(sum(database[model_name].para_dict[(1, 1, n)].weight_mem) / GB)
         op_all_latency = database[model_name].para_dict[(1, n, 1)].latency[1]
         op_latency.append(get_latency_and_throughput(op_all_latency)[0])
-        op_memory.append(sum(database[model_name].para_dict[(1, n, 1)].weight_mem) * n)
+        op_memory.append(sum(database[model_name].para_dict[(1, n, 1)].weight_mem) * n / GB)
         op_throughput.append(get_latency_and_throughput(op_all_latency)[1])
         dp_all_latency = database[model_name].para_dict[(1, 1, 1)].latency[1]
         dp_latency.append(dp_all_latency)
         dp_throughput.append(n / max(dp_all_latency))
-        dp_memory.append(sum(database[model_name].para_dict[(1, 1, 1)].weight_mem) * n)
+        dp_memory.append(sum(database[model_name].para_dict[(1, 1, 1)].weight_mem) * n / GB)
 
-    plt.figure()
-    plt.plot(n_gpus, pp_latency, '.-', label="PP")
-    plt.plot(n_gpus, op_latency, '.-', label="OP")
-    plt.plot(n_gpus, dp_latency, '.-', label="DP")
+    plt.figure(figsize=(4.5, 3.5))
+    plt.plot(n_gpus, pp_latency, '.-', label="Inter-Op Parallelism")
+    plt.plot(n_gpus, op_latency, '.-', label="Intra-Op Parallelism")
+    plt.plot(n_gpus, dp_latency, '.-', label="Replication")
+    # plt.axvline(8, linestyle='--', color = "black", label = "Single Node Boundary", linewidth=0.75)
     plt.xlabel("Number of GPUs")
     plt.ylabel("Latency (s)")
     plt.legend()
     plt.tight_layout()
     plt.savefig(f"model_parallel_latency.pdf")
 
-    plt.figure()
-    plt.plot(n_gpus, pp_throughput, '.-', label="PP")
-    plt.plot(n_gpus, op_throughput, '.-', label="OP")
-    plt.plot(n_gpus, dp_throughput, '.-', label="DP")
+    plt.figure(figsize=(4.5, 3.5))
+    plt.plot(n_gpus, pp_throughput, '.-', label="Inter-Op Parallelism")
+    plt.plot(n_gpus, op_throughput, '.-', label="Intra-Op Parallelism")
+    plt.plot(n_gpus, dp_throughput, '.-', label="Replication")
+    # plt.axvline(8, linestyle='--', color = "black", label = "Single Node Boundary", linewidth=0.75)
     plt.xlabel("Number of GPUs")
     plt.ylabel("Throughput (req/s)")
     plt.legend()
     plt.tight_layout()
     plt.savefig(f"model_parallel_throughput.pdf")
 
-    plt.figure()
-    plt.plot(n_gpus, pp_memory, '.-', label="PP")
-    plt.plot(n_gpus, op_memory, '.-', label="OP")
-    plt.plot(n_gpus, dp_memory, '.-', label="DP")
+    plt.figure(figsize=(4.5, 3.5))
+    plt.plot(n_gpus, pp_memory, '.-', label="Inter-Op Parallelism")
+    plt.plot(n_gpus, op_memory, '.-', label="Intra-Op Parallelism")
+    plt.plot(n_gpus, dp_memory, '.-', label="Replication")
+    # plt.axvline(8, linestyle='--', color = "black", label = "Single Node Boundary", linewidth=0.75)
     plt.xlabel("Number of GPUs")
-    plt.ylabel("Memory (Bytes)")
+    plt.ylabel("Memory (GB)")
     plt.legend()
     plt.tight_layout()
     plt.savefig(f"model_parallel_memory.pdf")
@@ -66,7 +70,7 @@ def plot_database(database, model_name="bert-6.7b"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("database_filename", type=str, default="profiling_result.pkl")
+    parser.add_argument("--database_filename", type=str, default="profiling_result_long_sequence_manual.pkl")
     args = parser.parse_args()
     with open(args.database_filename, "rb") as f:
         database = pickle.load(f)

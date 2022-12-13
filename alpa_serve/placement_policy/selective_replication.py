@@ -161,7 +161,7 @@ class SelectiveReplicationUniform(BasePlacementPolicy):
                         train_workload: Workload = None):
         num_models = len(model_datas)
         model_memory = model_datas[0].profiling_result.para_dict[ParallelConfig(1, 1, 1)].weight_mem[0]
-        num_models_per_group = int(cluster_env.mem_budget / model_memory)
+        num_models_per_group = min(int(cluster_env.mem_budget / model_memory), num_models)
         num_groups = cluster_env.num_devices
 
         group_models = []

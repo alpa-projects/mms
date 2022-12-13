@@ -7,21 +7,30 @@ from benchmarks.alpa.equal_model_case import EqualModelCase, run_equal_model_cas
 from alpa_serve.util import GB
 from alpa_serve.profiling import ProfilingDatabase
 
+color_dict = {
+    "sr-uniform": "C1",
+    "mp-greedy-8": "C0",
+}
+policy_name_to_label = {
+    "sr-uniform": "Selective Replication",
+    "mp-greedy-8": "Model Parallelism",
+}
+
 def run_case(case_id=1, mode="simulate", parallel=False):
     policies = ["mp-greedy-8", "sr-uniform"]
     num_devices = 8
     model_type = "bert-2.6b"
-    mem_budget = 14 * GB
+    mem_budget = 13 * GB
     num_models = 8
     arrival_process = "gamma"
     rate_distribution = "uniform"
     slo_scale = np.inf
-    total_rate = 60
-    arrival_process_kwargs = {"cv": 5.0}
-    overheads = list(np.linspace(1.0, 1.5, 11)) + [None]
+    total_rate = 30
+    arrival_process_kwargs = {"cv": 3.0}
+    overheads = list(np.linspace(1.0, 1.5, 6)) + [None]
     duration = 500
     results = []
-    slo_scales = [0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    slo_scales = np.linspace(1.0, 20, 20)
     for overhead in overheads:
         if overhead is None:
             prof_database = None
@@ -58,16 +67,17 @@ def plot_case(case_id=1):
     with open(f"changing_pipeline_overhead_{case_id}.pkl", "rb") as f:
         results = pickle.load(f)
 
-    plt.figure()
+    plt.figure(figsize=(4.5, 3.5))
     for policy_name, overhead, slo_scales, stats in results:
         x = slo_scales
-        label = policy_name + ("" if overhead is None else f" (overhead={overhead})")
+        label = policy_name_to_label[policy_name] + ("" if overhead is None else f" ($\\alpha$={overhead})")
         y = []
         for stat in stats:
-            y.append(stat.goodput)
-        plt.plot(x, y, '.-', label=label)
+            y.append(stat.goodput * 100)
+        alpha = 1 - (overhead - 1) * 1.6 if overhead is not None else 1
+        plt.plot(x, y, '.-', label=label, alpha = alpha, color = color_dict[policy_name])
     plt.xlabel("SLO Scale")
-    plt.ylabel("Goodput (%)")
+    plt.ylabel("Workload Satisfaction (%)")
     plt.legend()
     plt.tight_layout()
     plt.savefig(f"changing_pipeline_overhead_{case_id}.pdf")
@@ -81,5 +91,5 @@ if __name__ == "__main__":
                         default="simulate")
 
     args = parser.parse_args()
-    run_case(case_id=1, mode=args.mode, parallel=args.parallel)
+    # run_case(case_id=1, mode=args.mode, parallel=args.parallel)
     plot_case(case_id=1)
