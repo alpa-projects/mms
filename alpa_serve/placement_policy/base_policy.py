@@ -286,7 +286,7 @@ def replica_placement_round_robin(init_sol: ModelPlacement,
                                   cluster_env: ClusterEnv,
                                   workload: Workload,
                                   verbose: int):
-    """Use round robin to place replicas on groups (PP=4)."""
+    """Use round robin to place replicas on groups."""
 
     assert len(init_sol.group_configs) == len(init_sol.group_models)
 

@@ -258,9 +258,6 @@ def solve_separation_placement(self,
 class ModelParallelismRR(BasePlacementPolicy):
 
     def __init__(self,
-                 max_bs: int = 1,
-                 max_pp: int = 8,
-                 max_op: int = 4,
                  verbose: int = 0):
         super().__init__(verbose=verbose)
         self.max_bs = max_bs
