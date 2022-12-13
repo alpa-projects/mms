@@ -37,7 +37,7 @@ if __name__ == "__main__":
     mem_budget = 13 * GB
     model_type = "bert-2.6b"
     num_models = 24
-    total_rate = 45
+    total_rate = 40
     if args.trace == "synthetic":
         # choices: {"gamma", "uniform_mmpp"}
         arrival_process = "gamma"
