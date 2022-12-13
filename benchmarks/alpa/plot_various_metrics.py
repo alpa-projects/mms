@@ -12,8 +12,9 @@ show_name_dict = {
     "mp-search":      "Beta",
     "mp-search-sep":  "Model Parallelism (search model separation)",
 
-    "sr-replace-30": "Clockwork++",
-    "sr-replace-60": "Clockwork++",
+    "sr-replace-30": "Clockwork++ (30)",
+    "sr-replace-60": "Clockwork++ (60)",
+    "sr-replace-120": "Clockwork++ (120)",
     "sr-replace-3600": "Clockwork++",
     "sr-replace-5400": "Clockwork++",
     "sr-replace-10800": "Clockwork++",
@@ -61,7 +62,8 @@ def method2color(name):
 
 method_order_list = [
     "mp-ilp", "mp-round-robin", "mp-search", "mp-search-sep",
-    "sr-replace-30", "sr-replace-60", "sr-replace-3600", "sr-replace-5400", "sr-replace-10800", "sr-replace-21600",
+    "sr-replace-30", "sr-replace-60",  "sr-replace-3600", "sr-replace-5400", "sr-replace-10800", "sr-replace-21600",
+    "sr-replace-120",
     "sr-greedy", "sr-search", "sr-ilp",
 
     "mp-search-100", "mp-search-1000",
