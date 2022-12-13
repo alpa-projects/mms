@@ -8,7 +8,7 @@ from alpa_serve.simulator.controller import (Controller, DummyController,
 from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase, ParallelConfig
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
-    SelectiveReplicationILP, SelectiveReplicationGreedy,
+    SelectiveReplicationILP, SelectiveReplicationGreedy, SelectiveReplicationReplacement,
     ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch)
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.trace import Trace, report_group_stats
