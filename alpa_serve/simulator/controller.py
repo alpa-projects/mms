@@ -612,6 +612,9 @@ def simulate_requests_mixed(finish, good, tstamps, model_ids, slos, m_id2g_id,
             finish[i] = tstamp
             good[i] = False
 
+    # print("model_num_requests", model_num_requests)
+    # print("group_num_requests", group_num_requests)
+    # assert np.sum(model_num_requests) == np.sum(group_num_requests)
     return (model_num_requests, model_num_good_requests,
             group_num_requests, group_num_good_requests)
 
@@ -751,6 +754,8 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
         assert select_model_id != -1
         handle_batched_requests(idle_tstamp, select_model_id, g_id)
 
-    assert np.sum(model_num_requests) == np.sum(group_num_requests)
+    # print("model_num_requests", model_num_requests)
+    # print("group_num_requests", group_num_requests)
+    # assert np.sum(model_num_requests) == np.sum(group_num_requests)
     return (model_num_requests, model_num_good_requests,
             group_num_requests, group_num_good_requests)

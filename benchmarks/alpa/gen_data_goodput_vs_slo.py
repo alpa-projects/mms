@@ -2,7 +2,7 @@ import argparse
 
 from benchmarks.alpa.equal_model_case import EqualModelCase, run_equal_model_cases
 from benchmarks.alpa.general_model_case import GeneralModelCase, run_general_model_cases
-from alpa_serve.util import GB
+from alpa_serve.util import GB, enable_batching
 
 
 if __name__ == "__main__":
@@ -32,6 +32,8 @@ if __name__ == "__main__":
         policies = [args.policy]
     else:
         policies = ["sr-greedy", "mp-search"]
+    if enable_batching:
+        policies = [policy + "-batch" for policy in policies]
     exp_name = "goodput_vs_slo"
     num_devices = 8
     mem_budget = 13 * GB
