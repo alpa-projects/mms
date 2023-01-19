@@ -8,6 +8,9 @@ from typing import Sequence, Any
 import ray
 import numpy as np
 
+# global switch for batching
+enable_batching = True
+batchsize_config = [1, 2, 4, 8, 16]
 
 # A general serving case.
 # We can simulate or run such a case.
