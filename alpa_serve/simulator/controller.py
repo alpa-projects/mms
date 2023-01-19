@@ -686,11 +686,11 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
             # all requests in queue violate SLO
             return
         else:
-            t = tstamp
+            t = tstamp + fixed_overhead
             for k in range(num_stages[group_id]):
                 t = max(t, device_clocks[group_id][k]) + stage_latency[model_id][group_id][k][int(np.log2(bs))]
                 tmp_time[k] = t
-            finish_time = t + fixed_overhead
+            finish_time = t
 
             for rq_id in batch_rq:
                 finish[rq_id] = finish_time
@@ -737,6 +737,19 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
         if g_id != -1:
             # group is idle
             handle_batched_requests(tstamp, m_id, g_id)
+    
+    # handle remaining requests
+    while len(unhandled_group_idle_tstamp):
+        idle_tstamp, g_id = heapq.heappop(unhandled_group_idle_tstamp)
+        # select the model with the most requests in the queue
+        max_num_req = -1
+        select_model_id = -1
+        for tmp_id, req_queue in enumerate(req_queues):
+            if len(req_queue) > max_num_req:
+                max_num_req = len(req_queue)
+                select_model_id = tmp_id
+        assert select_model_id != -1
+        handle_batched_requests(idle_tstamp, select_model_id, g_id)
 
     assert np.sum(model_num_requests) == np.sum(group_num_requests)
     return (model_num_requests, model_num_good_requests,
