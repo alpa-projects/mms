@@ -4,11 +4,12 @@ The serving controller.
 This file simulates `alpa_serve/controller.py`.
 """
 import asyncio
-import math
 from collections import defaultdict
 import dataclasses
 from functools import partial
+import heapq
 from itertools import cycle
+import math
 import time
 from typing import Callable, List, Dict, Optional, Tuple
 
@@ -448,7 +449,7 @@ def approximate_one_case_one_placement(placement, model_names, prof_ress, model_
                             for i, bs in enumerate(batchsize_config):
                                 stage_latency[m_id][g_id][k][i] = value.latency[bs][k] * (1 + penalty)
                     else:
-                        stage_latency[m_id][g_id][:][:] = inf
+                        stage_latency[m_id][g_id][:] = inf
         else:
             # num_stages: (num_groups,)
             num_stages = np.array([c.pp for c in group_configs], dtype=np.int32)
@@ -614,7 +615,7 @@ def simulate_requests_mixed(finish, good, tstamps, model_ids, slos, m_id2g_id,
     return (model_num_requests, model_num_good_requests,
             group_num_requests, group_num_good_requests)
 
-@numba.jit(nopython=True)
+# @numba.jit(nopython=True)
 def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_id2g_id,
                                      num_stages, stage_latency, num_requests):
     # num_stages: num_groups
@@ -623,59 +624,120 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
     num_groups = len(stage_latency[0])
     max_num_stages = len(stage_latency[0][0])
 
-    device_clocks = np.zeros((num_groups, max_num_stages), dtype=np.float64)
+    # statistics
     group_num_requests = np.zeros(num_groups, dtype=np.int32)
     group_num_good_requests = np.zeros(num_groups, dtype=np.int32)
     model_num_requests = np.zeros(num_models, dtype=np.int32)
     model_num_good_requests = np.zeros(num_models, dtype=np.int32)
     fixed_overhead = 0.011
 
+    # simulator states
+    device_clocks = np.zeros((num_groups, max_num_stages), dtype=np.float64)
+    req_queues = [[] for _ in range(num_models)]
+    group_idle_tstamp = np.zeros(num_groups, dtype=np.float64) # the time when the first stage in the group is idle
+    unhandled_group_idle_tstamp = [] # (idle_tstamp, group_id)
+
     tmp_time = np.zeros(max_num_stages, dtype=np.float64)
 
+    def check_slo(tstamp, group_id, group_stage_latency, deadline):
+        t = tstamp
+        for k in range(num_stages[group_id]):
+            t = max(device_clocks[group_id][k], t) + group_stage_latency[k]
+        finish_time = t + fixed_overhead
+        # print(finish_time, deadline)
+        return finish_time <= deadline
+
+    def get_max_batch_under_slo(tstamp, model_id, group_id):
+        req_queue = req_queues[model_id]
+        find_valid_req = False
+        while len(req_queue):
+            req_id = req_queue.pop(0)
+            if check_slo(tstamp, group_id, stage_latency[model_id][group_id][:,0], tstamps[req_id] + slos[req_id]):
+                find_valid_req = True
+                break
+            else:
+                # drop requests which will exceed deadline even run alone immediately 
+                group_num_requests[group_id] += 1
+                finish[req_id] = tstamps[req_id]
+                good[req_id] = False
+
+        # all the requests in queue are rejected
+        if not find_valid_req:
+            return []
+        
+        # batch as much as we can
+        choosed_bs = 1
+        for bs in batchsize_config:
+            # remaining requests is not enough (no padding)
+            if bs - 1 > len(req_queue):
+                break
+            # check if violate slo
+            if check_slo(tstamp, group_id, stage_latency[model_id][group_id][:,int(np.log2(bs))], tstamps[req_id] + slos[req_id]):
+                choosed_bs = bs
+            else:
+                break
+
+        return [req_id] + [req_queue.pop(0) for _ in range(choosed_bs - 1)]
+        
+    def handle_batched_requests(tstamp, model_id, group_id):
+        batch_rq = get_max_batch_under_slo(tstamp, model_id, group_id)
+        bs = len(batch_rq)
+        if bs == 0:
+            # all requests in queue violate SLO
+            return
+        else:
+            t = tstamp
+            for k in range(num_stages[group_id]):
+                t = max(t, device_clocks[group_id][k]) + stage_latency[model_id][group_id][k][int(np.log2(bs))]
+                tmp_time[k] = t
+            finish_time = t + fixed_overhead
+
+            for rq_id in batch_rq:
+                finish[rq_id] = finish_time
+                good[rq_id] = True
+                for k in range(num_stages[group_id]):
+                    device_clocks[group_id][k] = tmp_time[k]
+            
+            group_idle_tstamp[group_id] = tmp_time[0]
+            heapq.heappush(unhandled_group_idle_tstamp, (tmp_time[0], group_id))
+
+            group_num_requests[group_id] += bs
+            group_num_good_requests[group_id] += bs
+            model_num_good_requests[model_id] += bs
+
+          
     for i in range(num_requests):
-        tstamp, m_id, slo = tstamps[i], model_ids[i], slos[i]
+        tstamp = tstamps[i]
 
-        if m_id < 0:
-            finish[i] = tstamp
-            good[i] = False
-            continue
+        while len(unhandled_group_idle_tstamp) and unhandled_group_idle_tstamp[0][0] <= tstamp:
+            idle_tstamp, g_id = heapq.heappop(unhandled_group_idle_tstamp)
+            # select the model with the most requests in the queue
+            max_num_req = -1
+            select_model_id = -1
+            for tmp_id, req_queue in enumerate(req_queues):
+                if len(req_queue) > max_num_req:
+                    max_num_req = len(req_queue)
+                    select_model_id = tmp_id
+            assert select_model_id != -1
+            handle_batched_requests(idle_tstamp, select_model_id, g_id)
 
+        m_id = model_ids[i]
+        req_queues[m_id].append(i)
         model_num_requests[m_id] += 1
 
-        # Select group id
+        # select idle group id
         g_id = -1
-        min_device_clock = inf
         for j in m_id2g_id[m_id]:
             if j < 0:
                 break
-            tmp = device_clocks[j][num_stages[j] - 1]
-            if tmp < min_device_clock:
-                min_device_clock = tmp
+            if tstamp >= group_idle_tstamp[j]:
                 g_id = j
+                break
+        
+        if g_id != -1:
+            # group is idle
+            handle_batched_requests(tstamp, m_id, g_id)
 
-        if g_id < 0:
-            finish[i] = tstamp
-            good[i] = False
-            continue
-
-        t = tstamp
-        for k in range(num_stages[g_id]):
-            t = max(t, device_clocks[g_id][k]) + stage_latency[m_id][g_id][k][0]
-            tmp_time[k] = t
-
-        finish_time = t + fixed_overhead
-        group_num_requests[g_id] += 1
-
-        if finish_time - tstamp <= slo:
-            finish[i] = finish_time
-            good[i] = True
-            for k in range(num_stages[g_id]):
-                device_clocks[g_id][k] = tmp_time[k]
-            group_num_good_requests[g_id] += 1
-            model_num_good_requests[m_id] += 1
-        else:
-            finish[i] = tstamp
-            good[i] = False
-
+    assert np.sum(model_num_requests) == np.sum(group_num_requests)
     return (model_num_requests, model_num_good_requests,
             group_num_requests, group_num_good_requests)
