@@ -643,6 +643,16 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
 
     tmp_time = np.zeros(max_num_stages, dtype=np.float64)
 
+    def select_model():
+        # select the model with the most requests in the queue
+        max_num_req = 0
+        select_model_id = -1
+        for tmp_id, req_queue in enumerate(req_queues):
+            if len(req_queue) > max_num_req:
+                max_num_req = len(req_queue)
+                select_model_id = tmp_id
+        return select_model_id
+
     def check_slo(tstamp, group_id, group_stage_latency, deadline):
         t = tstamp
         for k in range(num_stages[group_id]):
@@ -687,8 +697,10 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
         batch_rq = get_max_batch_under_slo(tstamp, model_id, group_id)
         bs = len(batch_rq)
         if bs == 0:
-            # all requests in queue violate SLO
-            return
+            # all requests in queue violate SLO, select another model
+            select_model_id = select_model() 
+            if select_model_id != -1:
+                handle_batched_requests(tstamp, select_model_id, group_id)
         else:
             t = tstamp + fixed_overhead
             for k in range(num_stages[group_id]):
@@ -698,6 +710,7 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
 
             for rq_id in batch_rq:
                 finish[rq_id] = finish_time
+                assert finish[rq_id] >= tstamps[rq_id]
                 good[rq_id] = True
                 for k in range(num_stages[group_id]):
                     device_clocks[group_id][k] = tmp_time[k]
@@ -709,23 +722,23 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
             group_num_good_requests[group_id] += bs
             model_num_good_requests[model_id] += bs
 
-          
+
     for i in range(num_requests):
         tstamp = tstamps[i]
 
         while len(unhandled_group_idle_tstamp) and unhandled_group_idle_tstamp[0][0] <= tstamp:
             idle_tstamp, g_id = heapq.heappop(unhandled_group_idle_tstamp)
-            # select the model with the most requests in the queue
-            max_num_req = -1
-            select_model_id = -1
-            for tmp_id, req_queue in enumerate(req_queues):
-                if len(req_queue) > max_num_req:
-                    max_num_req = len(req_queue)
-                    select_model_id = tmp_id
-            assert select_model_id != -1
-            handle_batched_requests(idle_tstamp, select_model_id, g_id)
+            select_model_id = select_model() 
+            if select_model_id != -1:
+                handle_batched_requests(idle_tstamp, select_model_id, g_id)
 
         m_id = model_ids[i]
+
+        if m_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
+
         req_queues[m_id].append(i)
         model_num_requests[m_id] += 1
 
@@ -746,17 +759,14 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
     while len(unhandled_group_idle_tstamp):
         idle_tstamp, g_id = heapq.heappop(unhandled_group_idle_tstamp)
         # select the model with the most requests in the queue
-        max_num_req = -1
-        select_model_id = -1
-        for tmp_id, req_queue in enumerate(req_queues):
-            if len(req_queue) > max_num_req:
-                max_num_req = len(req_queue)
-                select_model_id = tmp_id
-        assert select_model_id != -1
+        select_model_id = select_model() 
+        if select_model_id == -1:
+            break
         handle_batched_requests(idle_tstamp, select_model_id, g_id)
 
     # print("model_num_requests", model_num_requests)
     # print("group_num_requests", group_num_requests)
     # assert np.sum(model_num_requests) == np.sum(group_num_requests)
+    # assert np.all(finish > 0) == False
     return (model_num_requests, model_num_good_requests,
             group_num_requests, group_num_good_requests)
