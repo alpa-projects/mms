@@ -24,7 +24,7 @@ from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import (Workload, StatsResult,
     PerDeviceStatsResult, PerModelStatsResult, DEFAULT_WARMUP)
-from alpa_serve.util import ServingCase, inf, eps, to_str_round, enable_batching, batchsize_config
+from alpa_serve.util import ServingCase, inf, eps, to_str_round, batchsize_config
 
 
 class GroupManager:
@@ -309,7 +309,8 @@ def approximate_one_case(case: ServingCase,
                          seed: int = 0,
                          warmup: int = DEFAULT_WARMUP,
                          debug: bool = False,
-                         fast_stats: bool = False):
+                         fast_stats: bool = False,
+                         enable_batching: bool = False):
     """A fast simulator that only simulates one stage for a pipeline."""
     from alpa_serve.placement_policy.base_policy import (
         ModelPlacement, ModelPlacementWithReplacement)
@@ -340,7 +341,7 @@ def approximate_one_case(case: ServingCase,
     if isinstance(placement, ModelPlacement):
         (start, finish, good, model_num_requests, model_num_good_requests,
          group_num_requests, group_num_good_requests) = approximate_one_case_one_placement(
-             placement, model_names, prof_ress, model_ids, slos, workload.arrivals)
+             placement, model_names, prof_ress, model_ids, slos, workload.arrivals, enable_batching=enable_batching)
     elif isinstance(placement, ModelPlacementWithReplacement):
         arrivals = workload.arrivals
         change_times = placement.start_times[1:] + [inf]
@@ -357,7 +358,7 @@ def approximate_one_case(case: ServingCase,
                 (start, finish, good, model_num_requests, model_num_good_requests,
                  group_num_requests, group_num_good_requests) = approximate_one_case_one_placement(
                      placement.placements[pt], model_names, prof_ress,
-                     model_ids[start_i:i], slos[start_i:i], arrivals[start_i:i])
+                     model_ids[start_i:i], slos[start_i:i], arrivals[start_i:i], enable_batching=enable_batching)
                 start_list.append(start)
                 finish_list.append(finish)
                 good_list.append(good)
@@ -372,7 +373,7 @@ def approximate_one_case(case: ServingCase,
         (start, finish, good, model_num_requests, model_num_good_requests,
          group_num_requests, group_num_good_requests) = approximate_one_case_one_placement(
              placement.placements[pt], model_names, prof_ress,
-             model_ids[start_i:], slos[start_i:], arrivals[start_i:])
+             model_ids[start_i:], slos[start_i:], arrivals[start_i:], enable_batching=enable_batching)
         start_list.append(start)
         finish_list.append(finish)
         good_list.append(good)
@@ -406,7 +407,7 @@ def approximate_one_case(case: ServingCase,
     return stats, placement
 
 
-def approximate_one_case_one_placement(placement, model_names, prof_ress, model_ids, slos, arrivals, mixed = True):
+def approximate_one_case_one_placement(placement, model_names, prof_ress, model_ids, slos, arrivals, mixed = True, enable_batching = False):
     # Load constants
     group_configs, group_models = placement.group_configs, placement.group_models
 

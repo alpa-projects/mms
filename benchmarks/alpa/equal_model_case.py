@@ -191,7 +191,7 @@ def get_equal_model_serving_case(case, prof_database=None):
 
         if policy_name == "sr-ilp":
             policy = SelectiveReplicationILP(verbose=1)
-        elif policy_name in "sr-greedy":
+        elif "sr-greedy" in policy_name:
             policy = SelectiveReplicationGreedy(verbose=1)
         elif "sr-replace" in policy_name:
             interval = int(policy_name.split("-")[2])
@@ -201,7 +201,7 @@ def get_equal_model_serving_case(case, prof_database=None):
             policy = SelectiveReplicationSearch(verbose=1)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
-        elif policy_name in ["mp-search", "mp-search-evo"]:
+        elif "mp-search" in policy_name:
             use_evo_search = "evo" in policy_name
             policy = ModelParallelismSearch(
                 use_evo_search=use_evo_search, verbose=2)
@@ -236,11 +236,12 @@ _DATA_HEADS = ("exp_name",
 def run_one_equal_model_case(case, mode,
                              output_file=None, prof_database=None,
                              relax_slo=False, protocol="http",
-                             debug=False):
+                             debug=False,
+                             enable_batching=False):
     serving_case = get_equal_model_serving_case(case, prof_database)
 
     if mode == "simulate":
-        stats, placement = approximate_one_case(serving_case, debug=debug)
+        stats, placement = approximate_one_case(serving_case, debug=debug, enable_batching=enable_batching)
     else:
         stats, placement = run_one_case(serving_case, relax_slo=relax_slo,
                                         protocol=protocol, debug=debug)
@@ -259,7 +260,7 @@ def run_one_equal_model_case(case, mode,
 
 def run_equal_model_cases(cases, output_file=None,
                           mode="simulate", relax_slo=False, protocol="http",
-                          debug_tstamp=False, parallel=False):
+                          debug_tstamp=False, parallel=False, enable_batching=False):
     if parallel and not ray.is_initialized():
         ray.init(address="auto", namespace="alpa_serve",
                  runtime_env={"working_dir": os.getcwd(),
@@ -274,7 +275,7 @@ def run_equal_model_cases(cases, output_file=None,
     for case in cases:
         results.append(run_one_case_(case, mode,
             output_file=output_file, relax_slo=relax_slo,
-            protocol=protocol, debug=debug_tstamp))
+            protocol=protocol, debug=debug_tstamp, enable_batching=enable_batching))
 
     if parallel:
         results = ray.get(results)
