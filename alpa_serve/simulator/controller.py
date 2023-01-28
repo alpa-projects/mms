@@ -691,7 +691,7 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
         
         # batch as much as we can
         choosed_bs = 1
-        for bs in batchsize_config:
+        for bs in batchsize_config[1:]:
             # remaining requests is not enough (no padding)
             if bs - 1 > len(req_queue):
                 break
@@ -732,6 +732,7 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
             model_num_good_requests[model_id] += bs
 
 
+
     for i in range(num_requests):
         tstamp = tstamps[i]
 
@@ -754,18 +755,23 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
             good[i] = False
             continue
 
-        req_queues[m_id].append(i)
-        model_num_requests[m_id] += 1
-
-        # select idle group id
+        # select group with minimum stage clock
         g_id = -1
+        min_device_clock = inf
         for j in m_id2g_id[m_id]:
             if j < 0:
                 break
-            if tstamp >= group_idle_tstamp[j]:
+            # idle group
+            # if tstamp >= group_idle_tstamp[j]:
+            tmp = device_clocks[j][num_stages[j] - 1]
+            if tmp < min_device_clock:
+                min_device_clock = tmp
                 g_id = j
-                break
-        
+
+        req_queues[m_id].append(i)
+        model_num_requests[m_id] += 1
+
+       
         if g_id != -1:
             # group is idle
             handle_batched_requests(tstamp, m_id, g_id)
