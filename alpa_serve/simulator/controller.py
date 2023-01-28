@@ -652,14 +652,14 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
     tmp_time = np.zeros(max_num_stages, dtype=np.float64)
 
     def select_model(group_id):
-        # select the model with the most requests in the queue
-        max_num_req = 0
+        # select the model with the earliest request in the queue
+        min_arrival = inf
         select_model_id = -1
         for tmp_id in g_id2m_id[group_id]:
             if tmp_id < 0:
                 break
-            if len(req_queues[tmp_id]) > max_num_req:
-                max_num_req = len(req_queues[tmp_id])
+            if len(req_queues[tmp_id]) and tstamps[req_queues[tmp_id][0]] < min_arrival:
+                min_arrival = tstamps[req_queues[tmp_id][0]]
                 select_model_id = tmp_id
         return select_model_id
 
@@ -772,7 +772,7 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
         model_num_requests[m_id] += 1
 
        
-        if g_id != -1:
+        if tstamp >= group_idle_tstamp[g_id]:
             # group is idle
             handle_batched_requests(tstamp, m_id, g_id)
     
