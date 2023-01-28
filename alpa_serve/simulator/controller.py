@@ -739,8 +739,9 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
         while len(unhandled_group_idle_tstamp) and unhandled_group_idle_tstamp[0][0] <= tstamp:
             idle_tstamp, g_id = heapq.heappop(unhandled_group_idle_tstamp)
             select_model_id = select_model(g_id) 
-            if select_model_id != -1:
-                handle_batched_requests(idle_tstamp, select_model_id, g_id)
+            if select_model_id == -1:
+                break
+            handle_batched_requests(idle_tstamp, select_model_id, g_id)
 
         m_id = model_ids[i]
 
