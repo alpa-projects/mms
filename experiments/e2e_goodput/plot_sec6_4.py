@@ -17,6 +17,7 @@ linestyles = ["solid", "dashed", "dashdot", "dotted", (0, (3,5,1,5,1,5))]
 
 def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     methods = list(data.keys())
+    methods.remove("sr-replace-120")
     methods.sort(key=lambda x: method2order(x))
 
     curves = []
@@ -57,12 +58,12 @@ def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     ax.set_xlabel(xlabel, fontsize=20)
     ax.grid()
 
-    ax.legend(curves, legends, fontsize=20, loc="lower right")
-
     for i in range(len(methods)):
         if first_good[i] == 0:
             continue
         ax.axvline(first_good[i], color=method2color(methods[i]), linestyle=":", linewidth=4)
+    
+    return curves, legends
 
 
 def plot_goodput(lines, threshold, folder, pdf):
@@ -96,16 +97,22 @@ def plot_goodput(lines, threshold, folder, pdf):
         else:
             continue
  
-    fig, axs = plt.subplots(1, 5)
+    # fig, axs = plt.subplots(1, 5)
+    fig, axs = plt.subplots(1, 4)
 
-    datas = [devices_data, models_data, rate_data, cv_data, slo_data]
-    xlabels = ["#devices", "#models", "Rate Scale", "CV Scale", "SLO Scale"]
-    ybottoms = [0,0,0,0,0]
-    increasings = [True, False, False, False, True]
+    # datas = [devices_data, models_data, rate_data, cv_data, slo_data]
+    datas = [devices_data, rate_data, cv_data, slo_data]
+    # xlabels = ["#devices", "#models", "Rate Scale", "CV Scale", "SLO Scale"]
+    xlabels = ["#devices", "Rate Scale", "CV Scale", "SLO Scale"]
+    # ybottoms = [0,0,0,0,0]
+    ybottoms = [0,0,0,0]
+    # increasings = [True, False, False, False, True]
+    increasings = [True, False, False, True]
     for data, increasing, ax, xlabel, ybottom in zip(datas, increasings, axs, xlabels, ybottoms):
-        plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom)
+        curves, legends = plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom)
    
-    fig.text(0.07, 0.5, "Workload Satisfaction (%)", va='center', rotation='vertical', fontsize=20)
+    fig.text(0.09, 0.5, "Workload Satisfaction (%)", va='center', rotation='vertical', fontsize=20)
+    fig.legend(reversed(curves), reversed(legends), loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.1), fontsize=20)
 
     if pdf:
         output = os.path.join(folder, "robustness.pdf")
