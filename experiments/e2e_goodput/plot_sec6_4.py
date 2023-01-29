@@ -138,7 +138,9 @@ if __name__ == "__main__":
     
     threshold = 0.99
 
-    with open(args.input, "rb") as f:
-        lines = pickle.load(f)
+    # with open(args.input, "rb") as f:
+    #     lines = pickle.load(f)
+    lines = read_equal_model_case_tsv(args.input)
+
 
     plot_goodput(lines, threshold, args.output_dir, args.pdf)

@@ -43,9 +43,9 @@ if __name__ == "__main__":
     exp_name = "goodput_vs_slo"
     num_devices = 8
     mem_budget = 13 * GB
-    model_type = "bert-1.3b"
-    num_models = 16
-    total_rate = 64
+    model_type = "bert-2.6b"
+    num_models = 8
+    total_rate = 32
     if args.trace == "synthetic":
         # choices: {"gamma", "uniform_mmpp"}
         arrival_process = "gamma"
@@ -62,7 +62,6 @@ if __name__ == "__main__":
         slo_scales = [args.slo_scale]
     else:
         slo_scales = [0.5, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14]
-        # slo_scales = [14]
     duration = 1000
 
     if args.unequal:
