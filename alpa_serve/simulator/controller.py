@@ -783,11 +783,11 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
         # select the model with the most requests in the queue
         select_model_id = select_model(g_id) 
         if select_model_id == -1:
-            break
+            continue
         handle_batched_requests(idle_tstamp, select_model_id, g_id)
 
-    # for rq_queue in req_queues:
-    #     print(len(rq_queue))
+    for rq_queue in req_queues:
+        assert len(rq_queue) == 0
     # print(g_id2m_id)
     # print(m_id2g_id)
     # print("model_num_requests", model_num_requests)

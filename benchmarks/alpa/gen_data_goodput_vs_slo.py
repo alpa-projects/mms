@@ -2,7 +2,7 @@ import argparse
 
 from benchmarks.alpa.equal_model_case import EqualModelCase, run_equal_model_cases
 from benchmarks.alpa.general_model_case import GeneralModelCase, run_general_model_cases
-from alpa_serve.util import GB, enable_batching
+from alpa_serve.util import GB, batchsize_config
 
 
 if __name__ == "__main__":
@@ -22,6 +22,8 @@ if __name__ == "__main__":
                         choices=["http", "ray"])
     parser.add_argument("--relax-slo", action="store_true")
     parser.add_argument("--debug-tstamp", action="store_true")
+    parser.add_argument("--enable-batching", action="store_true")
+    parser.add_argument("--max-batchsize", type=int, default=2)
 
     args = parser.parse_args()
 
@@ -31,9 +33,13 @@ if __name__ == "__main__":
     if args.policy is not None:
         policies = [args.policy]
     else:
-        policies = ["sr-greedy", "mp-search"]
-    if enable_batching:
-        policies = [policy + "-batch" for policy in policies]
+        # policies = ["sr-greedy", "mp-search", "sr-replace-30"]
+        policies = ["mp-search"]
+
+    if args.enable_batching:
+        assert args.max_batchsize == batchsize_config[-1], f"maximum batchsize is not {args.max_batchsize}, set it in alpa_serve/util.py"
+        policies = [policy + "-batch-" + str(args.max_batchsize) for policy in policies]
+
     exp_name = "goodput_vs_slo"
     num_devices = 8
     mem_budget = 13 * GB
@@ -55,8 +61,9 @@ if __name__ == "__main__":
     if args.slo_scale is not None:
         slo_scales = [args.slo_scale]
     else:
-        slo_scales = [0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10]
-    duration = 200
+        slo_scales = [0.5, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14]
+        # slo_scales = [14]
+    duration = 1000
 
     if args.unequal:
         # multi-model config
@@ -83,7 +90,8 @@ if __name__ == "__main__":
                                 output_file=args.output,
                                 mode=args.mode,
                                 debug_tstamp=args.debug_tstamp,
-                                parallel=args.parallel)
+                                parallel=args.parallel,
+                                enable_batching=args.enable_batching)
     else:
         cases = []
         for slo_scale in slo_scales:
@@ -102,4 +110,5 @@ if __name__ == "__main__":
                               relax_slo=args.relax_slo,
                               protocol=args.protocol,
                               debug_tstamp=args.debug_tstamp,
-                              parallel=args.parallel)
+                              parallel=args.parallel,
+                              enable_batching=args.enable_batching)

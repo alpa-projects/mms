@@ -24,10 +24,18 @@ show_name_dict = {
     "mp-search":      "Beta",
     "mp-search-sep":  "Beta",
 
+    "sr-greedy-batch": "SR (mb=2)",
+    "sr-replace-30-batch": "Clockwork++ (mb=2)",
+    "mp-search-batch-2": "Beta (mb=2)",
+    "mp-search-batch-4": "Beta (mb=4)",
+    "mp-search-batch-8": "Beta (mb=8)",
+    "mp-search-batch-16": "Beta (mb=16)",
+
     "mp-greedy-2":    "Pipeline Parallelism (#stage=2)",
     "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",
     "mp-greedy-8":    "Pipeline Parallelism (#stage=8)",
     "mp-greedy-16":   "Pipeline Parallelism (#stage=16)",
+
     "mp-equal-16-1":  "(16,1)", 
     "mp-equal-8-2":   "(8,2)",
     "mp-equal-4-4":   "(4,4)",
@@ -38,9 +46,6 @@ def show_name(name):
     if "-real" in name:
         name = name.replace("-real", "")
         suffix = " REAL"
-    elif "-batch" in name:
-        name = name.replace("-batch", "")
-        suffix = " Batching"
     else:
         suffix = ""
     return show_name_dict.get(name, name) + suffix
@@ -52,7 +57,6 @@ method2color_dict = {
 ct = 0
 def method2color(name):
     global ct
-    name = name[:-6] if "batch" in name else name
     if name not in method2color_dict:
         method2color_dict[name] = f"C{ct}"
         ct += 1
@@ -60,10 +64,9 @@ def method2color(name):
 
 
 method_order_list = [
-    "sr-greedy", "sr-search", "sr-ilp",
-    "sr-replace-30", "sr-replace-60", "sr-replace-120", "sr-replace-3600", "sr-replace-5400", "sr-replace-10800", "sr-replace-21600",
     "mp-ilp", "mp-search", "mp-search-sep",
-
+    "sr-replace-30", "sr-replace-60", "sr-replace-120", "sr-replace-3600", "sr-replace-5400", "sr-replace-10800", "sr-replace-21600",
+    "sr-greedy", "sr-search", "sr-ilp",
     "mp-greedy-2", "mp-greedy-4", "mp-greedy-8", "mp-greedy-16",
     "mp-equal-16-1", "mp-equal-8-2", "mp-equal-4-4", "mp-equal-2-8",
 ]
@@ -73,7 +76,7 @@ def method2order(name):
         name = name.replace("-real", "")
         delta = len(method_order_list)
     elif "-batch" in name:
-        name = name.replace("-batch", "")
+        name = name[:name.find("-batch")]
         delta = len(method_order_list) * 2
     else:
         delta = 0

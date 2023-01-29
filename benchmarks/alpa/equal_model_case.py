@@ -163,6 +163,14 @@ def get_equal_model_serving_case(case, prof_database=None):
     rates = [a.rate() for a in arrival_processes]
     cvs = [a.cv() for a in arrival_processes]
 
+    if train_workload is None:
+        ws = []
+        for i in range(num_models):
+            ws.append(arrival_processes[i].generate_workload(
+                model_names[i], 0, duration, slo=slos[i], seed=i))
+        train_workload = Workload.merge(*ws)
+
+
     def register_models(controller):
         is_simulator = isinstance(controller, (Controller, DummyController))
 
