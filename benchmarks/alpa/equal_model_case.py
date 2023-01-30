@@ -237,7 +237,7 @@ _DATA_HEADS = ("exp_name",
                "num_devices", "mem_budget", "model_type", "num_models",
                "total_rate", "rate_distribution",
                "arrival_process", "arrival_process_kwargs",
-               "slo_scale", "duration", "policy_name", "train_start", "train_end", "test_start", "test_end",
+               "slo_scale", "duration", "policy_name", 
                "placement", "goodput", "mode")
 
 
@@ -303,7 +303,7 @@ def read_equal_model_case_tsv(filename):
          num_devices, mem_budget, model_type, num_models,
          total_rate, rate_distribution,
          arrival_process, arrival_process_kwargs,
-         slo_scale, duration, policy_name, train_start, train_end, test_start, test_end,
+         slo_scale, duration, policy_name, 
          placement, goodput, mode) = line.split("\t")
 
         num_devices = int(num_devices)

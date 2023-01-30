@@ -13,7 +13,7 @@ from benchmarks.alpa.general_model_case import read_general_model_case_tsv
 from benchmarks.alpa.plot_various_metrics import show_name, method2color, method2order
 
 linestyles = ["solid", "dashed", "dashdot", "dotted"]
-methodcolors = ["C0", "C1", "C2", "red"]
+methodcolors = ["C2", "C1", "C0", "red"]
 
 def plot_goodput_common(azurev1_data, azurev2_data, threshold, increasing, xlabel, output, ybottem, plot_legend=False):
     fig, axs = plt.subplots(1, len(azurev1_data) * 2)
@@ -72,10 +72,10 @@ def plot_goodput_common(azurev1_data, azurev2_data, threshold, increasing, xlabe
                 continue
             ax.axvline(first_good[i], color=methodcolors[i], linestyle=":", linewidth=4)
     
-    fig.text(0.1, 0.5, "Workload Satisfaction (%)", va='center', rotation='vertical', fontsize=20)
+    fig.text(0.1, 0.5, "SLO Attainment (%)", va='center', rotation='vertical', fontsize=20)
 
     if plot_legend:
-        fig.legend(reversed(curves), reversed(legends), loc="upper center", ncol=6, bbox_to_anchor=(0.5, 1.2), fontsize=20)
+        fig.legend(curves, legends, loc="upper center", ncol=6, bbox_to_anchor=(0.5, 1.2), fontsize=20)
 
 
     figure_size = (40, 4)

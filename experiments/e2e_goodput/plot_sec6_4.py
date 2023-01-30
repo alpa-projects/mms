@@ -14,6 +14,7 @@ from benchmarks.alpa.general_model_case import read_general_model_case_tsv
 from benchmarks.alpa.plot_various_metrics import show_name, method2color, method2order
 
 linestyles = ["solid", "dashed", "dashdot", "dotted", (0, (3,5,1,5,1,5))]
+methodcolors = ["C2", "C1", "C0", "red"]
 
 def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     methods = list(data.keys())
@@ -31,7 +32,7 @@ def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
         xs = [x for x, _ in sorted(zip(xs_, ys_))]
         ys = [y for _, y in sorted(zip(xs_, ys_))]
         ys = np.array(ys) * 100
-        curve = ax.plot(xs, ys, color=method2color(method), marker='*', linestyle=linestyles[i], linewidth=4, markersize=15)
+        curve = ax.plot(xs, ys, color=methodcolors[i], marker='*', linestyle=linestyles[i], linewidth=4, markersize=15)
         curves.append(curve[0])
         legends.append(show_name(method))
 
@@ -61,7 +62,7 @@ def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     for i in range(len(methods)):
         if first_good[i] == 0:
             continue
-        ax.axvline(first_good[i], color=method2color(methods[i]), linestyle=":", linewidth=4)
+        ax.axvline(first_good[i], color=methodcolors[i], linestyle=":", linewidth=4)
     
     return curves, legends
 
@@ -111,8 +112,8 @@ def plot_goodput(lines, threshold, folder, pdf):
     for data, increasing, ax, xlabel, ybottom in zip(datas, increasings, axs, xlabels, ybottoms):
         curves, legends = plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom)
    
-    fig.text(0.09, 0.5, "Workload Satisfaction (%)", va='center', rotation='vertical', fontsize=20)
-    fig.legend(reversed(curves), reversed(legends), loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.1), fontsize=20)
+    fig.text(0.09, 0.5, "SLO Attainment (%)", va='center', rotation='vertical', fontsize=20)
+    fig.legend(curves, legends, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.1), fontsize=20)
 
     if pdf:
         output = os.path.join(folder, "robustness.pdf")
@@ -138,9 +139,7 @@ if __name__ == "__main__":
     
     threshold = 0.99
 
-    # with open(args.input, "rb") as f:
-    #     lines = pickle.load(f)
-    lines = read_equal_model_case_tsv(args.input)
-
+    with open(args.input, "rb") as f:
+         lines = pickle.load(f)
 
     plot_goodput(lines, threshold, args.output_dir, args.pdf)
