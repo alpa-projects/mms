@@ -24,8 +24,8 @@ show_name_dict = {
     "mp-search":      "Beta",
     "mp-search-sep":  "Beta",
 
-    "sr-greedy-batch": "SR (mb=2)",
-    "sr-replace-30-batch": "Clockwork++ (mb=2)",
+    "sr-greedy-batch-2": "SR (mb=2)",
+    "sr-replace-30-batch-2": "Clockwork++ (mb=2)",
     "mp-search-batch-2": "Beta (mb=2)",
     "mp-search-batch-4": "Beta (mb=4)",
     "mp-search-batch-8": "Beta (mb=8)",
