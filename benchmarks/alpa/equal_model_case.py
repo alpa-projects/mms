@@ -163,6 +163,14 @@ def get_equal_model_serving_case(case, prof_database=None):
     rates = [a.rate() for a in arrival_processes]
     cvs = [a.cv() for a in arrival_processes]
 
+    if train_workload is None:
+        ws = []
+        for i in range(num_models):
+            ws.append(arrival_processes[i].generate_workload(
+                model_names[i], 0, duration, slo=slos[i], seed=i))
+        train_workload = Workload.merge(*ws)
+
+
     def register_models(controller):
         is_simulator = isinstance(controller, (Controller, DummyController))
 
@@ -191,7 +199,7 @@ def get_equal_model_serving_case(case, prof_database=None):
 
         if policy_name == "sr-ilp":
             policy = SelectiveReplicationILP(verbose=1)
-        elif policy_name in "sr-greedy":
+        elif "sr-greedy" in policy_name:
             policy = SelectiveReplicationGreedy(verbose=1)
         elif "sr-replace" in policy_name:
             interval = int(policy_name.split("-")[2])
@@ -201,7 +209,7 @@ def get_equal_model_serving_case(case, prof_database=None):
             policy = SelectiveReplicationSearch(verbose=1)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
-        elif policy_name in ["mp-search", "mp-search-evo"]:
+        elif "mp-search" in policy_name:
             use_evo_search = "evo" in policy_name
             policy = ModelParallelismSearch(
                 use_evo_search=use_evo_search, verbose=2)
@@ -229,18 +237,19 @@ _DATA_HEADS = ("exp_name",
                "num_devices", "mem_budget", "model_type", "num_models",
                "total_rate", "rate_distribution",
                "arrival_process", "arrival_process_kwargs",
-               "slo_scale", "duration", "policy_name", "train_start", "train_end", "test_start", "test_end",
+               "slo_scale", "duration", "policy_name", 
                "placement", "goodput", "mode")
 
 
 def run_one_equal_model_case(case, mode,
                              output_file=None, prof_database=None,
                              relax_slo=False, protocol="http",
-                             debug=False):
+                             debug=False,
+                             enable_batching=False):
     serving_case = get_equal_model_serving_case(case, prof_database)
 
     if mode == "simulate":
-        stats, placement = approximate_one_case(serving_case, debug=debug)
+        stats, placement = approximate_one_case(serving_case, debug=debug, enable_batching=enable_batching)
     else:
         stats, placement = run_one_case(serving_case, relax_slo=relax_slo,
                                         protocol=protocol, debug=debug)
@@ -259,7 +268,7 @@ def run_one_equal_model_case(case, mode,
 
 def run_equal_model_cases(cases, output_file=None,
                           mode="simulate", relax_slo=False, protocol="http",
-                          debug_tstamp=False, parallel=False):
+                          debug_tstamp=False, parallel=False, enable_batching=False):
     if parallel and not ray.is_initialized():
         ray.init(address="auto", namespace="alpa_serve",
                  runtime_env={"working_dir": os.getcwd(),
@@ -274,7 +283,7 @@ def run_equal_model_cases(cases, output_file=None,
     for case in cases:
         results.append(run_one_case_(case, mode,
             output_file=output_file, relax_slo=relax_slo,
-            protocol=protocol, debug=debug_tstamp))
+            protocol=protocol, debug=debug_tstamp, enable_batching=enable_batching))
 
     if parallel:
         results = ray.get(results)
@@ -294,7 +303,7 @@ def read_equal_model_case_tsv(filename):
          num_devices, mem_budget, model_type, num_models,
          total_rate, rate_distribution,
          arrival_process, arrival_process_kwargs,
-         slo_scale, duration, policy_name, train_start, train_end, test_start, test_end,
+         slo_scale, duration, policy_name, 
          placement, goodput, mode) = line.split("\t")
 
         num_devices = int(num_devices)

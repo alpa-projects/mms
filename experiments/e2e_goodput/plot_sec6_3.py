@@ -13,7 +13,7 @@ from benchmarks.alpa.general_model_case import read_general_model_case_tsv
 from benchmarks.alpa.plot_various_metrics import show_name, method2color, method2order
 
 linestyles = ["solid", "dashed", "dashdot", "dotted", (0, (3,5,1,5,1,5))]
-methodcolors = ["C2", "C1", "C2", "C3", "C0"]
+methodcolors = ["C2", "C1", "C0", "C3", "C4"]
 
 def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     methods = list(data.keys())
@@ -93,7 +93,7 @@ def plot_goodput(lines, threshold, folder, pdf):
     for data, increasing, ax, xlabel, ybottom in zip(datas, increasings, axs, xlabels, ybottoms):
         curves, legends = plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom)
    
-    fig.text(0.07, 0.5, "Workload Satisfaction (%)", va='center', rotation='vertical', fontsize=20)
+    fig.text(0.07, 0.5, "SLO Attainment (%)", va='center', rotation='vertical', fontsize=20)
     fig.legend(curves, legends, loc="upper center", ncol=6, bbox_to_anchor=(0.5, 1.1), fontsize=20)
 
     if pdf:
