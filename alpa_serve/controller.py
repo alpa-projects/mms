@@ -23,7 +23,7 @@ from alpa_serve.http_util import (HTTPRequestWrapper, receive_http_body,
                                   Response, set_socket_reuse_port, ASGIHandler,
                                   build_starlette_request, new_port,
                                   RelayException, make_error_response)
-from alpa_serve.util import build_logger, add_sync_method
+from alpa_serve.util import build_logger, add_sync_method, to_str_round
 
 logger = logging.getLogger(__file__)
 
@@ -65,6 +65,17 @@ class GroupInfo:
     num_total_requests: int
 
 
+class DummyRequest:
+    """A dummy class to mimic the behavior of starlette.requests.Request."""
+
+    def __init__(self, obj):
+        self.obj = obj
+        self.scope = {"ts": []}
+
+    async def json(self):
+        return self.obj
+
+
 @ray.remote(num_cpus=1)
 class GroupManager:
 
@@ -85,11 +96,10 @@ class GroupManager:
         self.latency_dict = defaultdict(dict)
 
         # Latency prediction
-        self.request_clocks = [[0] * np.prod(virtual_mesh_shape)]
-        self.request_starts = [0]
-        self.request_stage_latency = [None]
-        self.latency_scale = 1.0
-        self.target_ratio = 0.98
+        self.stage_clock = [0] * np.prod(virtual_mesh_shape)
+        self.latency_scale = {}
+        self.max_latency_scale = 1.08
+        self.freeze_end = 0
 
         self.logger = build_logger()
 
@@ -114,45 +124,42 @@ class GroupManager:
         assert name in self.replicas
         del self.replicas[name]
 
-    async def handle_request(self, name: str, request_wrapper: bytes):
+    async def handle_request(self, name: str, request_wrapper: Union[bytes, dict]):
+        enter_time = time.time()
+
         if isinstance(request_wrapper, bytes):
-            # The normal path
-            enter_time = time.time()
             request_wrapper = pickle.loads(request_wrapper)
             request = build_starlette_request(request_wrapper)
-            request.scope["ts"].append(("b", enter_time))
-
-            obj = await request.json()
-
-            if "slo" in obj:
-                # SLO awareness
-                stage_latency = self.latency_dict[name][1]
-
-                # Simulate clock
-                start_time = t = time.time()
-                req_stage_clock = []
-                for i in range(len(stage_latency)):
-                    t = max(self.request_clocks[-1][i], t) + stage_latency[i] * self.latency_scale
-                    req_stage_clock.append(t)
-                ret_time = req_stage_clock[-1]
-
-                # Drop this request if it will exceed deadline
-                if ret_time + self.fixed_overhead > obj["submit_time"] + obj["slo"]:
-                    return {
-                        "rejected": True,
-                        "ts": request.scope["ts"],
-                    }
-
-                # Accept this request
-                clock_idx = len(self.request_clocks)
-                self.request_clocks.append(req_stage_clock)
-                self.request_starts.append(start_time)
-                self.request_stage_latency.append(stage_latency)
-            else:
-                ret_time = None
+        elif isinstance(request_wrapper, dict):
+            request = DummyRequest(request_wrapper)
         else:
-            # A debug path for the API compatbility with simulator
-            request = request_wrapper
+            raise ValueError(f"Invalid request type: {request_wrapper}")
+
+        request.scope["ts"].append(("b", enter_time))
+        obj = await request.json()
+
+        if "slo" in obj:
+            slo = obj["slo"]
+            k = self.latency_scale[name]
+            # SLO awareness
+            stage_latency = self.latency_dict[name][1]
+
+            # Simulate clock
+            req_stage_clock = []
+            start_time = t = time.time()
+            for i in range(len(stage_latency)):
+                t = max(self.stage_clock[i], t) + stage_latency[i] * k
+                req_stage_clock.append(t)
+            ret_time = req_stage_clock[-1]
+
+            # Drop this request if it will exceed deadline
+            if ret_time + self.fixed_overhead + 0.001 > obj["submit_time"] + slo:
+                return {"rejected": True, "ts": request.scope["ts"]}
+
+            # Accept this request
+            for i in range(len(stage_latency)):
+                self.stage_clock[i] = req_stage_clock[i]
+        else:
             ret_time = None
 
         try:
@@ -160,33 +167,68 @@ class GroupManager:
         except Exception as e:  # pylint: disable=broad-except
             ret = RelayException(e)
 
-        if ret_time is not None:
-            # Adjust the clock estimation
-            actual_runtime = time.time() - start_time
-            predicted_runtime = ret_time - start_time
-            ratio = actual_runtime / predicted_runtime
+        if ret_time:
+            if time.time() + self.fixed_overhead > obj["submit_time"] + slo:
+                underestimated = True
+            else:
+                underestimated = False
 
-            if ratio > 3 or ratio < 0.3:
-                self.logger.warning("The error of latency estimation is too high.")
+            if start_time > self.freeze_end and underestimated:
+                actual_runtime = time.time() - start_time
+                predicted_runtime = ret_time - start_time
+                ratio = actual_runtime / predicted_runtime
 
-            lr = 0.2 if ratio > self.target_ratio else 0.1
-            self.latency_scale += lr * (ratio - self.target_ratio)
-
-            # Recompute all clock estimations
-            delta = time.time() - self.request_clocks[clock_idx][i]
-            for i in range(len(stage_latency)):
-                self.request_clocks[clock_idx][i] += delta
-            clock_idx += 1
-            while clock_idx < len(self.request_clocks):
-                t = self.request_starts[clock_idx]
-                stage_latency = self.request_stage_latency[clock_idx]
+                # Adjust the clock to block all requests temporarily
+                num_stages = len(stage_latency)
+                queue_size = (self.stage_clock[0] - start_time) / (
+                    predicted_runtime / num_stages)
+                adjust_clock = actual_runtime / num_stages * queue_size / 2
                 for i in range(len(stage_latency)):
-                    t = (max(self.request_clocks[clock_idx-1][i], t) +
-                         stage_latency[i] * self.latency_scale)
-                    self.request_clocks[clock_idx][i] = t
-                clock_idx += 1
+                    self.stage_clock[i] += adjust_clock
+                print(f"adjust clock: {adjust_clock:.2f}, queue size: {queue_size:.2f}, ratio: {ratio:.2f}")
+
+                # Adjust the scale
+                if ratio > 1.2:
+                    for key in self.latency_scale:
+                        self.latency_scale[key] = min(
+                            self.max_latency_scale,
+                            self.latency_scale[key] + 0.03)
+                    print(f"adjust latency scale: {to_str_round(self.latency_scale, 2)}")
+                self.freeze_end = self.stage_clock[-1]
 
         return ret
+
+    async def warmup(self):
+        n_iter = 12
+        n_warmup = 6
+        max_retry = 5
+
+        for name in self.replicas:
+            estimated = np.sum(self.latency_dict[name][1])
+
+            retry = 0
+            self.latency_scale[name] = math.inf
+
+            while self.latency_scale[name] > self.max_latency_scale and retry < max_retry:
+                actual = []
+                for i in range(n_iter):
+                    start = time.time()
+                    request = DummyRequest({"input": "Test."})
+                    res = await self.replicas[name].handle_request(request)
+                    e2e_latency = time.time() - start
+                    actual.append(e2e_latency)
+
+                    #tstamps = {x: (y - start) * 1e3 for x, y in res["ts"]}
+                    #print(f"idx: {i}, ts: {to_str_round(tstamps,2)}, "
+                    #      f"actual: {e2e_latency*1e3:.2f} ms, "
+                    #      f"estimated: {estimated*1e3:.2f} ms")
+
+                self.latency_scale[name] = np.median(actual[n_warmup:]) / estimated
+                retry += 1
+
+        for name in self.latency_scale:
+            self.latency_scale[name] = np.median(list(self.latency_scale.values()))
+        print(f"latency scale: {to_str_round(self.latency_scale, 2)}")
 
     def shutdown(self):
         from alpa.api import shutdown as alpa_shutdown
@@ -290,24 +332,30 @@ class Controller:
         return min_id
 
     async def handle_request(self, request):
-        name = request.model_name
+        ts = [("a", time.time())]
+        name = request["model"]
 
         assert name in self.model_info, (
             f"Model '{name}' is not registered.")
         model_info = self.model_info[name]
-        assert model_info.group_ids, (
-            f"No replica of model '{name}' is created.")
+        #assert model_info.group_ids, (
+        #    f"No replica of model '{name}' is created.")
 
-        # Dispatch
-        group_id = self.select_group_id(model_info.group_ids)
-        manager = self.group_info[group_id].manager
+        if not model_info.group_ids:
+            return {"rejected": True}
+        else:
+            # Dispatch
+            group_id = self.select_group_id(model_info.group_ids)
+            manager = self.group_info[group_id].manager
 
-        self.group_info[group_id].queue_size += 1
-        response = await manager.handle_request.remote(name, request)
-        self.group_info[group_id].queue_size -= 1
-        self.group_info[group_id].num_total_requests += 1
+            self.group_info[group_id].queue_size += 1
+            response = await manager.handle_request.remote(name, request)
+            self.group_info[group_id].queue_size -= 1
+            self.group_info[group_id].num_total_requests += 1
 
-        return response
+            response["ts"] = ts + response["ts"]
+
+            return response
 
     async def handle_asgi(self, scope, receive, send):
         scope["ts"] = [("a", time.time())]
@@ -334,24 +382,28 @@ class Controller:
             assert name in self.model_info, (
                 f"Model '{name}' is not registered.")
             model_info = self.model_info[name]
-            assert model_info.group_ids, (
-                f"No replica of model '{name}' is created.")
+            #assert model_info.group_ids, (
+            #    f"No replica of model '{name}' is created.")
 
-            # Dispatch
-            group_id = self.select_group_id(model_info.group_ids)
-            manager = self.group_info[group_id].manager
-
-            self.group_info[group_id].queue_size += 1
-            response = await manager.handle_request.remote(
-                name, request_wrapper_bytes)
-            self.group_info[group_id].queue_size -= 1
-            self.group_info[group_id].num_total_requests += 1
-
-            if isinstance(response, RelayException):
-                response = make_error_response(response)
-                status_code = 400
-            else:
+            if not model_info.group_ids:
                 status_code = 200
+                response = {"rejected": True}
+            else:
+                # Dispatch
+                group_id = self.select_group_id(model_info.group_ids)
+                manager = self.group_info[group_id].manager
+
+                self.group_info[group_id].queue_size += 1
+                response = await manager.handle_request.remote(
+                    name, request_wrapper_bytes)
+                self.group_info[group_id].queue_size -= 1
+                self.group_info[group_id].num_total_requests += 1
+
+                if isinstance(response, RelayException):
+                    response = make_error_response(response)
+                    status_code = 400
+                else:
+                    status_code = 200
         except Exception as e:  # pylint: disable=broad-except
             response = make_error_response(e)
             status_code = 400
@@ -365,6 +417,21 @@ class Controller:
             "port": self.port,
             "root_path": self.root_path,
         }
+
+    async def warmup(self):
+        # Warm up each single model replica in each group
+        tasks = []
+        for g in self.group_info.values():
+            tasks.append(g.manager.warmup.remote())
+        ray.get(tasks)
+
+        # Warm up the whole path from the controller to groups
+        for name, info in self.model_info.items():
+            request = {"model": name, "input": "Test"}
+            objs = []
+            for i in range(len(info.group_ids)):
+                objs.append(self.handle_request(request))
+            await asyncio.gather(*objs)
 
     ##### HTTP related functions #####
     async def ready(self):
@@ -461,5 +528,6 @@ def run_controller(host,
         )
     ray.get(controller.ready.remote())
 
-    add_sync_method(controller, ["create_replica", "create_mesh_group_manager"])
+    add_sync_method(controller,
+                    ["create_replica", "create_mesh_group_manager", "warmup"])
     return controller

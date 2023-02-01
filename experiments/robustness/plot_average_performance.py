@@ -1,4 +1,8 @@
 import argparse
+import glob
+import math
+import pickle
+
 import warnings
 
 import os
@@ -32,7 +36,7 @@ def plot_goodput_vs_num_devices(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_num_devices.png")
 
     plot_goodput_common(data, threshold, True, "#devices",
-                        "Workload satisfaction vs. #devices", output, args.show)
+                        "Goodput vs. #devices", output, args.show)
 
 
 def plot_goodput_vs_num_models(lines, threshold, show, folder, pdf):
@@ -53,7 +57,7 @@ def plot_goodput_vs_num_models(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_num_models.png")
 
     plot_goodput_common(data, threshold, False, "#models",
-                        "Workload satisfaction vs. #models", output, args.show)
+                        "Goodput vs. #models", output, args.show)
 
 
 def plot_goodput_vs_slo(lines, threshold, show, folder, pdf):
@@ -74,7 +78,7 @@ def plot_goodput_vs_slo(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_slo.png")
 
     plot_goodput_common(data, threshold, True, "SLO Scale",
-                        "Workload satisfaction vs. SLO Scale", output, args.show)
+                        "Goodput vs. SLO Scale", output, args.show)
 
 
 def plot_goodput_vs_rate(lines, threshold, show, folder, pdf):
@@ -95,7 +99,7 @@ def plot_goodput_vs_rate(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_rate.png")
 
     plot_goodput_common(data, threshold, False, "Rate(r/s)",
-                        "Workload satisfaction vs. Rate", output, args.show)
+                        "Goodput vs. Rate", output, args.show)
 
 
 def plot_goodput_vs_rate_scale(lines, threshold, show, folder, pdf):
@@ -116,7 +120,7 @@ def plot_goodput_vs_rate_scale(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_rate_scale.png")
 
     plot_goodput_common(data, threshold, False, "Rate Scale",
-                        "Workload satisfaction vs. Rate Scale", output, args.show)
+                        "Goodput vs. Rate Scale", output, args.show)
 
 
 def plot_goodput_vs_cv(lines, threshold, show, folder, pdf):
@@ -138,7 +142,7 @@ def plot_goodput_vs_cv(lines, threshold, show, folder, pdf):
 
 
     plot_goodput_common(data, threshold, False, "CV",
-                        "Workload satisfaction vs. CV", output, args.show)
+                        "Goodput vs. CV", output, args.show)
 
 
 
@@ -160,7 +164,7 @@ def plot_goodput_vs_cv_scale(lines, threshold, show, folder, pdf):
         output = os.path.join(folder, "goodput_vs_cv_scale.png")
 
     plot_goodput_common(data, threshold, False, "CV Scale",
-                        "Workload satisfaction vs. CV Scale", output, args.show)
+                        "Goodput vs. CV Scale", output, args.show)
 
 
 def plot_num_devices_vs_num_models(lines, threshold, show, folder, pdf):
@@ -239,32 +243,77 @@ def plot_num_devices_vs_num_models(lines, threshold, show, folder, pdf):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=str, required=True)
+    parser.add_argument("--input-folder", type=str, required=True)
     parser.add_argument("--show", action="store_true")
-    parser.add_argument("--general-case", action="store_true")
-    parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--pdf", action="store_true")
     args = parser.parse_args()
 
-    if len(args.input) > 1:
-        folder = os.path.dirname(args.input)
-    else:
-        folder = ""
-
     threshold = 0.99
+    folder = args.input_folder
+    assert os.path.isdir(args.input_folder)
+    files = glob.glob(args.input_folder + "/*.tsv")
+    print(f"reading files: {files}")
+    results = []
+    for file in files:
+        results.append(read_equal_model_case_tsv(file))
+    avg_results = results[0]
 
-    if args.general_case:
-        lines = read_general_model_case_tsv(args.input)
-    else:
-        lines = read_equal_model_case_tsv(args.input)
 
-    plot_goodput_vs_num_devices(lines, threshold, args.show, folder, args.pdf)
-    plot_goodput_vs_num_models(lines, threshold, args.show, folder, args.pdf)
-    plot_goodput_vs_slo(lines, threshold, args.show, folder, args.pdf)
-    if args.synthetic:
-        plot_goodput_vs_rate(lines, threshold, args.show, folder, args.pdf)
-        plot_goodput_vs_cv(lines, threshold, args.show, folder, args.pdf)
-    else:
-        plot_goodput_vs_rate_scale(lines, threshold, args.show, folder, args.pdf)
-        plot_goodput_vs_cv_scale(lines, threshold, args.show, folder, args.pdf)
-    plot_num_devices_vs_num_models(lines, threshold, args.show, folder, args.pdf)
+    def find_goodputs(results, exp_name, policy_name, value):
+        ret = []
+        for result in results:
+            for line in result:
+                if line["exp_name"] == exp_name and line["policy_name"] == policy_name:
+                    if exp_name == "goodput_vs_num_devices":
+                        if line["num_devices"] == value:
+                            ret.append(line["goodput"])
+                            break
+                    elif exp_name == "goodput_vs_num_models":
+                        if line["num_models"] == value:
+                            ret.append(line["goodput"])
+                            break
+                    elif exp_name == "goodput_vs_slo":
+                        if line["slo_scale"] == value:
+                            ret.append(line["goodput"])
+                            break
+                    elif exp_name == "goodput_vs_rate_scale":
+                        if math.isclose(line["arrival_process_kwargs"]["rate_scale"], value):
+                            ret.append(line["goodput"])
+                            break
+                    elif exp_name == "goodput_vs_cv_scale":
+                        if line["arrival_process_kwargs"]["cv_scale"] == value:
+                            ret.append(line["goodput"])
+                            break
+                    else:
+                        raise RuntimeError(f"Unknown exp_name: {exp_name}")
+        assert len(ret) == 2
+        return ret
+
+    for line in avg_results:
+        exp_name = line["exp_name"]
+        policy_name = line["policy_name"]
+        goodput = line["goodput"]
+        print(f"policy: {policy_name}, goodput 1 {goodput}")
+        if exp_name == "goodput_vs_num_devices":
+            goodputs = find_goodputs(results[1:], exp_name, policy_name, line["num_devices"])
+        elif exp_name == "goodput_vs_num_models":
+            goodputs = find_goodputs(results[1:], exp_name, policy_name, line["num_models"])
+        elif exp_name == "goodput_vs_slo":
+            goodputs = find_goodputs(results[1:], exp_name, policy_name, line["slo_scale"])
+        elif exp_name == "goodput_vs_rate_scale":
+            goodputs = find_goodputs(results[1:], exp_name, policy_name, line["arrival_process_kwargs"]["rate_scale"])
+        elif exp_name == "goodput_vs_cv_scale":
+            goodputs = find_goodputs(results[1:], exp_name, policy_name, line["arrival_process_kwargs"]["cv_scale"])
+        else:
+            raise RuntimeError(f"Got an unknow exp_name: {exp_name}")
+        goodputs.append(goodput)
+        print(f"exp_name {exp_name}, policy {policy_name}, goodput {goodputs}")
+        avg_goodput = sum(goodputs) / len(goodputs)
+        line["goodput"] = avg_goodput
+    with open(args.input_folder + "/final_results.pkl", "wb") as f:
+        pickle.dump(avg_results, f)
+    plot_goodput_vs_num_devices(avg_results, threshold, args.show, folder, args.pdf)
+    plot_goodput_vs_num_models(avg_results, threshold, args.show, folder, args.pdf)
+    plot_goodput_vs_slo(avg_results, threshold, args.show, folder, args.pdf)
+    plot_goodput_vs_rate_scale(avg_results, threshold, args.show, folder, args.pdf)
+    plot_goodput_vs_cv_scale(avg_results, threshold, args.show, folder, args.pdf)

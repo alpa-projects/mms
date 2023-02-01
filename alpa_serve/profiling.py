@@ -26,6 +26,7 @@ class LatencyMemData:
     weight_mem: List
     # Metadata for parallel strategy
     metadata: Any = None
+
     def add_result(self, batch_size: int, latency: List[float], act_mem: List[float], weight_mem: List[float], metadata: Any = None):
         if batch_size not in self.latency:
             self.latency[batch_size] = latency

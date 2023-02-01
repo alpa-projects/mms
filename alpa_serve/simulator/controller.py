@@ -4,10 +4,12 @@ The serving controller.
 This file simulates `alpa_serve/controller.py`.
 """
 import asyncio
-import math
 from collections import defaultdict
 import dataclasses
 from functools import partial
+import heapq
+from itertools import cycle
+import math
 import time
 from typing import Callable, List, Dict, Optional, Tuple
 
@@ -22,7 +24,7 @@ from alpa_serve.simulator.event_loop import (timed_coroutine, clock,
 from alpa_serve.simulator.util import install_remote_methods, async_to_sync
 from alpa_serve.simulator.workload import (Workload, StatsResult,
     PerDeviceStatsResult, PerModelStatsResult, DEFAULT_WARMUP)
-from alpa_serve.util import ServingCase, inf, eps, to_str_round
+from alpa_serve.util import ServingCase, inf, eps, to_str_round, batchsize_config
 
 
 class GroupManager:
@@ -47,8 +49,8 @@ class GroupManager:
 
         # Constants
         self.fixed_overhead = 0.004
-
-        self.alpa_overhead = partial(np.random.normal, loc=0.004, scale=0.001)
+        self.alpa_overhead = cycle(
+            np.abs(np.random.normal(loc=0.005, scale=0.0005, size=(2048,))))
 
         # Simulator specific code
         install_remote_methods(self)
@@ -92,7 +94,8 @@ class GroupManager:
             for i in range(len(stage_latency)):
                 self.stage_clock[i] = req_stage_clock[i]
 
-        ret = await self.replicas[name].handle_request(request, delay=self.alpa_overhead())
+        ret = await self.replicas[name].handle_request(request,
+            delay=next(self.alpa_overhead))
         return ret
 
 
@@ -115,8 +118,8 @@ class Controller:
         self.logger = build_logger("controller")
 
         # Simulator specific code
-        np.random.seed(1)
-        self.dispatch_overhead = partial(np.random.normal, loc=0.002, scale=0.0015)
+        self.dispatch_overhead = cycle(
+            np.abs(np.random.normal(loc=0.0025, scale=0.0005, size=(2048,))))
 
         install_remote_methods(self)
 
@@ -202,7 +205,7 @@ class Controller:
 
         self.group_info[group_id].queue_size += 1
         response = await manager.handle_request.remote(name, request,
-            delay=abs(self.dispatch_overhead()))
+            delay=next(self.dispatch_overhead))
         self.group_info[group_id].queue_size -= 1
         self.group_info[group_id].num_total_requests += 1
 
@@ -218,13 +221,12 @@ class Client:
         self.debug = debug
 
         self.res_dict = dict()
-        self.http_overhead = partial(np.random.normal, loc=0.0023, scale=0.0005)
 
     @timed_coroutine
-    async def submit_one(self, request, idx, start, finish, good):
+    async def submit_one(self, request, idx, start, finish, good, http_overhead):
         start[idx] = clock()
         request.submit_time = start[idx]
-        res = await self.controller.handle_request(request, delay=self.http_overhead())
+        res = await self.controller.handle_request(request, delay=http_overhead)
         finish[idx] = clock()
         e2e_latency = finish[idx] - start[idx]
         good[idx] = e2e_latency <= request.slo and res is not None
@@ -233,17 +235,19 @@ class Client:
             tstamps = to_str_round({x: (y - request.submit_time) * 1e3 for x, y in request.time_stamp.items()}, 2)
             print(f"idx: {idx} ts: {tstamps} e2e latency: {e2e_latency*1e3:.2f} ms", flush=True)
 
-    def submit_workload(self, workload: Workload):
-        start, finish, good = (np.zeros(len(workload)),
-            np.zeros(len(workload)), np.zeros((len(workload),), dtype=np.bool))
+    async def submit_workload(self, workload: Workload):
+        num_requests = len(workload)
+        start, finish, good = (np.zeros(num_requests),
+            np.zeros(num_requests), np.zeros(num_requests, dtype=np.bool))
         self.res_dict[workload] = (start, finish, good)
 
+        http_overheads = np.abs(np.random.normal(
+            loc=0.0025, scale=0.0005, size=(num_requests,)))
         for i in range(len(workload)):
             self.submit_one(workload.requests[i], i, start, finish, good,
-                            tstamp=workload.arrivals[i])
+                            http_overheads[i], tstamp=workload.arrivals[i])
 
-    def wait_all(self):
-        return main_loop()
+        await main_loop()
 
     def compute_stats(self, workload: Workload, warmup: float):
         start, finish, good = self.res_dict[workload]
@@ -251,10 +255,7 @@ class Client:
 
 
 async def run_workload(client, workload, warmup):
-    client.submit_workload(workload)
-
-    await client.wait_all()
-
+    await client.submit_workload(workload)
     return client.compute_stats(workload, warmup=warmup)
 
 
@@ -308,8 +309,12 @@ def approximate_one_case(case: ServingCase,
                          seed: int = 0,
                          warmup: int = DEFAULT_WARMUP,
                          debug: bool = False,
-                         fast_stats: bool = False):
+                         fast_stats: bool = False,
+                         enable_batching: bool = False):
     """A fast simulator that only simulates one stage for a pipeline."""
+    from alpa_serve.placement_policy.base_policy import (
+        ModelPlacement, ModelPlacementWithReplacement)
+
     tic = time.time()
     register_models, generate_workload, place_models = case
 
@@ -333,41 +338,57 @@ def approximate_one_case(case: ServingCase,
         if workload.enable_simulator_cache:
             workload.cached_data = (model_ids, slos, model_names, prof_ress)
 
-    # Load constants
-    group_configs, group_models = placement.group_configs, placement.group_models
+    if isinstance(placement, ModelPlacement):
+        (start, finish, good, model_num_requests, model_num_good_requests,
+         group_num_requests, group_num_good_requests) = approximate_one_case_one_placement(
+             placement, model_names, prof_ress, model_ids, slos, workload.arrivals, enable_batching=enable_batching)
+    elif isinstance(placement, ModelPlacementWithReplacement):
+        arrivals = workload.arrivals
+        change_times = placement.start_times[1:] + [inf]
 
-    num_groups = len(group_configs)
-    num_models = len(model_names)
-    num_requests = len(workload)
-    num_replicas = [0] * num_models
-    m_id2g_id = np.full((num_models, num_groups), -1, dtype=np.int32)
-    for g_id, m_ids in enumerate(group_models):
-        for m_id in m_ids:
-            m_id2g_id[m_id][num_replicas[m_id]] = g_id
-            num_replicas[m_id] += 1
+        start_list, finish_list, good_list = [], [], []
+        model_num_requests_list, model_num_good_requests_list = [], []
+        group_num_requests_list, group_num_good_requests_list = [], []
 
-    max_bs = 1
-    group_max_latency = np.empty((num_models, num_groups), dtype=np.float32)
-    group_sum_latency = np.empty((num_models, num_groups), dtype=np.float32)
-    for m_id in range(num_models):
-        for g_id in range(num_groups):
-            value = prof_ress[m_id].para_dict.get(group_configs[g_id], None)
-            if value:
-                group_max_latency[m_id][g_id] = max(value.latency[max_bs])
-                group_sum_latency[m_id][g_id] = sum(value.latency[max_bs])
-            else:
-                group_max_latency[m_id][g_id] = group_sum_latency[m_id][g_id] = inf
+        start_i = 0
+        pt = 0
 
-    # Simulate
-    start = workload.arrivals
-    finish = np.empty(num_requests, dtype=np.float32)
-    good = np.empty(num_requests, dtype=bool)
-    tstamps = workload.arrivals
+        for i in range(len(arrivals)):
+            if arrivals[i] > change_times[pt]:
+                (start, finish, good, model_num_requests, model_num_good_requests,
+                 group_num_requests, group_num_good_requests) = approximate_one_case_one_placement(
+                     placement.placements[pt], model_names, prof_ress,
+                     model_ids[start_i:i], slos[start_i:i], arrivals[start_i:i], enable_batching=enable_batching)
+                start_list.append(start)
+                finish_list.append(finish)
+                good_list.append(good)
+                group_num_requests_list.append(group_num_requests)
+                group_num_good_requests_list.append(group_num_good_requests)
+                model_num_requests_list.append(model_num_requests)
+                model_num_good_requests_list.append(model_num_good_requests)
 
-    (model_num_requests, model_num_good_requests,
-     group_num_requests, group_num_good_requests) = simulate_requests(
-        finish, good, tstamps, model_ids, slos, m_id2g_id,
-        group_max_latency, group_sum_latency, num_requests)
+                start_i = i
+                pt += 1
+
+        (start, finish, good, model_num_requests, model_num_good_requests,
+         group_num_requests, group_num_good_requests) = approximate_one_case_one_placement(
+             placement.placements[pt], model_names, prof_ress,
+             model_ids[start_i:], slos[start_i:], arrivals[start_i:], enable_batching=enable_batching)
+        start_list.append(start)
+        finish_list.append(finish)
+        good_list.append(good)
+        group_num_requests_list.append(group_num_requests)
+        group_num_good_requests_list.append(group_num_good_requests)
+        model_num_requests_list.append(model_num_requests)
+        model_num_good_requests_list.append(model_num_good_requests)
+
+        start = np.concatenate(start_list)
+        finish = np.concatenate(finish_list)
+        good = np.concatenate(good_list)
+        group_num_requests = np.sum(group_num_requests_list, axis=0)
+        group_num_good_requests = np.sum(group_num_good_requests_list, axis=0)
+        model_num_requests = np.sum(model_num_requests_list, axis=0)
+        model_num_good_requests = np.sum(model_num_good_requests_list, axis=0)
 
     if fast_stats:
         # Note: no warmup
@@ -376,13 +397,110 @@ def approximate_one_case(case: ServingCase,
             model_names[i], model_num_requests[i],
             model_num_good_requests[i] / (model_num_requests[i] + eps),
             model_num_requests[i] / interval,
-            0, 0, 0, 0, [], [], []) for i in range(num_models)]
-        stats = StatsResult(per_model_stats, group_num_requests, np.mean(good),
-                            np.mean(finish - start), len(start), len(start) / interval)
+            0, 0, 0, 0, [], [], []) for i in range(len(model_names))]
+        stats = StatsResult(per_model_stats, tuple(group_num_requests),
+                            np.mean(good), np.mean(finish - start),
+                            len(start), len(start) / interval)
     else:
         stats = workload.compute_stats(start, finish, good, warmup)
-        stats.group_num_requests = group_num_requests
+        stats.group_num_requests = tuple(group_num_requests)
     return stats, placement
+
+
+def approximate_one_case_one_placement(placement, model_names, prof_ress, model_ids, slos, arrivals, mixed = True, enable_batching = False):
+    # Load constants
+    group_configs, group_models = placement.group_configs, placement.group_models
+
+    num_groups = len(group_configs)
+    num_models = len(model_names)
+    num_requests = len(arrivals)
+    num_replicas = [0] * num_models
+    m_id2g_id = np.full((num_models, num_groups), -1, dtype=np.int32)
+    for g_id, m_ids in enumerate(group_models):
+        for m_id in m_ids:
+            m_id2g_id[m_id][num_replicas[m_id]] = g_id
+            num_replicas[m_id] += 1
+
+    num_instances = [0] * num_groups
+    g_id2m_id = np.full((num_groups, num_models), -1, dtype=np.int32)
+    for m_id, g_ids in enumerate(m_id2g_id):
+        for g_id in g_ids:
+            if g_id >= 0:
+                g_id2m_id[g_id][num_instances[g_id]] = m_id
+                num_instances[g_id] += 1
+
+    max_bs = 1
+    group_max_latency = np.empty((num_models, num_groups), dtype=np.float32)
+    group_sum_latency = np.empty((num_models, num_groups), dtype=np.float32)
+    for m_id in range(num_models):
+        for g_id in range(num_groups):
+            value = prof_ress[m_id].para_dict.get(group_configs[g_id], None)
+            if value:
+                penalty = 0.009 * len(value.latency[max_bs])
+                group_max_latency[m_id][g_id] = max(value.latency[max_bs]) * (1 + penalty)
+                group_sum_latency[m_id][g_id] = sum(value.latency[max_bs]) * (1 + penalty)
+            else:
+                group_max_latency[m_id][g_id] = group_sum_latency[m_id][g_id] = inf
+
+    if mixed:
+        if enable_batching:
+            # num_stages: (num_groups,)
+            num_stages = np.array([c.pp for c in group_configs], dtype=np.int32)
+            max_num_stages = np.max(num_stages)
+            # stage_latency: (num_models, num_groups, max_num_stages)
+            stage_latency = np.empty((num_models, num_groups, max_num_stages, len(batchsize_config)), dtype=np.float32)
+            for m_id in range(num_models):
+                for g_id in range(num_groups):
+                    value = prof_ress[m_id].para_dict.get(group_configs[g_id], None)
+                    if value:
+                        penalty = 0.009 * len(value.latency[max_bs])
+                        for k in range(num_stages[g_id]):
+                            for i, bs in enumerate(batchsize_config):
+                                stage_latency[m_id][g_id][k][i] = value.latency[bs][k] * (1 + penalty)
+                    else:
+                        stage_latency[m_id][g_id][:] = inf
+        else:
+            # num_stages: (num_groups,)
+            num_stages = np.array([c.pp for c in group_configs], dtype=np.int32)
+            max_num_stages = np.max(num_stages)
+            # stage_latency: (num_models, num_groups, max_num_stages)
+            stage_latency = np.empty((num_models, num_groups, max_num_stages), dtype=np.float32)
+            for m_id in range(num_models):
+                for g_id in range(num_groups):
+                    value = prof_ress[m_id].para_dict.get(group_configs[g_id], None)
+                    if value:
+                        penalty = 0.009 * len(value.latency[max_bs])
+                        for k in range(num_stages[g_id]):
+                            stage_latency[m_id][g_id][k] = value.latency[max_bs][k] * (1 + penalty)
+                    else:
+                        stage_latency[m_id][g_id][:] = inf
+
+    # Simulate
+    start = arrivals
+    finish = np.empty(num_requests, dtype=np.float64)
+    good = np.empty(num_requests, dtype=bool)
+    tstamps = arrivals
+
+    if mixed:
+        if enable_batching:
+            (model_num_requests, model_num_good_requests,
+            group_num_requests, group_num_good_requests) = simulate_requests_mixed_batching(
+                finish, good, tstamps, model_ids, slos, m_id2g_id, g_id2m_id,
+                num_stages, stage_latency, num_requests)
+        else:
+            (model_num_requests, model_num_good_requests,
+            group_num_requests, group_num_good_requests) = simulate_requests_mixed(
+                finish, good, tstamps, model_ids, slos, m_id2g_id,
+                num_stages, stage_latency, num_requests)
+    else:
+        (model_num_requests, model_num_good_requests,
+         group_num_requests, group_num_good_requests) = simulate_requests(
+            finish, good, tstamps, model_ids, slos, m_id2g_id,
+            group_max_latency, group_sum_latency, num_requests)
+
+    return (start, finish, good,
+            model_num_requests, model_num_good_requests,
+            group_num_requests, group_num_good_requests)
 
 
 @numba.jit(nopython=True)
@@ -391,12 +509,12 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
     num_models = len(group_max_latency)
     num_groups = len(group_max_latency[0])
 
-    group_clocks = np.zeros(num_groups, dtype=np.float32)
+    group_clocks = np.zeros(num_groups, dtype=np.float64)
     group_num_requests = np.zeros(num_groups, dtype=np.int32)
     group_num_good_requests = np.zeros(num_groups, dtype=np.int32)
     model_num_requests = np.zeros(num_models, dtype=np.int32)
     model_num_good_requests = np.zeros(num_models, dtype=np.int32)
-    fixed_overhead = 0.009
+    fixed_overhead = 0.011
 
     for i in range(num_requests):
         tstamp, m_id, slo = tstamps[i], model_ids[i], slos[i]
@@ -405,6 +523,7 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
             finish[i] = tstamp
             good[i] = False
             continue
+        model_num_requests[m_id] += 1
 
         # Select group id
         g_id = -1
@@ -424,7 +543,6 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
         start_time = max(group_clocks[g_id], tstamp)
         finish_time = start_time + group_sum_latency[m_id][g_id] + fixed_overhead
         group_num_requests[g_id] += 1
-        model_num_requests[m_id] += 1
 
         if finish_time - tstamp <= slo:
             finish[i] = finish_time
@@ -436,5 +554,245 @@ def simulate_requests(finish, good, tstamps, model_ids, slos, m_id2g_id,
             finish[i] = tstamp
             good[i] = False
 
+    return (model_num_requests, model_num_good_requests,
+            group_num_requests, group_num_good_requests)
+
+
+@numba.jit(nopython=True)
+def simulate_requests_mixed(finish, good, tstamps, model_ids, slos, m_id2g_id,
+                            num_stages, stage_latency, num_requests):
+    # num_stages: num_groups
+    # stage_latency: num_models * num_groups * max_num_stages
+    num_models = len(stage_latency)
+    num_groups = len(stage_latency[0])
+    max_num_stages = len(stage_latency[0][0])
+
+    device_clocks = np.zeros((num_groups, max_num_stages), dtype=np.float64)
+    group_num_requests = np.zeros(num_groups, dtype=np.int32)
+    group_num_good_requests = np.zeros(num_groups, dtype=np.int32)
+    model_num_requests = np.zeros(num_models, dtype=np.int32)
+    model_num_good_requests = np.zeros(num_models, dtype=np.int32)
+    fixed_overhead = 0.011
+
+    tmp_time = np.zeros(max_num_stages, dtype=np.float64)
+
+    for i in range(num_requests):
+        tstamp, m_id, slo = tstamps[i], model_ids[i], slos[i]
+
+        if m_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
+
+        model_num_requests[m_id] += 1
+
+        # Select group id
+        g_id = -1
+        min_device_clock = inf
+        for j in m_id2g_id[m_id]:
+            if j < 0:
+                break
+            tmp = device_clocks[j][num_stages[j] - 1]
+            if tmp < min_device_clock:
+                min_device_clock = tmp
+                g_id = j
+
+        if g_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
+
+        t = tstamp
+        for k in range(num_stages[g_id]):
+            t = max(t, device_clocks[g_id][k]) + stage_latency[m_id][g_id][k]
+            tmp_time[k] = t
+
+        finish_time = t + fixed_overhead
+        group_num_requests[g_id] += 1
+
+        if finish_time - tstamp <= slo:
+            finish[i] = finish_time
+            good[i] = True
+            for k in range(num_stages[g_id]):
+                device_clocks[g_id][k] = tmp_time[k]
+            group_num_good_requests[g_id] += 1
+            model_num_good_requests[m_id] += 1
+        else:
+            finish[i] = tstamp
+            good[i] = False
+
+    # print("model_num_requests", model_num_requests)
+    # print("group_num_requests", group_num_requests)
+    # assert np.sum(model_num_requests) == np.sum(group_num_requests)
+    return (model_num_requests, model_num_good_requests,
+            group_num_requests, group_num_good_requests)
+
+# @numba.jit(nopython=True)
+def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_id2g_id, g_id2m_id,
+                                     num_stages, stage_latency, num_requests):
+    # num_stages: num_groups
+    # stage_latency: num_models * num_groups * max_num_stages * #batchsize_config
+    num_models = len(stage_latency)
+    num_groups = len(stage_latency[0])
+    max_num_stages = len(stage_latency[0][0])
+
+    # statistics
+    group_num_requests = np.zeros(num_groups, dtype=np.int32)
+    group_num_good_requests = np.zeros(num_groups, dtype=np.int32)
+    model_num_requests = np.zeros(num_models, dtype=np.int32)
+    model_num_good_requests = np.zeros(num_models, dtype=np.int32)
+    fixed_overhead = 0.011
+
+    # simulator states
+    device_clocks = np.zeros((num_groups, max_num_stages), dtype=np.float64)
+    req_queues = [[] for _ in range(num_models)]
+    group_idle_tstamp = np.zeros(num_groups, dtype=np.float64) # the time when the first stage in the group is idle
+    unhandled_group_idle_tstamp = [] # (idle_tstamp, group_id)
+
+    tmp_time = np.zeros(max_num_stages, dtype=np.float64)
+
+    def select_model(group_id):
+        # select the model with the earliest request in the queue
+        min_arrival = inf
+        select_model_id = -1
+        for tmp_id in g_id2m_id[group_id]:
+            if tmp_id < 0:
+                break
+            if len(req_queues[tmp_id]) and tstamps[req_queues[tmp_id][0]] < min_arrival:
+                min_arrival = tstamps[req_queues[tmp_id][0]]
+                select_model_id = tmp_id
+        return select_model_id
+
+    def check_slo(tstamp, group_id, group_stage_latency, deadline):
+        t = tstamp
+        for k in range(num_stages[group_id]):
+            t = max(device_clocks[group_id][k], t) + group_stage_latency[k]
+        finish_time = t + fixed_overhead
+        # print(finish_time, deadline)
+        return finish_time <= deadline
+
+    def get_max_batch_under_slo(tstamp, model_id, group_id):
+        req_queue = req_queues[model_id]
+        find_valid_req = False
+        while len(req_queue):
+            req_id = req_queue.pop(0)
+            if check_slo(tstamp, group_id, stage_latency[model_id][group_id][:,0], tstamps[req_id] + slos[req_id]):
+                find_valid_req = True
+                break
+            else:
+                # drop requests which will exceed deadline even run alone immediately
+                group_num_requests[group_id] += 1
+                finish[req_id] = tstamps[req_id]
+                good[req_id] = False
+
+        # all the requests in queue are rejected
+        if not find_valid_req:
+            return []
+
+        # batch as much as we can
+        choosed_bs = 1
+        for bs in batchsize_config[1:]:
+            # remaining requests is not enough (no padding)
+            if bs - 1 > len(req_queue):
+                break
+            # check if violate slo
+            if check_slo(tstamp, group_id, stage_latency[model_id][group_id][:,int(np.log2(bs))], tstamps[req_id] + slos[req_id]):
+                choosed_bs = bs
+            else:
+                break
+
+        return [req_id] + [req_queue.pop(0) for _ in range(choosed_bs - 1)]
+
+    def handle_batched_requests(tstamp, model_id, group_id):
+        batch_rq = get_max_batch_under_slo(tstamp, model_id, group_id)
+        bs = len(batch_rq)
+        if bs == 0:
+            # all requests in queue violate SLO, select another model
+            select_model_id = select_model(group_id)
+            if select_model_id != -1:
+                handle_batched_requests(tstamp, select_model_id, group_id)
+        else:
+            t = tstamp + fixed_overhead
+            for k in range(num_stages[group_id]):
+                t = max(t, device_clocks[group_id][k]) + stage_latency[model_id][group_id][k][int(np.log2(bs))]
+                tmp_time[k] = t
+            finish_time = t
+
+            for rq_id in batch_rq:
+                finish[rq_id] = finish_time
+                good[rq_id] = True
+                for k in range(num_stages[group_id]):
+                    device_clocks[group_id][k] = tmp_time[k]
+
+            group_idle_tstamp[group_id] = tmp_time[0]
+            heapq.heappush(unhandled_group_idle_tstamp, (tmp_time[0], group_id))
+
+            group_num_requests[group_id] += bs
+            group_num_good_requests[group_id] += bs
+            model_num_good_requests[model_id] += bs
+
+
+
+    for i in range(num_requests):
+        tstamp = tstamps[i]
+
+        while len(unhandled_group_idle_tstamp) and unhandled_group_idle_tstamp[0][0] <= tstamp:
+            idle_tstamp, g_id = heapq.heappop(unhandled_group_idle_tstamp)
+            select_model_id = select_model(g_id)
+            if select_model_id == -1:
+                break
+            handle_batched_requests(idle_tstamp, select_model_id, g_id)
+
+        m_id = model_ids[i]
+
+        if m_id < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
+
+        # no group is available
+        if m_id2g_id[m_id][0] < 0:
+            finish[i] = tstamp
+            good[i] = False
+            continue
+
+        # select group with minimum stage clock
+        g_id = -1
+        min_device_clock = inf
+        for j in m_id2g_id[m_id]:
+            if j < 0:
+                break
+            # idle group
+            # if tstamp >= group_idle_tstamp[j]:
+            tmp = device_clocks[j][num_stages[j] - 1]
+            if tmp < min_device_clock:
+                min_device_clock = tmp
+                g_id = j
+
+        req_queues[m_id].append(i)
+        model_num_requests[m_id] += 1
+
+
+        if tstamp >= group_idle_tstamp[g_id]:
+            # group is idle
+            handle_batched_requests(tstamp, m_id, g_id)
+
+    # handle remaining requests
+    while len(unhandled_group_idle_tstamp):
+        idle_tstamp, g_id = heapq.heappop(unhandled_group_idle_tstamp)
+        # select the model with the most requests in the queue
+        select_model_id = select_model(g_id)
+        if select_model_id == -1:
+            continue
+        handle_batched_requests(idle_tstamp, select_model_id, g_id)
+
+    for rq_queue in req_queues:
+        assert len(rq_queue) == 0
+    # print(g_id2m_id)
+    # print(m_id2g_id)
+    # print("model_num_requests", model_num_requests)
+    # print("group_num_requests", group_num_requests)
+    # assert np.sum(model_num_requests) == np.sum(group_num_requests)
+    # assert np.all(finish > 0) == False
     return (model_num_requests, model_num_good_requests,
             group_num_requests, group_num_good_requests)

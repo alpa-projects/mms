@@ -283,16 +283,39 @@ class Workload:
             self.rate = 0
             self.cv = 0
 
+    def split_round_robin(self, number: int):
+        rets = []
+        for i in range(number):
+            rets.append(self[i::number])
+        return rets
+
+    def split_time_interval(self, interval: float):
+        if len(self.arrivals) < 1:
+            return []
+
+        ws = []
+        start_i = 0
+        start_time = self.arrivals[start_i]
+        for i in range(len(self.arrivals)):
+            if self.arrivals[i] > start_time + interval:
+                ws.append(self[start_i:i])
+                start_i = i
+                start_time = self.arrivals[i]
+
+        ws.append(self[start_i:])
+        return ws
+
     def compute_stats(self, start: Sequence[float], finish: Sequence[float],
                       good: Sequence[bool], warmup: float):
         """Compute the statistics of serving results."""
         # Skip the first and last `warmup` seconds
         if len(self.arrivals) > 1:
             skip = int(warmup / (self.arrivals[-1] - self.arrivals[0]) * len(self.arrivals))
-            start = start[skip:-skip]
-            finish = finish[skip:-skip]
-            good = good[skip:-skip]
-            requests = self.requests[skip:-skip]
+            if skip > 0:
+                start = start[skip:-skip]
+                finish = finish[skip:-skip]
+                good = good[skip:-skip]
+                requests = self.requests[skip:-skip]
 
         # Compute stats per model
         model_indices = defaultdict(list)
@@ -400,9 +423,12 @@ class Workload:
 
 if __name__ == "__main__":
     w1 = PoissonProcess(10).generate_workload("m", start=0, duration=1000, seed=0)
-    print(w1)
     w2 = GammaProcess(10, 5).generate_workload("m", start=0, duration=1000, seed=0)
-    print(w2)
 
     w3 = w1 + w2
-    print(w3[::2])
+    print(w3)
+
+    ws = w3.split_time_interval(500)
+    print(len(ws))
+    print(ws[0])
+    print(ws[1])

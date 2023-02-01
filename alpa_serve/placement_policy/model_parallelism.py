@@ -5,7 +5,7 @@ import logging
 import math
 import multiprocessing
 import time
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import ray
@@ -14,6 +14,7 @@ from alpa_serve.profiling import ParallelConfig
 from alpa_serve.placement_policy.base_policy import (
     BasePlacementPolicy, ModelData, ClusterEnv, ModelPlacement,
     PlacementEvaluator, gen_train_workload,
+    replica_placement_round_robin,
     replica_placement_fast_greedy, replica_placement_beam_search,
     replica_placement_on_last_group, evolutionary_search)
 from alpa_serve.simulator.controller import simulate_one_case
@@ -240,6 +241,53 @@ class ModelParallelismGreedy(BasePlacementPolicy):
         return sol, None
 
 
+def solve_separation_placement(self,
+                               eco_separation: List[Tuple[List[ModelData], ClusterEnv]],
+                               model_id_map,
+                               train_workload: Workload):
+    sol = ModelPlacement([],[])
+    for i, eco in enumerate(eco_separation):
+        sub_model_datas, sub_cluster_env = eco
+        eco_sol, _ = self.solve_placement_one_eco(sub_model_datas, sub_cluster_env, train_workload)
+        sol.group_configs += eco_sol.group_configs
+        sol.group_models += [[model_id_map[(i, model_id)] for model_id in group]
+                             for group in eco_sol.group_models]
+    return sol
+
+
+class ModelParallelismRR(BasePlacementPolicy):
+
+    def __init__(self,
+                 verbose: int = 0):
+        super().__init__(verbose=verbose)
+        self.max_bs = max_bs
+        self.max_pp = max_pp
+        self.max_op = max_op
+
+        self.evaluator_method = "fast_simulator"
+
+
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
+        # Generate workloads
+        if train_workload is None:
+            train_workload = gen_train_workload(model_datas)
+
+        # parallel config (dp = 1, op = 1, pp = 4)
+        num_reg_groups = cluster_env.num_devices // 4
+        quo_groups = decompose2tok(cluster_env.num_devices % 4)
+        init_sol = ModelPlacement([ParallelConfig(1, 1, 4)] * num_reg_groups +
+                                  [ParallelConfig(1, 1, s) for s in quo_groups],
+                                  [[] for _ in range(num_reg_groups + len(quo_groups))])
+
+        sol = replica_placement_round_robin(
+                   init_sol, model_datas, cluster_env, train_workload, self.verbose)
+
+        return sol, {}
+
+
 class ModelParallelismSearch(BasePlacementPolicy):
 
     def __init__(self,
@@ -305,10 +353,11 @@ class ModelParallelismSearch(BasePlacementPolicy):
     def enumerate_separations(self,
                               model_datas: List[ModelData],
                               cluster_env: ClusterEnv):
-        same_model_threshold = 0.1
+        same_model_threshold = 0.38
 
         model_id_map = {}
         eco_model_datas = []
+        cluster_latencies = []
         for model_id, model_data in enumerate(model_datas):
             cur_latency = max(model_data.profiling_result. \
                           para_dict[ParallelConfig(1, 1, 1)].latency[1])
@@ -324,12 +373,34 @@ class ModelParallelismSearch(BasePlacementPolicy):
             if not flag:
                 model_id_map[(len(eco_model_datas), 0)] = model_id
                 eco_model_datas.append([model_data])
+                cluster_latencies.append(cur_latency)
 
         # List[List[(List[ModelData], ClusterEnv)]]
         partitions = get_partitions(cluster_env.num_devices, len(eco_model_datas))
+
+        ## reduce num partitions
+        ratio = np.empty(len(eco_model_datas), dtype=np.float32)
+        for i, eco_model_data in enumerate(eco_model_datas):
+            ratio[i] = sum(x.rate for x in eco_model_data)
+        ratio = ratio / np.sum(ratio)   # q/s
+
+        for threshold in [1.0, 0.5, 0.3, 0.2, 0.1]:
+            reduced_partitions = []
+            for partition in partitions:
+                throughputs = [x / l for x, l in zip(partition, cluster_latencies)]   # q/s
+                norm_throughputs = np.array(throughputs) / sum(throughputs)
+                dis = np.max(np.abs(ratio - norm_throughputs))
+                if dis < threshold:
+                    reduced_partitions.append(partition)
+
+            if len(reduced_partitions) < 100:
+                break
+
+        print(f"original: {len(partitions)}  reduced: {len(reduced_partitions)}")
+
         separations = [[(eco_model_datas[i], ClusterEnv(device_cnt, cluster_env.mem_budget)) \
                         for i, device_cnt in enumerate(partition)] \
-                       for partition in partitions]
+                       for partition in reduced_partitions]
 
         return separations, model_id_map
 
@@ -347,16 +418,20 @@ class ModelParallelismSearch(BasePlacementPolicy):
         # Separate unequal model
         if self.use_separation:
             eco_separations, model_id_map = self.enumerate_separations(model_datas, cluster_env)
+            print("number of combinations: ", len(eco_separations))
+
+            parallel = False
+            if parallel:
+                func = ray.remote(solve_separation_placement).remote
+            else:
+                func = solve_separation_placement
+
             sols = []
             for eco_separation in eco_separations:
-                sol = ModelPlacement([],[])
-                for i, eco in enumerate(eco_separation):
-                    sub_model_datas, sub_cluster_env = eco
-                    eco_sol, _ = self.solve_placement_one_eco(sub_model_datas, sub_cluster_env, train_workload)
-                    sol.group_configs += eco_sol.group_configs
-                    sol.group_models += [[model_id_map[(i, model_id)] for model_id in group]
-                                         for group in eco_sol.group_models]
-                sols.append(sol)
+                sols.append(func(self, eco_separation, model_id_map, train_workload))
+
+            if parallel:
+                sols = ray.get(sols)
 
             evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
                 self.evaluator_method, self.parallel_evaluator)
@@ -364,12 +439,10 @@ class ModelParallelismSearch(BasePlacementPolicy):
             best_idx = np.argmax(scores)
 
             evaluator = PlacementEvaluator(model_datas, cluster_env, train_workload,
-                "simulator", self.parallel_evaluator)
+                self.evaluator_method, self.parallel_evaluator)
             score_mixed = evaluator.get_scores([best_sol])[0]
 
-            if self.verbose >= 2:
-                print(f"score_mixed: {score_mixed:.3f}, score_separate: {scores[best_idx]:.3f}")
-
+            print(f"score_mixed: {score_mixed:.3f}, score_separate: {scores[best_idx]:.3f}")
             if scores[best_idx] > score_mixed:
                 best_sol = sols[best_idx]
 
@@ -469,3 +542,20 @@ class ModelParallelismSearch(BasePlacementPolicy):
                 beam_sols[cur_num].append(next_sols[next_indices[i]])
 
         return beam_sols[num_devices]
+
+class ModelParallelismEqual(BasePlacementPolicy):
+    
+    def __init__(self, pp, op, verbose: int = 0):
+        super().__init__(verbose=verbose)
+        self.pp = pp
+        self.op = op
+
+    def solve_placement(self,
+                        model_datas: List[ModelData],
+                        cluster_env: ClusterEnv,
+                        train_workload: Workload = None):
+        group_size = self.op * self.pp
+        num_groups = cluster_env.num_devices // group_size
+        sol = ModelPlacement([ParallelConfig(1, self.op, self.pp)] * num_groups, [[i] for i in range(num_groups)])
+
+        return sol, None

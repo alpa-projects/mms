@@ -8,21 +8,47 @@ import matplotlib.pyplot as plt
 from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
 
 show_name_dict = {
-    "sr-greedy":   "Selective Replication (greedy)",
+    "sr-greedy":   "SR",
     "sr-search":   "Selective Replication (search)",
     "sr-ilp":      "Selective Replication (ilp)",
 
+    "sr-replace-30": "Clockwork++",
+    "sr-replace-60": "Clockwork++",
+    "sr-replace-120": "Clockwork++",
+    "sr-replace-3600": "Clockwork++",
+    "sr-replace-5400": "Clockwork++",
+    "sr-replace-10800": "Clockwork++",
+    "sr-replace-21600": "Clockwork++",
+
     "mp-ilp":         "Model Parallelism (ilp)",
-    "mp-search":      "Model Parallelism (search)",
-    "mp-search-100":  "Model Parallelism (search 100s)",
-    "mp-search-1000": "Model Parallelism (search 1000s)",
+    "mp-search":      "Beta",
+    "mp-search-sep":  "Beta",
+
+    "sr-greedy-batch-2": "SR (mb=2)",
+    "sr-replace-30-batch-2": "Clockwork++ (mb=2)",
+    "mp-search-batch-2": "Beta (mb=2)",
+    "mp-search-batch-4": "Beta (mb=4)",
+    "mp-search-batch-8": "Beta (mb=8)",
+    "mp-search-batch-16": "Beta (mb=16)",
+
     "mp-greedy-2":    "Pipeline Parallelism (#stage=2)",
     "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",
     "mp-greedy-8":    "Pipeline Parallelism (#stage=8)",
+    "mp-greedy-16":   "Pipeline Parallelism (#stage=16)",
+
+    "mp-equal-16-1":  "(16,1)", 
+    "mp-equal-8-2":   "(8,2)",
+    "mp-equal-4-4":   "(4,4)",
+    "mp-equal-2-8":   "(2,8)",
 }
 
 def show_name(name):
-    return show_name_dict.get(name, name)
+    if "-real" in name:
+        name = name.replace("-real", "")
+        suffix = " REAL"
+    else:
+        suffix = ""
+    return show_name_dict.get(name, name) + suffix
 
 
 method2color_dict = {
@@ -38,16 +64,23 @@ def method2color(name):
 
 
 method_order_list = [
+    "mp-ilp", "mp-search", "mp-search-sep",
+    "sr-replace-30", "sr-replace-60", "sr-replace-120", "sr-replace-3600", "sr-replace-5400", "sr-replace-10800", "sr-replace-21600",
     "sr-greedy", "sr-search", "sr-ilp",
-
-    "mp-ilp", "mp-search",
-    "mp-search-100", "mp-search-1000",
-    "mp-greedy-2", "mp-greedy-4", "mp-greedy-8",
+    "mp-greedy-2", "mp-greedy-4", "mp-greedy-8", "mp-greedy-16",
+    "mp-equal-16-1", "mp-equal-8-2", "mp-equal-4-4", "mp-equal-2-8",
 ]
 
 def method2order(name):
-    return method_order_list.index(name)
-
+    if "-real" in name:
+        name = name.replace("-real", "")
+        delta = len(method_order_list)
+    elif "-batch" in name:
+        name = name[:name.find("-batch")]
+        delta = len(method_order_list) * 2
+    else:
+        delta = 0
+    return method_order_list.index(name) + delta
 
 
 def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show):
@@ -68,10 +101,14 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
     y_max = 0
     for method in methods:
         curve = data[method]
-        xs, ys = zip(*curve.items())
-
+        xs_, ys_ = zip(*curve.items())
+        xs = [x for x, _ in sorted(zip(xs_, ys_))]
+        ys = [y for _, y in sorted(zip(xs_, ys_))]
         ys = np.array(ys) * 100
-        curve = ax.plot(xs, ys, color=method2color(method), marker='*')
+        if "batch" in method:
+            curve = ax.plot(xs, ys, "--*", color=method2color(method))
+        else:
+            curve = ax.plot(xs, ys, "-*", color=method2color(method))
         curves.append(curve[0])
         legends.append(show_name(method))
 
@@ -92,13 +129,15 @@ def plot_goodput_common(data, threshold, increasing, xlabel, title, output, show
         x_max = max(x_max, *xs)
         y_max = max(y_max, *ys)
 
-    ax.set_ylim(bottom=0, top=max(y_max * 1.05, 100))
-    ax.set_ylabel("Goodput (%)")
+    ax.set_ylim(bottom=0, top=max(y_max * 1.02, 100))
+    ax.set_ylabel("Workload satisfaction (%)")
     ax.set_xlabel(xlabel)
     ax.legend(curves, legends)
     ax.set_title(title)
 
     for i in range(len(methods)):
+        if first_good[i] == 0:
+            continue
         ax.axvline(first_good[i], color=method2color(methods[i]), linestyle=":")
 
     if show:
@@ -122,7 +161,7 @@ def plot_goodput_vs_num_devices(lines, threshold, show):
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, True, "#devices",
-                        "Goodput vs. #devices", "goodput_vs_num_devices.png",
+                        "Workload satisfaction vs. #devices", "goodput_vs_num_devices.png",
                         args.show)
 
 
@@ -139,7 +178,7 @@ def plot_goodput_vs_num_models(lines, threshold, show):
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, False, "#models",
-                        "Goodput vs. #models", "goodput_vs_num_models.png",
+                        "Workload satisfaction vs. #models", "goodput_vs_num_models.png",
                         args.show)
 
 
@@ -156,7 +195,7 @@ def plot_goodput_vs_slo(lines, threshold, show):
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, True, "SLO (s)",
-                        "Goodput vs. SLO", "goodput_vs_slo.png",
+                        "Workload satisfaction vs. SLO", "goodput_vs_slo.png",
                         args.show)
 
 
@@ -173,7 +212,7 @@ def plot_goodput_vs_total_rate(lines, threshold, show):
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, False, "Total rate (r/s)",
-                        "Goodput vs. Total rate", "goodput_vs_total_rate.png",
+                        "Workload satisfaction vs. Total rate", "goodput_vs_total_rate.png",
                         args.show)
 
 
@@ -190,7 +229,7 @@ def plot_goodput_vs_cv(lines, threshold, show):
         data[policy][x] = goodput
 
     plot_goodput_common(data, threshold, False, "CV",
-                        "Goodput vs. CV", "goodput_vs_cv.png",
+                        "Workload satisfaction vs. CV", "goodput_vs_cv.png",
                         args.show)
 
 
