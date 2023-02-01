@@ -56,6 +56,19 @@ class ModelPlacement:
 
 
 @dataclasses.dataclass
+class ModelPlacementWithReplacement:
+    start_times: List[float]
+    placements: List[ModelPlacement]
+
+    def verify(self, model_datas, cluster_env):
+        for p in self.placements:
+            p.verify(model_datas, cluster_env)
+
+    def __str__(self):
+        return f"ModelPlacementWithReplacement(num_segments={len(self.placements)})"
+
+
+@dataclasses.dataclass
 class ModelData:
     name: str
     slo: float
@@ -97,6 +110,9 @@ class BasePlacementPolicy:
                           cluster_env: ClusterEnv,
                           model_datas: List[ModelData],
                           placement: ModelPlacement):
+        if isinstance(placement, ModelPlacementWithReplacement):
+            return
+
         group_configs, group_models = placement.group_configs, placement.group_models
         assert len(group_configs) == len(group_models)
         num_groups = len(group_configs)
@@ -245,11 +261,11 @@ class PlacementEvaluator:
         else:
             stats, _ = simulate_one_case(serving_case)
         model_goodput = [x.goodput for x in stats.per_model_stats]
-        return (stats.goodput, model_goodput, stats.group_num_requests)
+        return (stats.goodput, model_goodput, stats.group_num_requests, stats)
 
 
 def gen_train_workload(model_datas: List[ModelData],
-                       seed: int = 1234,
+                       seed: int = 0,
                        simulation_min_duration: float = 100,
                        simulation_min_samples: int = 30000):
     """Generate a training workload for search."""
@@ -263,6 +279,51 @@ def gen_train_workload(model_datas: List[ModelData],
             slo=data.slo, seed=seed + i))
     train_workload = Workload.merge(*ws)
     return train_workload
+
+
+def replica_placement_round_robin(init_sol: ModelPlacement,
+                                  model_datas: List[ModelData],
+                                  cluster_env: ClusterEnv,
+                                  workload: Workload,
+                                  verbose: int):
+    """Use round robin to place replicas on groups."""
+
+    assert len(init_sol.group_configs) == len(init_sol.group_models)
+
+    # Load constants
+    num_models = len(model_datas)
+    num_groups = len(init_sol.group_configs)
+    mem_budget = cluster_env.mem_budget
+    num_devices = cluster_env.num_devices
+
+    weight_mem = {}  # Dict[parallel_config -> [model_idx -> weight_mem]]
+    for parallel_config in init_sol.group_configs:
+        weight_mem[parallel_config] = [
+            max(x.profiling_result.para_dict[parallel_config].weight_mem)
+            if parallel_config in x.profiling_result.para_dict
+            else inf
+            for x in model_datas]
+
+    sol = init_sol
+    group_mem = [
+        sum(weight_mem[c][m_id] for m_id in group_ms)
+        for c, group_ms in zip(sol.group_configs, sol.group_models)
+    ]
+    group_id = 0
+    found = True
+    while found:
+        found = False
+        for model_id in range(num_models):
+            c = sol.group_configs[group_id]
+            if (model_id not in sol.group_models[group_id] and
+                weight_mem[c][model_id] + group_mem[group_id] <= mem_budget):
+                found = True
+                group_mem[group_id] += weight_mem[c][model_id]
+                sol = sol.add_model(group_id, model_id)
+                sol.verify(model_datas, cluster_env)
+                group_id = (group_id + 1) % num_groups
+
+    return sol
 
 
 def replica_placement_fast_greedy(init_sol: ModelPlacement,
@@ -292,19 +353,21 @@ def replica_placement_fast_greedy(init_sol: ModelPlacement,
             else inf
             for x in model_datas]
 
-    rates = [m.rate for m in model_datas]
-
     # Greedy placement
     sol = init_sol
     it = 0
 
     while True:
         stats = evaluator.get_stats([sol])[0]
-        overall_goodput, goodputs, group_num_requests = stats
+        overall_goodput, goodputs, group_num_requests, fullstats = stats
 
         # Find the most unserved model and the most available group
         model_num_unserved = [
-            (rate * (1 - goodput)) for rate, goodput in zip(rates, goodputs)]
+            (s.num_requests * (1 - goodput))
+            for s, goodput in zip(fullstats.per_model_stats, goodputs)]
+        #model_num_unserved = [
+        #    (x.rate * (1 - goodput))
+        #    for x, goodput in zip(model_datas, goodputs)]
         model_ids = np.argsort(model_num_unserved)[::-1]
         group_ids = np.argsort(group_num_requests)
         group_mem = [
@@ -579,7 +642,6 @@ def evolutionary_search(init_sols: List[ModelPlacement],
             if c not in weight_mem:
                 weight_mem[c] = [inf] * len(model_datas)
             weight_mem[c][m_id] = max(x.profiling_result.para_dict[c].weight_mem)
-    rates = [m.rate for m in model_datas]
 
     # Search status
     best_score = -1
@@ -605,12 +667,14 @@ def evolutionary_search(init_sols: List[ModelPlacement],
             idx = np.random.choice(len(scores), p=weights)
             sol = cur_sols[idx]
             goodputs = stats[idx][1]
+            fullstats = stats[idx][3]
 
             if model_num_unserved_list[idx] is not None:
                 model_num_unserved = model_num_unserved_list[idx]
             else:
-                model_num_unserved = np.array([
-                    (rate * (1 - goodput)) for rate, goodput in zip(rates, goodputs)])
+                model_num_unserved = [
+                    (s.num_requests * (1 - goodput))
+                    for s, goodput in zip(fullstats.per_model_stats, goodputs)]
                 model_num_unserved = model_num_unserved / np.sum(model_num_unserved)
                 model_num_unserved_list[idx] = model_num_unserved
 

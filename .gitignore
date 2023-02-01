@@ -4,6 +4,10 @@ figures/
 chrome_trace/
 *.csv
 *.txt
+*.png
+*.pdf
+*.sh
+*.zip
 
 # Python cache
 __pycache__

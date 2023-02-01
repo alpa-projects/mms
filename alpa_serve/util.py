@@ -8,6 +8,9 @@ from typing import Sequence, Any
 import ray
 import numpy as np
 
+# global switch for batching
+# enable_batching = True
+batchsize_config = [1, 2, 4, 8, 16]
 
 # A general serving case.
 # We can simulate or run such a case.
@@ -17,7 +20,7 @@ ServingCase = namedtuple("ServingCase",
 
 GB = 1 << 30
 eps = 1e-6
-inf = 1e20
+inf = 1e100
 
 
 def build_logger(name="alpa_serve"):
@@ -109,19 +112,31 @@ def is_valid_size(n: int, i: int):
 
 # partition n into k parts that summed to n
 # each part could only be 2^k
-def get_partitions(n: int, k: int, lb: int = 1):
+def get_partitions(n: int, k: int):
     if k == 1:
-        if n >= lb:
-            return [[n]]
-        else:
-            return []
+        return [[n]]
 
     ret = []
-    for i in range(lb, n):
+    for i in range(1, n):
         if not is_valid_size(n, i): continue
-        pre_partitions = get_partitions(n - i, k - 1, i)
+        pre_partitions = get_partitions(n - i, k - 1)
         ret += [partition + [i] for partition in pre_partitions]
     return ret
+
+
+#def get_partitions(n: int, k: int, lb: int = 1):
+#    if k == 1:
+#        if n >= lb:
+#            return [[n]]
+#        else:
+#            return []
+#
+#    ret = []
+#    for i in range(lb, n):
+#        if not is_valid_size(n, i): continue
+#        pre_partitions = get_partitions(n - i, k - 1, i)
+#        ret += [partition + [i] for partition in pre_partitions]
+#    return ret
 
 
 def get2tok(n: int):
@@ -147,7 +162,7 @@ def decompose2tok(n: int):
 
 
 if __name__ == "__main__":
-    print(get_partitions(32, 2, 1))
-    print(get_partitions(32, 3, 1))
+    print(get_partitions(64, 6))
+    print(len(get_partitions(64, 6)))
     print(get2tok(34))
     print(decompose2tok(13))

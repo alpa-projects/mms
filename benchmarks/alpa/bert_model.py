@@ -5,7 +5,7 @@ import time
 try:
     from alpa import (PipeshardParallel,
                       get_global_virtual_physical_mesh,
-                      AutoShardingOption, ManualStageOption,
+                      AutoShardingOption, ManualStageOption, AutoLayerOption,
                       parallelize)
     import jax
     import jax.numpy as jnp
@@ -23,21 +23,24 @@ BertModelConfig = namedtuple(
 
 bert_specs = {
     #                      S，   H,   L,  head,   V,
-    "125M": BertModelConfig(1024, 768, 12, 12, 51200),
-    "350M": BertModelConfig(1024, 1024, 24, 16, 51200),
-    "760M": BertModelConfig(1024, 1536, 24, 16, 51200),
-    "1.3B": BertModelConfig(1024, 2048, 24, 32, 51200),
-    "2.6B": BertModelConfig(1024, 2560, 32, 32, 51200),
-    "6.7B": BertModelConfig(1024, 4096, 32, 32, 51200),
-    "15B": BertModelConfig(1024, 5120, 48, 40, 51200),
-    "39B": BertModelConfig(1024, 8192, 48, 64, 51200),
-    "76B": BertModelConfig(1024, 10240, 60, 80, 51200),
+    "125M": BertModelConfig(2048, 768, 12, 12, 51200),
+    "350M": BertModelConfig(2048, 1024, 24, 16, 51200),
+    "760M": BertModelConfig(2048, 1536, 24, 16, 51200),
+    "1.3B": BertModelConfig(2048, 2048, 24, 32, 51200),
+    "2.6B": BertModelConfig(2048, 2560, 32, 32, 51200),
+    "6.7B": BertModelConfig(2048, 4096, 32, 32, 51200),
+    "15B":  BertModelConfig(2048, 5120, 48, 40, 51200),
+    "39B":  BertModelConfig(2048, 8192, 48, 64, 51200),
+    "76B":  BertModelConfig(2048, 10240, 60, 80, 51200),
+    "103.5B": BertModelConfig(1024, 8192, 128, 64, 51200),
 }
 
 
 class BertModel:
     def __init__(self, model_config, profiling_result, parallel_config):
         self.latency_mem = profiling_result.para_dict[parallel_config]
+        self.metadata = profiling_result.para_dict[parallel_config].metadata
+
         self.logger = logging.getLogger("bert_model")
         self.logger.setLevel(logging.INFO)
         tic = time.time()
@@ -151,19 +154,37 @@ class BertModel:
             physical_mesh_shape = (num_mesh_devices // num_devices_per_host,
                                    num_devices_per_host)
 
-        parallel_method = PipeshardParallel(
-            num_micro_batches=1,
-            default_auto_sharding_option=AutoShardingOption(
-                prefer_reduce_scatter=False,
-                force_batch_dim_to_mesh_dim=0,
-            ),
-            pipeline_schedule="inference",
-            layer_option="manual",
-            stage_option=ManualStageOption(
-                forward_stage_layer_ids=[[i] for i in range(pp)],
-                submesh_physical_shapes=[physical_mesh_shape] * pp,
-                submesh_logical_shapes=[logical_mesh_shape] * pp,
-                submesh_autosharding_option_dicts=[{}] * pp))
+        if False: # manual partition
+            parallel_method = PipeshardParallel(
+                num_micro_batches=1,
+                default_auto_sharding_option=AutoShardingOption(
+                    prefer_reduce_scatter=False,
+                    force_batch_dim_to_mesh_dim=0,
+                ),
+                pipeline_schedule="inference",
+                layer_option="manual",
+                stage_option=ManualStageOption(
+                    forward_stage_layer_ids=[[i] for i in range(pp)],
+                    submesh_physical_shapes=[physical_mesh_shape] * pp,
+                    submesh_logical_shapes=[logical_mesh_shape] * pp,
+                    submesh_autosharding_option_dicts=[{}] * pp))
+        else: # auto partition
+            metadata = self.metadata
+            layer_num = max(max(x) for x in
+                metadata["forward_stage_layer_ids"]) + 1
+            parallel_method = PipeshardParallel(
+                num_micro_batches=1,
+                default_auto_sharding_option=AutoShardingOption(
+                    prefer_reduce_scatter=False,
+                ),
+                pipeline_schedule="inference",
+                layer_option=AutoLayerOption(layer_num=layer_num),
+                stage_option=ManualStageOption(
+                    forward_stage_layer_ids=metadata["forward_stage_layer_ids"],
+                    submesh_physical_shapes=metadata["submesh_shapes"],
+                    submesh_logical_shapes=metadata["logical_mesh_shapes"],
+                    submesh_autosharding_option_dicts=
+                        metadata["autosharding_option_dicts"]))
 
         # Compile executable
         @parallelize(method=parallel_method)
@@ -198,24 +219,24 @@ class BertModel:
         global_config.use_dummy_value_for_benchmarking = False
 
         # Final inference function
-        async def infer_func(src, request):
-            inputs = tokenizer(src,
-                               max_length=seq_len,
-                               padding="max_length",
-                               return_tensors="np")
-            input_ids = inputs.input_ids
-            batch = {
-                "input_ids": input_ids,
-                "attention_mask": inputs.attention_mask,
-                "token_type_ids": inputs.token_type_ids,
-                "position_ids": np.broadcast_to(np.arange(
-                    np.atleast_2d(input_ids).shape[-1]), input_ids.shape),
-            }
+        def infer_func(src, request):
+            #inputs = tokenizer(src,
+            #                   max_length=seq_len,
+            #                   padding="max_length",
+            #                   return_tensors="np")
+            #input_ids = inputs.input_ids
+            #batch = {
+            #    "input_ids": input_ids,
+            #    "attention_mask": inputs.attention_mask,
+            #    "token_type_ids": inputs.token_type_ids,
+            #    "position_ids": np.broadcast_to(np.arange(
+            #        np.atleast_2d(input_ids).shape[-1]), input_ids.shape),
+            #}
             outputs = executable(params, batch)
             request.scope["ts"].append(("d", time.time()))
             logits = outputs.logits
             logits.prefetch()
-            return await logits.to_np_async()
+            return logits.to_np_async()
 
         return infer_func
 
