@@ -11,8 +11,9 @@ from alpa_serve.simulator.workload import Workload, GammaProcess, UniformMMPP
 from alpa_serve.profiling import ProfilingDatabase, ParallelConfig
 from alpa_serve.placement_policy import (ClusterEnv, ModelData,
     SelectiveReplicationILP, SelectiveReplicationGreedy,
-    SelectiveReplicationSearch, SelectiveReplicationReplacement,
-    ModelParallelismILP, ModelParallelismGreedy, ModelParallelismSearch,
+    SelectiveReplicationSearch, SelectiveReplicationUniform,
+    SelectiveReplicationReplacement, ModelParallelismILP,
+    ModelParallelismGreedy, ModelParallelismSearch,
     ModelParallelismEqual)
 from alpa_serve.profiling import ProfilingDatabase
 from alpa_serve.trace import Trace, report_group_stats
@@ -28,7 +29,6 @@ EqualModelCase = namedtuple("EqualModelCase", [
     "total_rate", "rate_distribution", "arrival_process", "arrival_process_kwargs",
     "slo_scale", "duration", "policy_name", "train_start", "train_end",
     "test_start", "test_end"])
-
 
 def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
@@ -69,6 +69,9 @@ def get_equal_model_serving_case(case, prof_database=None):
             cnt = int(1 / cur_rate)
         s = sum(np.array(frac))
         rates = np.array(frac) / s * total_rate
+    elif isinstance(rate_distribution, (list, tuple, np.ndarray)):
+        assert len(rate_distribution) == num_models
+        rates = np.array(rate_distribution) / sum(rate_distribution) * total_rate
     elif rate_distribution is None:
         pass
     else:
@@ -207,6 +210,8 @@ def get_equal_model_serving_case(case, prof_database=None):
                  replacement_interval=interval)
         elif policy_name == "sr-search":
             policy = SelectiveReplicationSearch(verbose=1)
+        elif policy_name == "sr-uniform":
+            policy = SelectiveReplicationUniform(verbose=1)
         elif policy_name == "mp-ilp":
             policy = ModelParallelismILP(verbose=1)
         elif "mp-search" in policy_name:
@@ -237,9 +242,8 @@ _DATA_HEADS = ("exp_name",
                "num_devices", "mem_budget", "model_type", "num_models",
                "total_rate", "rate_distribution",
                "arrival_process", "arrival_process_kwargs",
-               "slo_scale", "duration", "policy_name", 
+               "slo_scale", "duration", "policy_name",
                "placement", "goodput", "mode")
-
 
 def run_one_equal_model_case(case, mode,
                              output_file=None, prof_database=None,
@@ -247,7 +251,6 @@ def run_one_equal_model_case(case, mode,
                              debug=False,
                              enable_batching=False):
     serving_case = get_equal_model_serving_case(case, prof_database)
-
     if mode == "simulate":
         stats, placement = approximate_one_case(serving_case, debug=debug, enable_batching=enable_batching)
     else:
@@ -268,7 +271,8 @@ def run_one_equal_model_case(case, mode,
 
 def run_equal_model_cases(cases, output_file=None,
                           mode="simulate", relax_slo=False, protocol="http",
-                          debug_tstamp=False, parallel=False, enable_batching=False):
+                          debug_tstamp=False, parallel=False, enable_batching=False,
+                          prof_database=None):
     if parallel and not ray.is_initialized():
         ray.init(address="auto", namespace="alpa_serve",
                  runtime_env={"working_dir": os.getcwd(),
@@ -283,12 +287,13 @@ def run_equal_model_cases(cases, output_file=None,
     for case in cases:
         results.append(run_one_case_(case, mode,
             output_file=output_file, relax_slo=relax_slo,
-            protocol=protocol, debug=debug_tstamp, enable_batching=enable_batching))
+            protocol=protocol, debug=debug_tstamp,
+            enable_batching=enable_batching, prof_database=prof_database))
 
     if parallel:
         results = ray.get(results)
 
-    return results
+    return results, all_stats
 
 
 def read_equal_model_case_tsv(filename):
@@ -303,12 +308,12 @@ def read_equal_model_case_tsv(filename):
          num_devices, mem_budget, model_type, num_models,
          total_rate, rate_distribution,
          arrival_process, arrival_process_kwargs,
-         slo_scale, duration, policy_name, 
+         slo_scale, duration, policy_name,
          placement, goodput, mode) = line.split("\t")
 
         num_devices = int(num_devices)
         num_models = int(num_models)
-        total_rate = float(total_rate) 
+        total_rate = float(total_rate)
         arrival_process_kwargs = eval(arrival_process_kwargs)
         slo_scale = float(slo_scale)
         duration = float(duration)

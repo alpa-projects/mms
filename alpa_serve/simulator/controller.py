@@ -397,7 +397,7 @@ def approximate_one_case(case: ServingCase,
             model_names[i], model_num_requests[i],
             model_num_good_requests[i] / (model_num_requests[i] + eps),
             model_num_requests[i] / interval,
-            0, 0, 0, 0) for i in range(len(model_names))]
+            0, 0, 0, 0, [], [], []) for i in range(len(model_names))]
         stats = StatsResult(per_model_stats, tuple(group_num_requests),
                             np.mean(good), np.mean(finish - start),
                             len(start), len(start) / interval)
@@ -680,7 +680,7 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
                 find_valid_req = True
                 break
             else:
-                # drop requests which will exceed deadline even run alone immediately 
+                # drop requests which will exceed deadline even run alone immediately
                 group_num_requests[group_id] += 1
                 finish[req_id] = tstamps[req_id]
                 good[req_id] = False
@@ -688,7 +688,7 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
         # all the requests in queue are rejected
         if not find_valid_req:
             return []
-        
+
         # batch as much as we can
         choosed_bs = 1
         for bs in batchsize_config[1:]:
@@ -702,13 +702,13 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
                 break
 
         return [req_id] + [req_queue.pop(0) for _ in range(choosed_bs - 1)]
-        
+
     def handle_batched_requests(tstamp, model_id, group_id):
         batch_rq = get_max_batch_under_slo(tstamp, model_id, group_id)
         bs = len(batch_rq)
         if bs == 0:
             # all requests in queue violate SLO, select another model
-            select_model_id = select_model(group_id) 
+            select_model_id = select_model(group_id)
             if select_model_id != -1:
                 handle_batched_requests(tstamp, select_model_id, group_id)
         else:
@@ -723,7 +723,7 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
                 good[rq_id] = True
                 for k in range(num_stages[group_id]):
                     device_clocks[group_id][k] = tmp_time[k]
-            
+
             group_idle_tstamp[group_id] = tmp_time[0]
             heapq.heappush(unhandled_group_idle_tstamp, (tmp_time[0], group_id))
 
@@ -738,7 +738,7 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
 
         while len(unhandled_group_idle_tstamp) and unhandled_group_idle_tstamp[0][0] <= tstamp:
             idle_tstamp, g_id = heapq.heappop(unhandled_group_idle_tstamp)
-            select_model_id = select_model(g_id) 
+            select_model_id = select_model(g_id)
             if select_model_id == -1:
                 break
             handle_batched_requests(idle_tstamp, select_model_id, g_id)
@@ -772,16 +772,16 @@ def simulate_requests_mixed_batching(finish, good, tstamps, model_ids, slos, m_i
         req_queues[m_id].append(i)
         model_num_requests[m_id] += 1
 
-       
+
         if tstamp >= group_idle_tstamp[g_id]:
             # group is idle
             handle_batched_requests(tstamp, m_id, g_id)
-    
+
     # handle remaining requests
     while len(unhandled_group_idle_tstamp):
         idle_tstamp, g_id = heapq.heappop(unhandled_group_idle_tstamp)
         # select the model with the most requests in the queue
-        select_model_id = select_model(g_id) 
+        select_model_id = select_model(g_id)
         if select_model_id == -1:
             continue
         handle_batched_requests(idle_tstamp, select_model_id, g_id)
