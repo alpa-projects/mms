@@ -52,6 +52,8 @@ def plot_case(case_id=1, per_model_curves=False, figsize=(4.5, 3.5)):
     max_latency = 0
     for policy_name, stat in zip(policies, stats):
         for model_id, model_stat in enumerate(stat.per_model_stats):
+            if per_model_curves is not False and model_id != per_model_curves:
+                continue
             latency = model_stat.latency
             max_latency = max(max_latency, max(latency))
     for policy_name, stat in zip(policies, stats):
@@ -63,14 +65,20 @@ def plot_case(case_id=1, per_model_curves=False, figsize=(4.5, 3.5)):
         all_latency.extend([max_latency, 0])
         cdfx = np.sort(all_latency)
         cdfy = np.linspace(0, 1, len(all_latency), endpoint=False)
-        plt.plot(cdfx, cdfy, label=policy_name_to_label[policy_name], color=color_dict[policy_name])
-        if per_model_curves:
+        if per_model_curves is not False:
             for model_id, model_stat in enumerate(stat.per_model_stats):
+                if model_id != per_model_curves:
+                    continue
                 latency = model_stat.latency
                 cdfx = np.sort(latency)
+                cdfx = np.append(cdfx, [max_latency])
                 cdfy = np.linspace(0, 1, len(latency), endpoint=False)
-                plt.plot(cdfx, cdfy, label=policy_name_to_label[policy_name] + f" Model {model_id + 1}", color=color_dict[policy_name], alpha=(len(stat.per_model_stats) - model_id) * 0.3 + 0.15)
-        plt.axvline(mean_latency, linestyle='--', color = color_dict[policy_name], label = policy_name_to_label[policy_name]+' Mean Latency', linewidth=0.75)
+                cdfy = np.append(cdfy, [1.0])
+                plt.plot(cdfx, cdfy, label=policy_name_to_label[policy_name] + f" Model {model_id + 1}", color=color_dict[policy_name])
+        # plt.axvline(mean_latency, linestyle='--', color = color_dict[policy_name], label = policy_name_to_label[policy_name]+' Mean Latency', linewidth=0.75)
+        else:
+            plt.plot(cdfx, cdfy, label=policy_name_to_label[policy_name], color=color_dict[policy_name])
+            plt.axvline(mean_latency, linestyle='--', color = color_dict[policy_name], linewidth=1.0)
     plt.xlabel("Latency (s)")
     plt.ylabel("CDF")
     plt.grid()
@@ -78,7 +86,7 @@ def plot_case(case_id=1, per_model_curves=False, figsize=(4.5, 3.5)):
     plt.ylim(0, 1.05)
     plt.legend(prop={'size': 8})
     plt.tight_layout()
-    plt.savefig(f"illustrative_example_{case_id}.pdf")
+    plt.savefig(f"slides_illustrative_example_{case_id}.pdf")
     # plt.show()
 
 def cmp(t1, t2):
@@ -91,7 +99,7 @@ def plot_case_utilization(case_id=1, per_model_curves=False):
     with open(f"illustrative_example_policies_and_stats_{case_id}.pkl", "rb") as f:
         policies, stats = pickle.load(f)
     max_latency = 0
-    plt.figure(figsize=(3.5, 2.5))
+    plt.figure(figsize=(6, 2.5))
     for policy_name, stat in zip(policies, stats):
         all_time_stamps = []
         for model_id, model_stat in enumerate(stat.per_model_stats):
@@ -100,7 +108,7 @@ def plot_case_utilization(case_id=1, per_model_curves=False):
             all_time_stamps.extend(starts)
             all_time_stamps.extend(finishes)
         all_time_stamps = sorted(all_time_stamps, key=functools.cmp_to_key(cmp))
-        x = np.linspace(0, 40, 400)
+        x = np.linspace(0, 50, 500)
         y = []
         i = 0
         u = 0
@@ -109,12 +117,12 @@ def plot_case_utilization(case_id=1, per_model_curves=False):
                 u += all_time_stamps[i][1]
                 i += 1
             y.append(u/2 * 100)
-        cut_i0 = 7 * 10
-        cut_i1 = 12 * 10
-        cut_i2 = 17 * 10
-        cut_i3 = 37 * 10
-        x = np.concatenate((x[cut_i0:cut_i1] - x[cut_i0], x[cut_i2:cut_i3] - (x[cut_i2] - x[cut_i0])))
-        y = np.concatenate((y[cut_i0:cut_i1], y[cut_i2:cut_i3]))
+#         cut_i0 = 7 * 10
+#         cut_i1 = 12 * 10
+#         cut_i2 = 17 * 10
+#         cut_i3 = 37 * 10
+#         x = np.concatenate((x[cut_i0:cut_i1] - x[cut_i0], x[cut_i2:cut_i3] - (x[cut_i2] - x[cut_i0])))
+#         y = np.concatenate((y[cut_i0:cut_i1], y[cut_i2:cut_i3]))
 
         plt.plot(x, y, label=policy_name_to_label[policy_name], color=color_dict[policy_name])
         plt.fill_between(x, y, alpha=0.2, color=color_dict[policy_name])
@@ -122,7 +130,7 @@ def plot_case_utilization(case_id=1, per_model_curves=False):
     plt.ylabel("Utilization (%)")
     plt.legend(prop={'size': 8}, loc='upper center', bbox_to_anchor=(0.5, 1.3), ncol=2)
     plt.tight_layout()
-    plt.savefig(f"illustrative_example_utilization_{case_id}.pdf")
+    plt.savefig(f"slides_illustrative_example_utilization_{case_id}.pdf")
 
 
 if __name__ == "__main__":
@@ -133,10 +141,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     # run_case((1, 1), cv=1, case_id=1, mode=args.mode, parallel=args.parallel)
-    #plot_case(case_id=1, figsize=(3.5, 2.5))
+    # plot_case(case_id=1, figsize=(3.5, 2.5))
     # run_case((2, 8), cv=1, case_id=2, mode=args.mode, parallel=args.parallel)
-    #plot_case(case_id=2, figsize=(3.5, 2.5), per_model_curves=True)
+    # plot_case(case_id=2, figsize=(3.5, 2.5), per_model_curves=False)
+    # plot_case(case_id=2, figsize=(3.5, 2.5), per_model_curves=0)
+    # plot_case(case_id=2, figsize=(3.5, 2.5), per_model_curves=1)
     # run_case((1, 1), cv=3.0, case_id=3, mode=args.mode, parallel=args.parallel)
-    #plot_case(case_id=3, figsize=(3.5, 2.5))
+    # plot_case(case_id=3, figsize=(3.5, 2.5))
     # run_case((1, 1), cv=3.0, case_id=4, mode=args.mode, parallel=args.parallel, duration=500)
     plot_case_utilization(case_id=4)

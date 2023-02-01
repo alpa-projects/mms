@@ -12,7 +12,7 @@ color_dict = {
     "mp-search": "C0",
 }
 policy_name_to_label = {
-    "sr": "Selective Replication",
+    "sr": "Replication",
     "mp": "Model Parallelism",
 }
 
@@ -39,7 +39,7 @@ def run_case(case_id=1, mode="simulate", parallel=False):
         mp_mem_budgets = [7 * GB, 12 * GB, 22 * GB, 44 * GB]
         mp_policies = ["mp-greedy-8", "mp-greedy-4", "mp-greedy-2", "sr-uniform"]
         sr_mem_budgets = [5.5 * GB * i for i in range(1, 9)]
-        sr_policies = ["sr-uniform"] * len(sr_mem_budgets)        
+        sr_policies = ["sr-uniform"] * len(sr_mem_budgets)
 
     cases = []
     for policy_name, mem_budget in zip(mp_policies, mp_mem_budgets):
@@ -71,7 +71,7 @@ def get_latency_percentile(stat, p=99):
     for per_model_stat in stat.per_model_stats:
         all_latencies.extend(per_model_stat.latency)
     return np.percentile(all_latencies, p)
-        
+
 def plot_case(case_id=1):
     with open(f"memory_budget_vs_latency_results_{case_id}.pkl", "rb") as f:
         ((mp_mem_budgets, mp_policies, sr_mem_budgets, sr_policies), stats) = pickle.load(f)
@@ -91,23 +91,25 @@ def plot_case(case_id=1):
         sr_y.append(stat.latency_mean)
         sr_y_p99.append(get_latency_percentile(stat, 99))
 
-    plt.figure(figsize=(4.5, 3.5))
-    plt.plot(sr_x, sr_y, '.-', label=policy_name_to_label["sr"])
+    plt.figure(figsize=(3, 2))
     plt.plot(mp_x, mp_y, '.-', label=policy_name_to_label["mp"])
+    plt.plot(sr_x, sr_y, '.-', label=policy_name_to_label["sr"])
     plt.axvline(13, linestyle='--', color = "black", label = "GPU Memory Bound", linewidth=0.75)
     plt.xlabel("Memory Budget (GB)")
     plt.ylabel("Mean Latency (s)")
-    plt.legend()
+    plt.grid()
+    plt.legend(prop={'size': 8})
     plt.tight_layout()
     plt.savefig(f"memory_budget_vs_latency_mean_latency_{case_id}.pdf")
 
-    plt.figure(figsize=(4.5, 3.5))
-    plt.plot(sr_x, sr_y_p99, '.-', label=policy_name_to_label["sr"])
+    plt.figure(figsize=(3, 2))
     plt.plot(mp_x, mp_y_p99, '.-', label=policy_name_to_label["mp"])
+    plt.plot(sr_x, sr_y_p99, '.-', label=policy_name_to_label["sr"])
     plt.axvline(13, linestyle='--', color = "black", label = "GPU Memory Bound", linewidth=0.75)
     plt.xlabel("Memory Budget (GB)")
     plt.ylabel("P99 Latency (s)")
-    plt.legend()
+    plt.grid()
+    plt.legend(prop={'size': 8})
     plt.tight_layout()
     plt.savefig(f"memory_budget_vs_latency_p99_latency_{case_id}.pdf")
 

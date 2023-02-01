@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 import argparse
 import matplotlib.pyplot as plt
+from matplotlib.transforms import Bbox
 
 from benchmarks.alpa.equal_model_case import EqualModelCase, run_equal_model_cases
 from alpa_serve.util import GB
@@ -12,7 +13,7 @@ color_dict = {
     "mp-greedy-8": "C0",
 }
 policy_name_to_label = {
-    "sr-uniform": "Selective Replication",
+    "sr-uniform": "Replication",
     "mp-greedy-8": "Model Parallelism",
 }
 
@@ -92,7 +93,7 @@ def plot_case(case_id=1):
         with open(f"changing_rate_cv_slo_{case_id}.pkl", "rb") as f:
             ((policies, x), stats) = pickle.load(f)
 
-    plt.figure(figsize=(4.5, 3.5))
+    plt.figure(figsize=(3, 2))
     i = 0
     for policy in policies:
         y = []
@@ -105,7 +106,7 @@ def plot_case(case_id=1):
             elif case_id == 3:
                 y.append(stat.goodput * 100)
             i += 1
-        plt.plot(x, y, '.-', label=policy_name_to_label[policy], 
+        plt.plot(x, y, '.-', label=policy_name_to_label[policy],
                  color=color_dict[policy])
     if case_id == 1 or case_id == 1.5:
         plt.xlabel("Total Rates (req/s)")
@@ -116,13 +117,17 @@ def plot_case(case_id=1):
     if case_id in [1, 2]:
         plt.ylabel("Mean Latency (s)")
     elif case_id in [1.5, 2.5]:
-        plt.ylabel("P99 Latency (s)")        
+        plt.ylabel("P99 Latency (s)")
     elif case_id == 3:
         # plt.ylim(0, 100)
-        plt.ylabel("Workload Satisfaction (%)")
-    plt.legend()
+        plt.ylabel("SLO Attainment (%)")
+    plt.grid()
+    plt.legend(prop={'size': 8})
     plt.tight_layout()
-    plt.savefig(f"changing_rate_cv_slo_{case_id}.pdf")
+    if case_id == 3:
+        plt.savefig(f"changing_rate_cv_slo_{case_id}.pdf", bbox_inches=Bbox([[0, 0], [3, 2.25]]))
+    else:
+        plt.savefig(f"changing_rate_cv_slo_{case_id}.pdf")
     # plt.show()
 
 
@@ -134,10 +139,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     # run_case(case_id=1, mode=args.mode, parallel=args.parallel)
-    # plot_case(case_id=1)
-    # plot_case(case_id=1.5)
+#     plot_case(case_id=1)
+#     plot_case(case_id=1.5)
     # run_case(case_id=2, mode=args.mode, parallel=args.parallel)
-    # plot_case(case_id=2)
-    # plot_case(case_id=2.5)
-    run_case(case_id=3, mode=args.mode, parallel=args.parallel)
+#     plot_case(case_id=2)
+#     plot_case(case_id=2.5)
+    # run_case(case_id=3, mode=args.mode, parallel=args.parallel)
     plot_case(case_id=3)

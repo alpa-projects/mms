@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 import argparse
 import matplotlib.pyplot as plt
+from matplotlib.transforms import Bbox
 
 from benchmarks.alpa.equal_model_case import EqualModelCase, run_equal_model_cases
 from alpa_serve.util import GB
@@ -12,7 +13,7 @@ color_dict = {
     "mp-greedy-8": "C0",
 }
 policy_name_to_label = {
-    "sr-uniform": "Selective Replication",
+    "sr-uniform": "Replication",
     "mp-greedy-8": "Model Parallelism",
 }
 
@@ -67,7 +68,7 @@ def plot_case(case_id=1):
     with open(f"changing_pipeline_overhead_{case_id}.pkl", "rb") as f:
         results = pickle.load(f)
 
-    plt.figure(figsize=(4.5, 3.5))
+    plt.figure(figsize=(3, 2))
     for policy_name, overhead, slo_scales, stats in results:
         x = slo_scales
         label = policy_name_to_label[policy_name] + ("" if overhead is None else f" ($\\alpha$={overhead})")
@@ -77,10 +78,11 @@ def plot_case(case_id=1):
         alpha = 1 - (overhead - 1) * 1.6 if overhead is not None else 1
         plt.plot(x, y, '.-', label=label, alpha = alpha, color = color_dict[policy_name])
     plt.xlabel("SLO Scale")
-    plt.ylabel("Workload Satisfaction (%)")
-    plt.legend()
+    plt.ylabel("SLO Attainment (%)")
+    plt.grid()
+    plt.legend(prop={'size': 6})
     plt.tight_layout()
-    plt.savefig(f"changing_pipeline_overhead_{case_id}.pdf")
+    plt.savefig(f"changing_pipeline_overhead_{case_id}.pdf", bbox_inches=Bbox([[0, 0], [3, 2.25]]))
     # plt.show()
 
 

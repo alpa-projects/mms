@@ -25,28 +25,30 @@ def get_database_data(database, model_name="bert-2.6b", op=True):
 
 
 def plot_one_database(n_gpus, n_gpus_str, base_latency, pp_comm, pp_uneven, op_comm):
-    plt.figure(figsize=(4.5, 3.5))
+    plt.figure(figsize=(3, 2.5))
+    plt.grid(axis="y")
     plt.bar(n_gpus_str, [base_latency] * len(n_gpus), label="Compuation", width=0.3)
     plt.bar(n_gpus_str, pp_comm, label="Communication Overhead", bottom = [base_latency] * len(n_gpus), width=0.3)
     plt.bar(n_gpus_str, pp_uneven, label="Uneven Partition Overhead", bottom = [base_latency + x for x in pp_comm], width=0.3)
     plt.xlabel("Number of GPUs")
     plt.ylabel("Latency (s)")
-    plt.legend()
+    plt.legend(prop={'size': 7})
     plt.tight_layout()
     plt.savefig(f"overhead_decomposition_pp.pdf")
 
-    plt.figure(figsize=(4.5, 3.5))
+    plt.figure(figsize=(3, 2.5))
+    plt.grid(axis="y")
     plt.bar(n_gpus_str, [base_latency / n for n in n_gpus], label="Compuation", width=0.3)
     plt.bar(n_gpus_str, op_comm, label="Communication Overhead", bottom = [base_latency / n for n in n_gpus], width=0.3)
     plt.xlabel("Number of GPUs")
     plt.ylabel("Latency (s)")
     plt.ylim(0, 0.25)
-    plt.legend()
+    plt.legend(prop={'size': 7})
     plt.tight_layout()
     plt.savefig(f"overhead_decomposition_op.pdf")
 
 def plot_two_databases(manual_result, dp_result, model_name="bert-2.6b", ylim=(0.2, 0.3)):
-    plt.figure(figsize=(4.5, 3.5))
+    plt.figure(figsize=(3, 2.5))
     n_gpus, n_gpus_str, base_latency, pp_comm, pp_uneven, _ = manual_result
     x = np.arange(len(n_gpus))
     width = 0.3
@@ -62,10 +64,11 @@ def plot_two_databases(manual_result, dp_result, model_name="bert-2.6b", ylim=(0
     ax.bar(x + width/2, pp_uneven, bottom = [base_latency + x for x in pp_comm], width=0.3, color="C2", label="Uneven Partition Overhead")
     ax.set_xticks(x)
     ax.set_xticklabels(n_gpus_str)
+    ax.grid(axis="y")
     plt.ylim(*ylim)
     plt.xlabel("Number of GPUs")
     plt.ylabel("Latency (s)")
-    plt.legend()
+    plt.legend(loc="upper left", prop={'size': 7})
     plt.tight_layout()
     plt.savefig(f"overhead_decomposition_pp_compare_{model_name}.pdf")
 
