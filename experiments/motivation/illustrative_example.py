@@ -45,7 +45,7 @@ def run_case(rate_distribution=(1, 1), cv=1.0, case_id=1, mode="simulate", paral
     with open(f"illustrative_example_policies_and_stats_{case_id}.pkl", "wb") as f:
         pickle.dump(policies_and_stats, f)
 
-def plot_case(case_id=1, per_model_curves=False, figsize=(4.5, 3.5)):
+def plot_case(case_id=1, per_model_curves=False, figsize=(4.5, 3.5), legend_size=8):
     with open(f"illustrative_example_policies_and_stats_{case_id}.pkl", "rb") as f:
         policies, stats = pickle.load(f)
     plt.figure(figsize=figsize)
@@ -76,7 +76,7 @@ def plot_case(case_id=1, per_model_curves=False, figsize=(4.5, 3.5)):
     plt.grid()
     plt.xlim(0, max_latency)
     plt.ylim(0, 1.05)
-    plt.legend(prop={'size': 8})
+    plt.legend(prop={'size': legend_size})
     plt.tight_layout()
     plt.savefig(f"illustrative_example_{case_id}.pdf")
     # plt.show()
@@ -132,11 +132,11 @@ if __name__ == "__main__":
                         default="simulate")
 
     args = parser.parse_args()
-    # run_case((1, 1), cv=1, case_id=1, mode=args.mode, parallel=args.parallel)
-    #plot_case(case_id=1, figsize=(3.5, 2.5))
-    # run_case((2, 8), cv=1, case_id=2, mode=args.mode, parallel=args.parallel)
-    #plot_case(case_id=2, figsize=(3.5, 2.5), per_model_curves=True)
-    # run_case((1, 1), cv=3.0, case_id=3, mode=args.mode, parallel=args.parallel)
-    #plot_case(case_id=3, figsize=(3.5, 2.5))
-    # run_case((1, 1), cv=3.0, case_id=4, mode=args.mode, parallel=args.parallel, duration=500)
+    run_case((1, 1), cv=1, case_id=1, mode=args.mode, parallel=args.parallel)
+    plot_case(case_id=1, figsize=(3.5, 2.5))
+    run_case((2, 8), cv=1, case_id=2, mode=args.mode, parallel=args.parallel)
+    plot_case(case_id=2, figsize=(3.5, 2.5), per_model_curves=True, legend_size=6)
+    run_case((1, 1), cv=3.0, case_id=3, mode=args.mode, parallel=args.parallel)
+    plot_case(case_id=3, figsize=(3.5, 2.5))
+    run_case((1, 1), cv=3.0, case_id=4, mode=args.mode, parallel=args.parallel, duration=500)
     plot_case_utilization(case_id=4)

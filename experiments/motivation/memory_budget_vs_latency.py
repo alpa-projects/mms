@@ -121,7 +121,7 @@ if __name__ == "__main__":
                         default="simulate")
 
     args = parser.parse_args()
-    # run_case(case_id=1, mode=args.mode, parallel=args.parallel)
+    run_case(case_id=1, mode=args.mode, parallel=args.parallel)
     plot_case(case_id=1)
-    # run_case(case_id=2, mode=args.mode, parallel=args.parallel)
+    run_case(case_id=2, mode=args.mode, parallel=args.parallel)
     plot_case(case_id=2)

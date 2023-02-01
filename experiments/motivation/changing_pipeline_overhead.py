@@ -80,7 +80,7 @@ def plot_case(case_id=1):
     plt.xlabel("SLO Scale")
     plt.ylabel("SLO Attainment (%)")
     plt.grid()
-    plt.legend(prop={'size': 6})
+    plt.legend(prop={'size': 5.5})
     plt.tight_layout()
     plt.savefig(f"changing_pipeline_overhead_{case_id}.pdf", bbox_inches=Bbox([[0, 0], [3, 2.25]]))
     # plt.show()
@@ -93,5 +93,5 @@ if __name__ == "__main__":
                         default="simulate")
 
     args = parser.parse_args()
-    # run_case(case_id=1, mode=args.mode, parallel=args.parallel)
+    run_case(case_id=1, mode=args.mode, parallel=args.parallel)
     plot_case(case_id=1)
