@@ -21,15 +21,15 @@ show_name_dict = {
     "sr-replace-21600": "Clockwork++",
 
     "mp-ilp":         "Model Parallelism (ilp)",
-    "mp-search":      "Beta",
-    "mp-search-sep":  "Beta",
+    "mp-search":      "AlpaServe",
+    "mp-search-sep":  "AlpaServe",
 
     "sr-greedy-batch-2": "SR (mb=2)",
     "sr-replace-30-batch-2": "Clockwork++ (mb=2)",
-    "mp-search-batch-2": "Beta (mb=2)",
-    "mp-search-batch-4": "Beta (mb=4)",
-    "mp-search-batch-8": "Beta (mb=8)",
-    "mp-search-batch-16": "Beta (mb=16)",
+    "mp-search-batch-2": "AlpaServe (mb=2)",
+    "mp-search-batch-4": "AlpaServe (mb=4)",
+    "mp-search-batch-8": "AlpaServe (mb=8)",
+    "mp-search-batch-16": "AlpaServe (mb=16)",
 
     "mp-greedy-2":    "Pipeline Parallelism (#stage=2)",
     "mp-greedy-4":    "Pipeline Parallelism (#stage=4)",

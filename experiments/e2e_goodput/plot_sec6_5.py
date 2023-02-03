@@ -30,7 +30,7 @@ def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
         xs = [x for x, _ in sorted(zip(xs_, ys_))]
         ys = [y for _, y in sorted(zip(xs_, ys_))]
         ys = np.array(ys) * 100
-        curve = ax.plot(xs, ys, color=methodcolors[i], marker='*', linestyle=linestyles[i], linewidth=4, markersize=15)
+        curve = ax.plot(xs, ys, color=methodcolors[i], marker='.', linestyle=linestyles[i], linewidth=4, markersize=15)
         curves.append(curve[0])
         legends.append(show_name(method))
 
@@ -113,7 +113,8 @@ def plot_goodput(bs_lines, batching_lines, threshold, folder, pdf):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output-dir", type=str, default="./")
+    parser.add_argument("--input", type=str, required=True)
+    parser.add_argument("--output-dir", type=str, default="./paper_figures")
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--pdf", action="store_true")
     args = parser.parse_args()
@@ -122,8 +123,8 @@ if __name__ == "__main__":
     
     threshold = 0.99
 
-    bs_lines = read_equal_model_case_tsv("res_batchsize.tsv")
-    batching_lines = read_equal_model_case_tsv("res_batching.tsv")
+    bs_lines = read_equal_model_case_tsv(args.input + "/res_batchsize.tsv")
+    batching_lines = read_equal_model_case_tsv(args.input + "/res_batching.tsv")
 
 
     plot_goodput(bs_lines, batching_lines, threshold, args.output_dir, args.pdf)

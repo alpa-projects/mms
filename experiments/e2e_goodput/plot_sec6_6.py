@@ -36,7 +36,7 @@ def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
         xs = [x for x, _ in sorted(zip(xs_, ys_))]
         ys = [y for _, y in sorted(zip(xs_, ys_))]
         ys = np.array(ys) * 100
-        curve = ax.plot(xs, ys, color=method2color(method), marker='*', linestyle=linestyles[i], linewidth=4, markersize=15)
+        curve = ax.plot(xs, ys, color=method2color(method), marker='.', linestyle=linestyles[i], linewidth=4, markersize=15)
         curves.append(curve[0])
         legends.append(paper_name.get(method))
 
