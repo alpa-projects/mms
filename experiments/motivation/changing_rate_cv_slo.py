@@ -31,7 +31,7 @@ def run_case(case_id=1, mode="simulate", parallel=False):
     cases = []
     if case_id == 1:
         duration = 1000
-        total_rates = np.linspace(1, 3.3, 20) * num_devices
+        total_rates = np.linspace(0.02, 3.3, 20) * num_devices
         for policy_name in policies:
             for total_rate in total_rates:
                 cases.append(EqualModelCase(
@@ -138,9 +138,9 @@ if __name__ == "__main__":
                         default="simulate")
 
     args = parser.parse_args()
-    # run_case(case_id=1, mode=args.mode, parallel=args.parallel)
-#     plot_case(case_id=1)
-#     plot_case(case_id=1.5)
+    run_case(case_id=1, mode=args.mode, parallel=args.parallel)
+    plot_case(case_id=1)
+    plot_case(case_id=1.5)
     # run_case(case_id=2, mode=args.mode, parallel=args.parallel)
 #     plot_case(case_id=2)
 #     plot_case(case_id=2.5)
