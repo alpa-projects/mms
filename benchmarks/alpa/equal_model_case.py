@@ -32,7 +32,7 @@ EqualModelCase = namedtuple("EqualModelCase", [
 
 def get_equal_model_serving_case(case, prof_database=None):
     if prof_database is None:
-        prof_database = ProfilingDatabase("profiling_result_backup.pkl")
+        prof_database = ProfilingDatabase("profiling_result.pkl")
 
     (exp_name, num_devices, mem_budget, model_type, num_models,
      total_rate, rate_distribution, arrival_process, arrival_process_kwargs,
