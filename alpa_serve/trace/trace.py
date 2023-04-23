@@ -3,6 +3,8 @@ import os.path
 import csv
 import pickle
 import time
+
+import copy
 import warnings
 from typing import List, Dict
 from collections import OrderedDict
@@ -404,7 +406,7 @@ class Trace:
             function_model_mapping = self.map_model(models, function_histogram.keys(), model_mapping_strategy)
             for f, m in function_model_mapping.items():
                 if m not in model_histogram:
-                    model_histogram[m] = function_histogram[f]
+                    model_histogram[m] = copy.deepcopy(function_histogram[f])
                 else:
                     model_histogram[m] += function_histogram[f]
 

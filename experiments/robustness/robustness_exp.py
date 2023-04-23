@@ -36,7 +36,7 @@ if __name__ == "__main__":
     # choices: {"sr-greedy", "sr-ilp", "mp-ilp", "mp-greedy-2", "mp-greedy-8"}
 
     if args.workload == "azure_v1":
-        policies = ["sr-greedy", "sr-replace-60", "mp-search"]
+        policies = ["sr-greedy", "sr-replace-60", "sr-replace-120", "mp-search"]
     else:
         policies = ["sr-greedy", "sr-replace-3600", "mp-search"]
 
@@ -154,11 +154,18 @@ if __name__ == "__main__":
             exp_name = "goodput_vs_num_devices"
             for num_devices in num_devices_list:
                 for policy_name in policies:
-                    cases.append(EqualModelCase(exp_name,
-                        num_devices, mem_budget, model_type, fixed_num_models,
-                        total_rate, rate_distribution,
-                        arrival_process, arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name, train_start, train_end, test_start, test_end))
+                    if "sr-replace" in policy_name:
+                        cases.append(EqualModelCase(exp_name,
+                            num_devices, mem_budget, model_type, fixed_num_models,
+                            total_rate, rate_distribution,
+                            arrival_process, arrival_process_kwargs,
+                            fixed_slo_scale, duration, policy_name, test_start, test_end, test_start, test_end))
+                    else:
+                        cases.append(EqualModelCase(exp_name,
+                            num_devices, mem_budget, model_type, fixed_num_models,
+                            total_rate, rate_distribution,
+                            arrival_process, arrival_process_kwargs,
+                            fixed_slo_scale, duration, policy_name, train_start, train_end, test_start, test_end))
 
         #### goodput vs num_models #####
         if "goodput_vs_num_models" in experiments:
@@ -179,11 +186,19 @@ if __name__ == "__main__":
                         new_arrival_process_kwargs = {"rate_scale": scale_factor * fixed_rate_scale,
                                                       "cv_scale": fixed_cv_scale,
                                                       "trace_dir": args.trace_dir}
-                        cases.append(EqualModelCase(exp_name,
-                            fixed_num_devices, mem_budget, model_type, num_models,
-                            total_rate, rate_distribution,
-                            arrival_process, new_arrival_process_kwargs,
-                            fixed_slo_scale, duration, policy_name, train_start, train_end, test_start, test_end))
+                        if "sr-replace" in policy_name:
+                            cases.append(EqualModelCase(exp_name,
+                                                        fixed_num_devices, mem_budget, model_type, num_models,
+                                                        total_rate, rate_distribution,
+                                                        arrival_process, new_arrival_process_kwargs,
+                                                        fixed_slo_scale, duration, policy_name, test_start, test_end,
+                                                        test_start, test_end))
+                        else:
+                            cases.append(EqualModelCase(exp_name,
+                                fixed_num_devices, mem_budget, model_type, num_models,
+                                total_rate, rate_distribution,
+                                arrival_process, new_arrival_process_kwargs,
+                                fixed_slo_scale, duration, policy_name, train_start, train_end, test_start, test_end))
 
         #### goodput vs slo #####
         if "goodput_vs_slo" in experiments:
@@ -191,11 +206,18 @@ if __name__ == "__main__":
             exp_name = "goodput_vs_slo"
             for slo_scale in slo_scales:
                 for policy_name in policies:
-                    cases.append(EqualModelCase(exp_name,
-                        fixed_num_devices, mem_budget, model_type, fixed_num_models,
-                        total_rate, rate_distribution,
-                        arrival_process, arrival_process_kwargs,
-                        slo_scale, duration, policy_name, train_start, train_end, test_start, test_end))
+                    if "sr-replace" in policy_name:
+                        cases.append(EqualModelCase(exp_name,
+                            fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                            total_rate, rate_distribution,
+                            arrival_process, arrival_process_kwargs,
+                            slo_scale, duration, policy_name, test_start, test_end, test_start, test_end))
+                    else:
+                        cases.append(EqualModelCase(exp_name,
+                            fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                            total_rate, rate_distribution,
+                            arrival_process, arrival_process_kwargs,
+                            slo_scale, duration, policy_name, train_start, train_end, test_start, test_end))
 
         #### goodput vs rate/rate_scale #####
         if "goodput_vs_rate" in experiments:
@@ -217,11 +239,18 @@ if __name__ == "__main__":
                         arrival_process_kwargs = {"rate_scale": rate_scale,
                                                 "cv_scale": fixed_cv_scale,
                                                 "trace_dir": args.trace_dir}
-                        cases.append(EqualModelCase(exp_name,
-                            fixed_num_devices, mem_budget, model_type, fixed_num_models,
-                            total_rate, rate_distribution,
-                            arrival_process, arrival_process_kwargs,
-                            fixed_slo_scale, duration, policy_name, train_start, train_end, test_start, test_end))
+                        if "sr-replace" in policy_name:
+                            cases.append(EqualModelCase(exp_name,
+                                fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                                total_rate, rate_distribution,
+                                arrival_process, arrival_process_kwargs,
+                                fixed_slo_scale, duration, policy_name, test_start, test_end, test_start, test_end))
+                        else:
+                            cases.append(EqualModelCase(exp_name,
+                                fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                                total_rate, rate_distribution,
+                                arrival_process, arrival_process_kwargs,
+                                fixed_slo_scale, duration, policy_name, train_start, train_end, test_start, test_end))
 
 
         #### goodput vs cv/cv_scale #####
@@ -245,11 +274,18 @@ if __name__ == "__main__":
                         arrival_process_kwargs = {"rate_scale": fixed_rate_scale,
                                                   "cv_scale": cv_scale,
                                                   "trace_dir": args.trace_dir}
-                        cases.append(EqualModelCase(exp_name,
-                            fixed_num_devices, mem_budget, model_type, fixed_num_models,
-                            total_rate, rate_distribution,
-                            arrival_process, arrival_process_kwargs,
-                            fixed_slo_scale, duration, policy_name, train_start, train_end, test_start, test_end))
+                        if "sr-replace" in policy_name:
+                            cases.append(EqualModelCase(exp_name,
+                                fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                                total_rate, rate_distribution,
+                                arrival_process, arrival_process_kwargs,
+                                fixed_slo_scale, duration, policy_name, test_start, test_end, test_start, test_end))
+                        else:
+                            cases.append(EqualModelCase(exp_name,
+                                fixed_num_devices, mem_budget, model_type, fixed_num_models,
+                                total_rate, rate_distribution,
+                                arrival_process, arrival_process_kwargs,
+                                fixed_slo_scale, duration, policy_name, train_start, train_end, test_start, test_end))
 
         n_cases = len(cases)
         M = 8

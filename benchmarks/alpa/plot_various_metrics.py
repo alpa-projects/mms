@@ -15,6 +15,7 @@ show_name_dict = {
     "sr-replace-30": "Clockwork++",
     "sr-replace-60": "Clockwork++",
     "sr-replace-120": "Clockwork++",
+
     "sr-replace-3600": "Clockwork++",
     "sr-replace-5400": "Clockwork++",
     "sr-replace-10800": "Clockwork++",
