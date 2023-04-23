@@ -1,0 +1,3 @@
+python3 general_model_exp.py --exp-name sec6_5_data --output ablation.tsv --workload=synthetic --model-type=mixed --policy=mp-round-robin --ablation --parallel
+python3 general_model_exp.py --exp-name sec6_5_data --output ablation.tsv --workload=synthetic --model-type=mixed --policy=mp-greedy-4 --ablation --parallel
+python3 general_model_exp.py --exp-name sec6_5_data --output ablation.tsv --workload=synthetic --model-type=mixed --policy=mp-search-sep --ablation --parallel
