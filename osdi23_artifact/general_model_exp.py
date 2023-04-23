@@ -149,28 +149,28 @@ if __name__ == "__main__":
 
    
     ##### goodput vs num_models #####
-    if "goodput_vs_num_models" in experiments:
-        print("=== Running goodput vs. #models ===")
-        exp_name = "goodput_vs_num_models"
-        for num_modelset in num_modelset_list:
-            for policy_name in policies:
-                new_model_types = model_set * num_modelset
-                new_model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(num_modelset)], [])
-                if args.workload == "synthetic":
-                     cases.append(GeneralModelCase(exp_name,
-                        fixed_num_devices, mem_budget, new_model_types, new_model_names,
-                        total_rate * num_modelset / fixed_num_modelset, rate_distribution,
-                        arrival_process, arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name))
-                else:
-                    new_arrival_process_kwargs = {"rate_scale": num_modelset / fixed_num_modelset,
-                                                 "cv_scale": fixed_cv_scale,
-                                                 "trace_dir": args.trace_dir}
-                    cases.append(GeneralModelCase(exp_name,
-                        fixed_num_devices, mem_budget, new_model_types, new_model_names,
-                        total_rate, rate_distribution,
-                        arrival_process, arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name))
+    # if "goodput_vs_num_models" in experiments:
+    #     print("=== Running goodput vs. #models ===")
+    #     exp_name = "goodput_vs_num_models"
+    #     for num_modelset in num_modelset_list:
+    #         for policy_name in policies:
+    #             new_model_types = model_set * num_modelset
+    #             new_model_names = sum([[f"{model_type}-{i}" for model_type in model_set] for i in range(num_modelset)], [])
+    #             if args.workload == "synthetic":
+    #                  cases.append(GeneralModelCase(exp_name,
+    #                     fixed_num_devices, mem_budget, new_model_types, new_model_names,
+    #                     total_rate * num_modelset / fixed_num_modelset, rate_distribution,
+    #                     arrival_process, arrival_process_kwargs,
+    #                     fixed_slo_scale, duration, policy_name))
+    #             else:
+    #                 new_arrival_process_kwargs = {"rate_scale": num_modelset / fixed_num_modelset,
+    #                                              "cv_scale": fixed_cv_scale,
+    #                                              "trace_dir": args.trace_dir}
+    #                 cases.append(GeneralModelCase(exp_name,
+    #                     fixed_num_devices, mem_budget, new_model_types, new_model_names,
+    #                     total_rate, rate_distribution,
+    #                     arrival_process, arrival_process_kwargs,
+    #                     fixed_slo_scale, duration, policy_name))
 
     ##### goodput vs slo #####
     if "goodput_vs_slo" in experiments:
