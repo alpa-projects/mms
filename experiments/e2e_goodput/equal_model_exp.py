@@ -29,6 +29,7 @@ if __name__ == "__main__":
     parser.add_argument("--rate", type=float, default=64)
     parser.add_argument("--cv", type=float, default=4)
     parser.add_argument('--duration', type=float, default=200)
+    parser.add_argument('--enable-batching', action='store_true')
 
     args = parser.parse_args()
 
@@ -39,10 +40,12 @@ if __name__ == "__main__":
     if model_type == "bert-103.5b":
         policies = ["mp-equal-16-1", "mp-equal-8-2", "mp-equal-4-4", "mp-equal-2-8", "mp-search"]
     else:
-        if args.workload == "azure_v1":
-            policies = ["sr-greedy", "sr-replace-60", "sr-replace-30", "mp-search"]
-        else:
+        if args.workload == "azure_v2":
             policies = ["sr-greedy", "sr-replace-21600", "mp-search"]
+        else:
+            policies = ["sr-greedy", "sr-replace-30", "mp-search"]
+    if args.enable_batching:
+        policies = [policy + "-batch" for policy in policies]
 
     # workload config
     if args.workload == "synthetic":
@@ -129,30 +132,30 @@ if __name__ == "__main__":
                     arrival_process, arrival_process_kwargs,
                     fixed_slo_scale, duration, policy_name, None, None, None, None))
 
-    #### goodput vs num_models #####
-    if "goodput_vs_num_models" in experiments:
-        print("=== Running goodput vs. #models ===")
-        exp_name = "goodput_vs_num_models"
-        for num_models in num_models_list:
-            for policy_name in policies:
-                # Note(Hao): we need to scale the rate as well to keep the total traffic unchanged.
-                # when num_model = fix_num_models / 4, the total cluster rate is 1 q/s.
-                if args.workload == "synthetic":
-                    cases.append(EqualModelCase(exp_name,
-                        fixed_num_devices, mem_budget, model_type, num_models,
-                        total_rate * num_models / fixed_num_models, rate_distribution,
-                        arrival_process, arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name, None, None, None, None))
-                else:
-                    scale_factor = num_models / fixed_num_models
-                    new_arrival_process_kwargs = {"rate_scale": scale_factor * fixed_rate_scale,
-                                                  "cv_scale": fixed_cv_scale,
-                                                  "trace_dir": args.trace_dir}
-                    cases.append(EqualModelCase(exp_name,
-                        fixed_num_devices, mem_budget, model_type, num_models,
-                        total_rate, rate_distribution,
-                        arrival_process, new_arrival_process_kwargs,
-                        fixed_slo_scale, duration, policy_name, None, None, None, None))
+    # #### goodput vs num_models #####
+    # if "goodput_vs_num_models" in experiments:
+    #     print("=== Running goodput vs. #models ===")
+    #     exp_name = "goodput_vs_num_models"
+    #     for num_models in num_models_list:
+    #         for policy_name in policies:
+    #             # Note(Hao): we need to scale the rate as well to keep the total traffic unchanged.
+    #             # when num_model = fix_num_models / 4, the total cluster rate is 1 q/s.
+    #             if args.workload == "synthetic":
+    #                 cases.append(EqualModelCase(exp_name,
+    #                     fixed_num_devices, mem_budget, model_type, num_models,
+    #                     total_rate * num_models / fixed_num_models, rate_distribution,
+    #                     arrival_process, arrival_process_kwargs,
+    #                     fixed_slo_scale, duration, policy_name, None, None, None, None))
+    #             else:
+    #                 scale_factor = num_models / fixed_num_models
+    #                 new_arrival_process_kwargs = {"rate_scale": scale_factor * fixed_rate_scale,
+    #                                               "cv_scale": fixed_cv_scale,
+    #                                               "trace_dir": args.trace_dir}
+    #                 cases.append(EqualModelCase(exp_name,
+    #                     fixed_num_devices, mem_budget, model_type, num_models,
+    #                     total_rate, rate_distribution,
+    #                     arrival_process, new_arrival_process_kwargs,
+    #                     fixed_slo_scale, duration, policy_name, None, None, None, None))
 
     #### goodput vs slo #####
     if "goodput_vs_slo" in experiments:
@@ -228,7 +231,8 @@ if __name__ == "__main__":
         end_case = (i + 1) * n_case_each_run  if (i + 1) * n_case_each_run < n_cases else n_cases
         run_equal_model_cases(cases[start_case:end_case],
                               output_file=output_file,
-                              mode=args.mode, parallel=args.parallel)
+                              mode=args.mode, parallel=args.parallel,
+                              enable_batching=args.enable_batching)
     # ### model vs devices ###
     # if "num_devices_vs_num_models" in experiments:
     #     print("=== Running #devices vs. #models ===")

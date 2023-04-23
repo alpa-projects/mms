@@ -27,7 +27,8 @@ class Request:
 
 PerModelStatsResult = namedtuple("PerModelStatsResult",
         ("name", "num_requests", "goodput", "throughput",
-         "latency_mean", "latency_std", "latency_p90", "latency_p99"))
+         "latency_mean", "latency_std", "latency_p90", "latency_p99", "latency",
+         "request_starts", "request_finishes"))
 
 PerDeviceStatsResult = namedtuple("PerDeviceStatsResult", ("num_requests",))
 
@@ -347,7 +348,7 @@ class Workload:
             stats.append(PerModelStatsResult(
                 name, len(indices), goodput, throughput,
                 np.mean(latency), np.std(latency),
-                latency_p90, latency_p99))
+                latency_p90, latency_p99, latency, tmp_start, tmp_finish))
 
         return StatsResult(stats, None, np.mean(good), np.mean(finish - start),
                            len(start), len(start) / (start[-1] - start[0]))

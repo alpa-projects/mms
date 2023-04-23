@@ -10,15 +10,13 @@ import matplotlib.pyplot as plt
 import pickle
 
 from benchmarks.alpa.equal_model_case import read_equal_model_case_tsv
-from benchmarks.alpa.general_model_case import read_general_model_case_tsv
 from benchmarks.alpa.plot_various_metrics import show_name, method2color, method2order
 
-linestyles = ["solid", "dashed", "dashdot", "dotted", (0, (3,5,1,5,1,5))]
-methodcolors = ["C2", "C1", "C0", "red"]
+linestyles = ["solid", "dashed", "dashdot", "dotted", (0, (3,5,1,5,1,5)), (0, (3,10,1,10,1,10))]
+methodcolors = ["C2", "C1", "C0", "C3", "C4", "C5", "C6", "C7", "C8", "C9"]
 
 def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     methods = list(data.keys())
-    methods.remove("sr-replace-120")
     methods.sort(key=lambda x: method2order(x))
 
     curves = []
@@ -58,6 +56,7 @@ def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     ax.set_ylim(bottom=ybottom, top=max(y_max * 1.02, 100))
     ax.set_xlabel(xlabel, fontsize=20)
     ax.grid()
+    ax.legend(curves, legends, fontsize=20)
 
     for i in range(len(methods)):
         if first_good[i] == 0:
@@ -67,60 +66,45 @@ def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     return curves, legends
 
 
-def plot_goodput(lines, threshold, folder, pdf):
-    devices_data = defaultdict(lambda: defaultdict(dict)) 
-    models_data = defaultdict(lambda: defaultdict(dict))
-    rate_data = defaultdict(lambda: defaultdict(dict))
-    cv_data = defaultdict(lambda: defaultdict(dict))
-    slo_data = defaultdict(lambda: defaultdict(dict))
+def plot_goodput(bs_lines, batching_lines, threshold, folder, pdf):
+    bs_data = defaultdict(lambda: defaultdict(dict)) 
+    batching_data = defaultdict(lambda: defaultdict(dict))
 
-    for line in lines:
-        if line["exp_name"] == "goodput_vs_num_devices":
-            policy, x, goodput = (
-                line["policy_name"], line["num_devices"], line["goodput"])
-            devices_data[policy][x] = goodput
-        elif line["exp_name"] == "goodput_vs_num_models":
-            policy, x, goodput = (
-                line["policy_name"], line["num_models"], line["goodput"])
-            models_data[policy][x] = goodput
-        elif line["exp_name"] == "goodput_vs_rate_scale":
-            policy, x, goodput = (
-                line["policy_name"], line["arrival_process_kwargs"]["rate_scale"], line["goodput"])
-            rate_data[policy][x] = goodput
-        elif line["exp_name"] == "goodput_vs_cv_scale":
-            policy, x, goodput = (
-                line["policy_name"], line["arrival_process_kwargs"]["cv_scale"], line["goodput"])
-            cv_data[policy][x] = goodput
-        elif line["exp_name"] == "goodput_vs_slo":
+    for line in bs_lines:
+        if line["exp_name"] == "goodput_vs_slo":
             policy, x, goodput = (
                 line["policy_name"], line["slo_scale"], line["goodput"])
-            slo_data[policy][x] = goodput
+            bs_data[policy][x] = goodput
+        else:
+            continue
+    
+    for line in batching_lines:
+        if line["exp_name"] == "goodput_vs_slo":
+            policy, x, goodput = (
+                line["policy_name"], line["slo_scale"], line["goodput"])
+            batching_data[policy][x] = goodput
         else:
             continue
  
     # fig, axs = plt.subplots(1, 5)
-    fig, axs = plt.subplots(1, 4)
+    fig, axs = plt.subplots(1, 2)
 
-    # datas = [devices_data, models_data, rate_data, cv_data, slo_data]
-    datas = [devices_data, rate_data, cv_data, slo_data]
-    # xlabels = ["#devices", "#models", "Rate Scale", "CV Scale", "SLO Scale"]
-    xlabels = ["#devices", "Rate Scale", "CV Scale", "SLO Scale"]
-    # ybottoms = [0,0,0,0,0]
+    datas = [bs_data, batching_data]
+    xlabels = ["SLO Scale", "SLO Scale"]
     ybottoms = [0,0,0,0]
-    # increasings = [True, False, False, False, True]
-    increasings = [True, False, False, True]
+    increasings = [True, True]
     for data, increasing, ax, xlabel, ybottom in zip(datas, increasings, axs, xlabels, ybottoms):
         curves, legends = plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom)
    
-    fig.text(0.09, 0.5, "SLO Attainment (%)", va='center', rotation='vertical', fontsize=20)
-    fig.legend(curves, legends, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.1), fontsize=20)
+    fig.text(0.05, 0.5, "SLO Attainment (%)", va='center', rotation='vertical', fontsize=20)
+    # fig.legend(reversed(curves), reversed(legends), loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.1), fontsize=20)
 
     if pdf:
-        output = os.path.join(folder, "robustness.pdf")
+        output = os.path.join(folder, "batching.pdf")
     else:
-        output = os.path.join(folder, "robustness.png")
+        output = os.path.join(folder, "batching.png")
 
-    figure_size = (30, 5)
+    figure_size = (15, 5)
     fig.set_size_inches(figure_size)
     fig.savefig(output, bbox_inches='tight')
     print(f"Output the plot to {output}")
@@ -130,7 +114,7 @@ def plot_goodput(lines, threshold, folder, pdf):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=str, required=True)
-    parser.add_argument("--output-dir", type=str, default="paper_figures")
+    parser.add_argument("--output-dir", type=str, default="./paper_figures")
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--pdf", action="store_true")
     args = parser.parse_args()
@@ -139,7 +123,8 @@ if __name__ == "__main__":
     
     threshold = 0.99
 
-    with open(args.input, "rb") as f:
-         lines = pickle.load(f)
+    bs_lines = read_equal_model_case_tsv(args.input + "/res_batchsize.tsv")
+    batching_lines = read_equal_model_case_tsv(args.input + "/res_batching.tsv")
 
-    plot_goodput(lines, threshold, args.output_dir, args.pdf)
+
+    plot_goodput(bs_lines, batching_lines, threshold, args.output_dir, args.pdf)

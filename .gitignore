@@ -4,6 +4,10 @@ figures/
 chrome_trace/
 *.csv
 *.txt
+*.png
+*.pdf
+*.sh
+*.zip
 
 # Python cache
 __pycache__
@@ -60,8 +64,8 @@ tests/tmp
 benchmark/deepspeed/data
 
 # plots
-benchmarks/*/*.pdf
-benchmarks/*/*.png
+benchmarks/**/*.pdf
+benchmarks/**/*.png
 
 # Numpy cache
 *.npy
@@ -80,10 +84,15 @@ examples/imagenet/imagenet
 .DS_Store
 
 # images
-alpa_serve/trace/*png
+alpa_serve/trace/*.png
 alpa_serve/trace/plots
 dataset/
 
 # experiments
-experiments/e2e_goodput/*png
-experiments/e2e_goodput/*tsv
+experiments/e2e_goodput/*.png
+experiments/e2e_goodput/*.tsv
+experiments/motivation/**/*.pdf
+experiments/motivation/**/*.pkl
+
+# ipython
+.ipynb_checkpoints

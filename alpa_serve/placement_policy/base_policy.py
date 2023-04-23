@@ -265,7 +265,7 @@ class PlacementEvaluator:
 
 
 def gen_train_workload(model_datas: List[ModelData],
-                       seed: int = 1234,
+                       seed: int = 0,
                        simulation_min_duration: float = 100,
                        simulation_min_samples: int = 30000):
     """Generate a training workload for search."""

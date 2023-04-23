@@ -14,12 +14,16 @@ from benchmarks.alpa.general_model_case import read_general_model_case_tsv
 from benchmarks.alpa.plot_various_metrics import show_name, method2color, method2order
 
 linestyles = ["solid", "dashed", "dashdot", "dotted", (0, (3,5,1,5,1,5))]
-methodcolors = ["C2", "C1", "C0", "red"]
+
+paper_name = {
+    "mp-round-robin": "Round robin",
+    "mp-greedy-4":    "Greedy placement",
+    "mp-search-sep":  "Greedy placement + Group partitioning",
+}
 
 def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     methods = list(data.keys())
-    methods.remove("sr-replace-120")
-    methods.sort(key=lambda x: method2order(x))
+    # methods.sort(key=lambda x: method2order(x))
 
     curves = []
     legends = []
@@ -32,9 +36,9 @@ def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
         xs = [x for x, _ in sorted(zip(xs_, ys_))]
         ys = [y for _, y in sorted(zip(xs_, ys_))]
         ys = np.array(ys) * 100
-        curve = ax.plot(xs, ys, color=methodcolors[i], marker='.', linestyle=linestyles[i], linewidth=4, markersize=15)
+        curve = ax.plot(xs, ys, color=method2color(method), marker='.', linestyle=linestyles[i], linewidth=4, markersize=15)
         curves.append(curve[0])
-        legends.append(show_name(method))
+        legends.append(paper_name.get(method))
 
         if increasing:
             iterator = range(len(xs))
@@ -56,71 +60,50 @@ def plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom):
     ax.tick_params(axis='both', which='major', labelsize=20)
     ax.tick_params(axis='both', which='minor', labelsize=20)
     ax.set_ylim(bottom=ybottom, top=max(y_max * 1.02, 100))
-    ax.set_xlabel(xlabel, fontsize=20)
+    ax.set_xlabel(xlabel, fontsize=22)
     ax.grid()
+
+    ax.legend(curves, legends, fontsize=18.5, loc="lower left")
 
     for i in range(len(methods)):
         if first_good[i] == 0:
             continue
-        ax.axvline(first_good[i], color=methodcolors[i], linestyle=":", linewidth=4)
-    
-    return curves, legends
+        ax.axvline(first_good[i], color=method2color(methods[i]), linestyle=":", linewidth=4)
 
 
 def plot_goodput(lines, threshold, folder, pdf):
-    devices_data = defaultdict(lambda: defaultdict(dict)) 
     models_data = defaultdict(lambda: defaultdict(dict))
     rate_data = defaultdict(lambda: defaultdict(dict))
-    cv_data = defaultdict(lambda: defaultdict(dict))
-    slo_data = defaultdict(lambda: defaultdict(dict))
 
     for line in lines:
-        if line["exp_name"] == "goodput_vs_num_devices":
-            policy, x, goodput = (
-                line["policy_name"], line["num_devices"], line["goodput"])
-            devices_data[policy][x] = goodput
-        elif line["exp_name"] == "goodput_vs_num_models":
+        if line["exp_name"] == "goodput_vs_num_models":
             policy, x, goodput = (
                 line["policy_name"], line["num_models"], line["goodput"])
             models_data[policy][x] = goodput
-        elif line["exp_name"] == "goodput_vs_rate_scale":
+        elif line["exp_name"] == "goodput_vs_rate":
             policy, x, goodput = (
-                line["policy_name"], line["arrival_process_kwargs"]["rate_scale"], line["goodput"])
+                line["policy_name"], line["total_rate"], line["goodput"])
             rate_data[policy][x] = goodput
-        elif line["exp_name"] == "goodput_vs_cv_scale":
-            policy, x, goodput = (
-                line["policy_name"], line["arrival_process_kwargs"]["cv_scale"], line["goodput"])
-            cv_data[policy][x] = goodput
-        elif line["exp_name"] == "goodput_vs_slo":
-            policy, x, goodput = (
-                line["policy_name"], line["slo_scale"], line["goodput"])
-            slo_data[policy][x] = goodput
         else:
             continue
  
-    # fig, axs = plt.subplots(1, 5)
-    fig, axs = plt.subplots(1, 4)
+    fig, axs = plt.subplots(1, 2)
 
-    # datas = [devices_data, models_data, rate_data, cv_data, slo_data]
-    datas = [devices_data, rate_data, cv_data, slo_data]
-    # xlabels = ["#devices", "#models", "Rate Scale", "CV Scale", "SLO Scale"]
-    xlabels = ["#devices", "Rate Scale", "CV Scale", "SLO Scale"]
-    # ybottoms = [0,0,0,0,0]
-    ybottoms = [0,0,0,0]
-    # increasings = [True, False, False, False, True]
-    increasings = [True, False, False, True]
+    datas = [models_data, rate_data]
+    xlabels = ["#models", "Rate Scale"]
+    ybottoms = [60,60]
+    increasings = [False, False]
     for data, increasing, ax, xlabel, ybottom in zip(datas, increasings, axs, xlabels, ybottoms):
-        curves, legends = plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom)
+        plot_goodput_common(data, threshold, increasing, ax, xlabel, ybottom)
    
-    fig.text(0.09, 0.5, "SLO Attainment (%)", va='center', rotation='vertical', fontsize=20)
-    fig.legend(curves, legends, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.1), fontsize=20)
+    fig.text(0.07, 0.5, "SLO Attainment (%)", va='center', rotation='vertical', fontsize=22)
 
     if pdf:
-        output = os.path.join(folder, "robustness.pdf")
+        output = os.path.join(folder, "ablation.pdf")
     else:
-        output = os.path.join(folder, "robustness.png")
+        output = os.path.join(folder, "ablation.png")
 
-    figure_size = (30, 5)
+    figure_size = (18, 7)
     fig.set_size_inches(figure_size)
     fig.savefig(output, bbox_inches='tight')
     print(f"Output the plot to {output}")
@@ -139,7 +122,6 @@ if __name__ == "__main__":
     
     threshold = 0.99
 
-    with open(args.input, "rb") as f:
-         lines = pickle.load(f)
+    lines = read_general_model_case_tsv(args.input)
 
     plot_goodput(lines, threshold, args.output_dir, args.pdf)

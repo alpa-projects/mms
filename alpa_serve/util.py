@@ -8,6 +8,9 @@ from typing import Sequence, Any
 import ray
 import numpy as np
 
+# global switch for batching
+# enable_batching = True
+batchsize_config = [1, 2, 4, 8, 16]
 
 # A general serving case.
 # We can simulate or run such a case.
@@ -17,7 +20,7 @@ ServingCase = namedtuple("ServingCase",
 
 GB = 1 << 30
 eps = 1e-6
-inf = 1e20
+inf = 1e100
 
 
 def build_logger(name="alpa_serve"):
