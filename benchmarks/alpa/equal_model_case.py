@@ -43,7 +43,10 @@ def get_equal_model_serving_case(case, prof_database=None):
 
     model_names = [f"m{i}" for i in range(num_models)]
     model_types = [model_type] * num_models
-    single_latency = {
+    if model_type == "bert-103.5b":
+        single_latency = {model_type: 4.6}
+    else:
+        single_latency = {
         model_type: sum(prof_database.get(model_type).para_dict[ParallelConfig(1,1,1)
         ].latency[1]) for model_type in set(model_types)}
     slos = [slo_scale * single_latency[model_type]] * num_models
@@ -293,7 +296,7 @@ def run_equal_model_cases(cases, output_file=None,
     if parallel:
         results = ray.get(results)
 
-    return results, all_stats
+    return results
 
 
 def read_equal_model_case_tsv(filename):

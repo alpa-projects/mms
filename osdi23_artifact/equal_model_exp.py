@@ -44,7 +44,7 @@ if __name__ == "__main__":
         if args.workload == "azure_v2":
             policies = ["sr-greedy", "sr-replace-21600", "mp-search"]
         else:
-            policies = ["sr-greedy", "sr-replace-30", "mp-search"]
+            policies = ["sr-greedy", "sr-replace-60", "mp-search"]
     if args.enable_batching:
         policies = [policy + "-batch" for policy in policies]
 
