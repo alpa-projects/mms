@@ -1,6 +1,8 @@
 import pickle
 import numpy as np
 import argparse
+import matplotlib as mpl
+mpl.use('Pdf')
 import matplotlib.pyplot as plt
 from matplotlib.transforms import Bbox
 
@@ -47,17 +49,20 @@ def run_case(case_id=1, mode="simulate", parallel=False):
         cases = []
         for slo_scale in slo_scales:
             cases.append(EqualModelCase(
+                None,
                 num_devices, mem_budget, model_type, num_models,
                 total_rate, rate_distribution,
                 arrival_process, arrival_process_kwargs,
-                slo_scale, duration, policy_name))
+                slo_scale, duration, policy_name,
+                None, None, None, None))
 
-        _, stats = run_equal_model_cases(cases,
-                                         exp_name=None,
-                                         output_file=None,
-                                         mode=mode,
-                                         parallel=parallel,
-                                         prof_database=prof_database)
+        all_results = run_equal_model_cases(cases,
+                                        output_file=None,
+                                        mode=mode,
+                                        parallel=parallel,
+                                        prof_database=prof_database,
+                                        return_stats_and_placement=True)
+        stats = [result[0] for result in all_results]
         results.append((policy_name, overhead, slo_scales, stats))
 
 

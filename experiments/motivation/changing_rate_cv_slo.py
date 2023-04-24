@@ -1,6 +1,8 @@
 import pickle
 import numpy as np
 import argparse
+import matplotlib as mpl
+mpl.use('Pdf')
 import matplotlib.pyplot as plt
 from matplotlib.transforms import Bbox
 
@@ -31,14 +33,16 @@ def run_case(case_id=1, mode="simulate", parallel=False):
     cases = []
     if case_id == 1:
         duration = 1000
-        total_rates = np.linspace(1, 3.3, 20) * num_devices
+        total_rates = np.linspace(0.1, 3.0, 20) * num_devices
         for policy_name in policies:
             for total_rate in total_rates:
                 cases.append(EqualModelCase(
+                    None,
                     num_devices, mem_budget, model_type, num_models,
                     total_rate, rate_distribution,
                     arrival_process, arrival_process_kwargs,
-                    slo_scale, duration, policy_name))
+                    slo_scale, duration, policy_name,
+                    None, None, None, None))
     elif case_id == 2:
         duration = 100000
         cvs = np.linspace(0.1, 8, 20)
@@ -46,10 +50,12 @@ def run_case(case_id=1, mode="simulate", parallel=False):
             for cv in cvs:
                 arrival_process_kwargs = {"cv": cv}
                 cases.append(EqualModelCase(
+                    None,
                     num_devices, mem_budget, model_type, num_models,
                     total_rate, rate_distribution,
                     arrival_process, arrival_process_kwargs,
-                    slo_scale, duration, policy_name))
+                    slo_scale, duration, policy_name,
+                    None, None, None, None))
     elif case_id == 3:
         duration = 500
         total_rate = 30
@@ -57,16 +63,20 @@ def run_case(case_id=1, mode="simulate", parallel=False):
         for policy_name in policies:
             for slo_scale in slo_scales:
                 cases.append(EqualModelCase(
+                    None,
                     num_devices, mem_budget, model_type, num_models,
                     total_rate, rate_distribution,
                     arrival_process, arrival_process_kwargs,
-                    slo_scale, duration, policy_name))
+                    slo_scale, duration, policy_name,
+                    None, None, None, None))
 
-    _, stats = run_equal_model_cases(cases,
-                                     exp_name=None,
-                                     output_file=None,
-                                     mode=mode,
-                                     parallel=parallel)
+    results = run_equal_model_cases(cases,
+                                    output_file=None,
+                                    mode=mode,
+                                    parallel=parallel,
+                                    return_stats_and_placement=True)
+
+    stats = [result[0] for result in results]
     if case_id == 1:
         results = ((policies, total_rates), stats)
     elif case_id == 2:

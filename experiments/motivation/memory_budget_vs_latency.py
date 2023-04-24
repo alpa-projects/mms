@@ -1,6 +1,8 @@
 import pickle
 import numpy as np
 import argparse
+import matplotlib as mpl
+mpl.use('Pdf')
 import matplotlib.pyplot as plt
 
 from benchmarks.alpa.equal_model_case import EqualModelCase, run_equal_model_cases
@@ -44,24 +46,30 @@ def run_case(case_id=1, mode="simulate", parallel=False):
     cases = []
     for policy_name, mem_budget in zip(mp_policies, mp_mem_budgets):
         cases.append(EqualModelCase(
+            None,
             num_devices, mem_budget, model_type, num_models,
             total_rate, rate_distribution,
             arrival_process, arrival_process_kwargs,
-            slo_scale, duration, policy_name))
+            slo_scale, duration, policy_name,
+            None, None, None, None))
 
     for policy_name, mem_budget in zip(sr_policies, sr_mem_budgets):
         cases.append(EqualModelCase(
+            None,
             num_devices, mem_budget, model_type, num_models,
             total_rate, rate_distribution,
             arrival_process, arrival_process_kwargs,
-            slo_scale, duration, policy_name))
+            slo_scale, duration, policy_name,
+            None, None, None, None))
 
 
-    _, stats = run_equal_model_cases(cases,
-                                     exp_name=None,
-                                     output_file=None,
-                                     mode=mode,
-                                     parallel=parallel)
+    results = run_equal_model_cases(cases,
+                                    output_file=None,
+                                    mode=mode,
+                                    parallel=parallel,
+                                    return_stats_and_placement=True)
+
+    stats = [result[0] for result in results]
     results = ((mp_mem_budgets, mp_policies, sr_mem_budgets, sr_policies), stats)
     with open(f"memory_budget_vs_latency_results_{case_id}.pkl", "wb") as f:
         pickle.dump(results, f)
