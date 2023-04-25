@@ -1,6 +1,8 @@
 import pickle
 import numpy as np
 import argparse
+import matplotlib as mpl
+mpl.use('Pdf')
 import matplotlib.pyplot as plt
 import functools
 
@@ -31,16 +33,20 @@ def run_case(rate_distribution=(1, 1), cv=1.0, case_id=1, mode="simulate", paral
     cases = []
     for policy_name in policies:
         cases.append(EqualModelCase(
+            None,
             num_devices, mem_budget, model_type, num_models,
             total_rate, rate_distribution,
             arrival_process, arrival_process_kwargs,
-            slo_scale, duration, policy_name))
+            slo_scale, duration, policy_name,
+            None, None, None, None))
 
-    _, stats = run_equal_model_cases(cases,
-                                     exp_name=None,
-                                     output_file=None,
-                                     mode=mode,
-                                     parallel=parallel)
+    results = run_equal_model_cases(cases,
+                                    output_file=None,
+                                    mode=mode,
+                                    parallel=parallel,
+                                    return_stats_and_placement=True)
+
+    stats = [result[0] for result in results]
     policies_and_stats = (policies, stats)
     with open(f"illustrative_example_policies_and_stats_{case_id}.pkl", "wb") as f:
         pickle.dump(policies_and_stats, f)

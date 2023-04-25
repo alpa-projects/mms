@@ -1,6 +1,8 @@
 import pickle
 import numpy as np
 import argparse
+import matplotlib as mpl
+mpl.use('Pdf')
 import matplotlib.pyplot as plt
 from alpa_serve.util import GB
 
