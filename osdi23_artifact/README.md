@@ -8,7 +8,7 @@ This is the artifact for the paper "Beta: Statistical Multiplexing with Model Pa
 
 We provide a shared AWS account for the reviewers. Click the [console login link](https://222351104556.signin.aws.amazon.com/console) and use the username and password provided in the hotcrp `Artifact Appendix` to login.
 
-After login, click  `EC2` in the `console home` panel and then click `instances` in the left panel. You will find a `stopped` instance called `osdi23-ae` (If you find the instance in the `running` state, there may be other reviewers have already started the instance, you can skip to the next step). Right-click on the instance entry, choose `Start instance`, and wait for the instance state to become `running`. 
+After login, click  `EC2` in the `console home` panel and then click `instances` in the left panel. You will find a `stopped` instance called `osdi23-ae` (If you find the instance in the `running` state, there may be other reviewers have already started the instance, you can skip to the next step). Right-click on the instance entry, choose `Start instance`, and wait for the instance state to become `running`.
 
 Now you can ssh into the instance. Save the SSH keys provided in the hotcrp into a file `ae-reviewers.pem` and run the command below (you can find the public_ip by left-clicking on the instance entry and checking `Details: Public IPv4 address` in the panel showed in the bottom):
 
@@ -44,7 +44,7 @@ If you are curious about how to get and use Azure Function Trace Dataset, read [
 
 ### Profiling results (optional)
 
-Our algorithm relies on the profiling results, which is provided as `profiling_result.pkl` in the current folder. If you want reproduce the profiling results, read [this instruction](). TODO: @zhuohan
+Our algorithm relies on the profiling results, which is provided as `profiling_result.pkl` in the current folder. If you want reproduce the profiling results, plese follow [this benchmarking script](https://github.com/alpa-projects/alpa/blob/main/benchmark/alpa/benchmark_one_case_gpt_bert_inference.py) and [this conversion script](https://github.com/alpa-projects/alpa/blob/main/benchmark/alpa/gen_serving_database.py).
 
 ## End-to-end Results (Section 6.2, Figure. 11)
 
@@ -110,7 +110,7 @@ python3 plot_sec6_5_ab.py --pdf
 
 ## Motivation results
 
-TODO @zhuohan
+Please refer to [this instruction](../experiments/motivation/README.md) to reproduce the results in the motivation section.
 
 ## Stop the instance
 
